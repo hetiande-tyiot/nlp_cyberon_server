@@ -1,0 +1,51 @@
+# ===== Python 虛擬環境 (1.5G) =====
+# venv 必須在目標機器重建，不能複製
+llmenv/
+venv/
+.venv/
+
+# ===== 模型權重 (25G) =====
+# 只排除權重檔本身，同目錄的 config/tokenizer/原始碼要進版控
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+*.ckpt
+models/
+
+# ===== 機密檔案 =====
+# 憑證 / 金鑰絕對不要進 git
+*.pem
+*.key
+*.crt
+.env
+.env.*
+!.env.example
+
+# ===== Python 快取 =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ===== Go =====
+vendor/
+
+# ===== Log / 暫存 =====
+*.log
+log_119/
+*.zip
+*.tmp
+
+# ===== 音檔 (測試資料，如果要傳就把這段刪掉) =====
+*.wav
+*.pcm8
+
+# ===== 編輯器 / OS =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

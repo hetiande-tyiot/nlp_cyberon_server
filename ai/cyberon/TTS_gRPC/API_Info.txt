@@ -1,0 +1,7 @@
+gRPC end point: xx.x.x.xxx:8088
+gRPC parameters:
+serviceName: e2e
+language: zh-TW, Speaker: Sharon
+language: zh-NAN, Speaker: YiChuen
+language: en-US, Speaker: Zero
+Token: yGFJ1D5HcTXaysVMc_GEfQto-lWfjjgruiqdAhEh0fw4YKbJ1TkYFYOOQ80nuXuvimoRqtzr99iqXE8KN5_Cxj6ksGV1uVLilv1ERRp0Je_B4MhASKJmX5evRd0VMdPf
