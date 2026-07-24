@@ -41,7 +41,7 @@ from sop_utils_119 import format_qa_for_llm, parse_yes_no, parse_yes_no_for_ques
 # ─── 常量 ─────────────────────────────────────────────────────────────────────
 
 DEFAULT_MODEL_PATH = (
-    "/root/autodl-tmp/models/TW-110-Model_V2.0/TW-110-Model_V2.0.gguf"
+    "/home/cyberon2/nlp_cyberon_server/models/TW-119-Model.gguf"
 )
 
 # ── System Prompt：抽取任務 ───────────────────────────────────────────────────

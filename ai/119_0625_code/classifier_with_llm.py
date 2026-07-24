@@ -6,7 +6,7 @@ MacBERT 分层分类 + LLM 复核 纯函数库
 适用模型:
   - 分类器: /root/autodl-tmp/models/TW-119-BERT-sub_救護/
              /root/autodl-tmp/models/TW-119-BERT-sub_火警/
-  - LLM:    /root/autodl-tmp/models/TW-110-Model_V2.0/TW-110-Model_V2.0.gguf
+  - LLM:    /home/cyberon2/nlp_cyberon_server/models/TW-119-Model.gguf
 
 触发逻辑:
   若分类器的预测标签属于「高频误判标签集合」，则将文本送入 LLM 进行语义复核；
@@ -569,7 +569,7 @@ class _ClassifierRegistry:
 
 def build_classifiers(
     models_base: str = "/root/autodl-tmp/models/",
-    llm_model_path: Optional[str] = "/root/autodl-tmp/models/TW-110-Model_V2.0/TW-110-Model_V2.0.gguf",
+    llm_model_path: Optional[str] = "/home/cyberon2/nlp_cyberon_server/models/TW-119-Model.gguf",
     confidence_threshold: float = 1.0,
     device: Optional[str] = None,
     llm_n_gpu_layers: int = -1,

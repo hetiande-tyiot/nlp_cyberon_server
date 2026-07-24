@@ -51,7 +51,7 @@ from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
 # ── LLM extractor 暫用 110 的 Qwen3.6-35B GGUF ──────────────────────────
 GGUF_MODEL_PATH = os.environ.get(
     "GGUF_MODEL_PATH",
-    "/home/aitop4/project/110llm/110LLM_Qwen3.6-35B/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-Q4_K_S.gguf",
+    "/home/cyberon2/nlp_cyberon_server/models/TW-119-Model.gguf",
 )
 GGUF_N_CTX = int(os.environ.get("GGUF_N_CTX", "4096"))
 GGUF_N_GPU_LAYERS = int(os.environ.get("GGUF_N_GPU_LAYERS", "-1"))
