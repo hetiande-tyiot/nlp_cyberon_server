@@ -4,8 +4,17 @@ llmenv/
 venv/
 .venv/
 
-# ===== 模型權重 (25G) =====
-# 只排除權重檔本身，同目錄的 config/tokenizer/原始碼要進版控
+# ===== 整包走 rsync 的模型資料夾（不進 git，以資料夾為單位）=====
+# 這些資料夾是純模型，視為一個整體用 rsync 傳，不在內部分裂。
+models/
+ai/TW-119-BERT_main/
+ai/TW-119-BERT-sub_火警/
+ai/TW-119-BERT-sub_救護/
+ai/TW-119-BERT-sub_緊急救援/
+ai/TW-119-BERT-sub_其他案類/
+
+# ===== 權重副檔名（安全網）=====
+# STT-Whisper 為例外：server 程式與 config 進 git，只有 model.bin 被這裡擋掉走 rsync。
 *.gguf
 *.safetensors
 *.bin
@@ -13,7 +22,6 @@ venv/
 *.pth
 *.onnx
 *.ckpt
-models/
 
 # ===== 機密檔案 =====
 # 憑證 / 金鑰絕對不要進 git
