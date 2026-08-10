@@ -1,0 +1,64 @@
+# 119 系統 (sop_api_server_119, port 8200) 相依套件
+# 由 cyberon2 上實測可運行的 llmenv 以 pip freeze 產出（2026-08-10，119_0808_loc_feedback）。
+#
+# 放 repo 根目錄、全版本共用一份；ai/119_* 各版本目錄下不再各放快照。
+# 這是「在新機器重建 venv」用的紀錄（例：aitop6），不是執行期依賴；
+# cyberon2 的 llmenv/ 已存在，換版不重建。
+#
+# 用法：
+#   python3 -m venv llmenv
+#   llmenv/bin/pip install -U pip
+#   llmenv/bin/pip install -r requirements-119.txt
+#
+# ⚠️ llama-cpp-python 不在此檔內，必須另行針對顯卡 CUDA 編譯（否則會裝到 CPU 版）：
+#   CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.9/bin/nvcc -DCMAKE_CUDA_ARCHITECTURES=120" \
+#     llmenv/bin/pip install llama-cpp-python==0.3.23 --no-cache-dir
+#   （CMAKE_CUDA_ARCHITECTURES：RTX 5090=120，RTX 4090=89）
+#
+# torch 用 CPU 版（BERT 跑 CPU，把 VRAM 留給 gguf）；下面的 extra-index 讓 pip 找得到 +cpu 版。
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.14.2
+certifi==2026.6.17
+click==8.4.2
+diskcache==5.6.3
+et_xmlfile==2.0.0
+fastapi==0.139.0
+filelock==3.29.0
+fsspec==2026.4.0
+h11==0.16.0
+hf-xet==1.5.1
+httpcore==1.0.9
+httpx==0.28.1
+huggingface_hub==1.23.0
+idna==3.18
+Jinja2==3.1.6
+markdown-it-py==4.2.0
+MarkupSafe==3.0.3
+mdurl==0.1.2
+mpmath==1.3.0
+networkx==3.6.1
+numpy==2.5.1
+openpyxl==3.1.5
+packaging==26.2
+pydantic==2.13.4
+pydantic_core==2.46.4
+Pygments==2.20.0
+PyYAML==6.0.3
+regex==2026.7.10
+rich==15.0.0
+safetensors==0.8.0
+setuptools==78.1.0
+shellingham==1.5.4
+starlette==1.3.1
+sympy==1.14.0
+tokenizers==0.22.2
+torch==2.13.0+cpu
+tqdm==4.68.4
+transformers==5.13.1
+typer==0.26.8
+typing-inspection==0.4.2
+typing_extensions==4.16.0
+uvicorn==0.51.0
