@@ -770,7 +770,7 @@ class SopEngine119:
         all_caller_text = self.case.full_caller_text()
         sub_cat, sub_conf, sub_source = self._do_sub_classify(all_caller_text, "救護")
 
-        # 關鍵詞未命中且分類器置信度低於 70% → 最多追問兩遍「麻煩發生了什麼事」
+        # 關鍵詞未命中且分類器置信度低於 70% → 最多追問兩遍「請問發生了什麼事」
         # 每次分類結果都保留，最終取置信度最高者再進入子類流程
         # （關鍵詞命中 conf=1.0，不會進入此分支）
         _SUB_CONF_THRESHOLD = 0.7

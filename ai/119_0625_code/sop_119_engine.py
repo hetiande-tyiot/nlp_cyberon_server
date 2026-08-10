@@ -271,7 +271,7 @@ class SopEngine119:
                 self.case.is_ohca = True
             self._notify_case_update()
             self._say(
-                "救護車已派出，請不要掛斷電話，我立即為您轉接專人。" #（判斷為OHCA）
+                "救護車已派出，請不要掛斷電話，我立即為您轉接專人。" #（判斷為ohca）
             )
             raise TransferToHumanError(f"OHCA detected at {slot}")
 

@@ -52,10 +52,24 @@ from typing import Any, Dict, List, Optional
 
 from case_info_119 import CaseInfo119
 from handlers import get_handler
+from important_tags_119 import match_important_tags, merge_important_tags
 from llm_extractor_119 import LLMExtractor119, build_fallback_summary
+from location_validation_119 import (
+    load_landmark_names,
+    load_mrt_location_names,
+    query_jurisdiction,
+    validate_landmark,
+    validate_mrt,
+)
 from sop_utils_119 import (
+    build_highway_address,
+    build_intersection_address,
+    classify_location_type,
     clean_address_fragment,
     extract_address_hint,
+    extract_address_district,
+    extract_highway_components,
+    extract_intersection_roads,
     is_street_address,
     is_usable_address,
     extract_patient_info_hint,
@@ -113,7 +127,8 @@ class QueueDialogueIO(DialogueIO):
     {"type": "classification", "main": ..., "main_conf": ...,
                                "sub": ...,  "sub_conf": ...}
     {"type": "stage_update",   "stage": "..."}
-    {"type": "stopped",        "result": "dispatched"|"ohca_transfer"|"error"|"manual_end"}
+    {"type": "stopped",        "result": "dispatched"|"ohca_transfer"|
+                                         "human_transfer"|"error"|"manual_end"}
     {"type": "error",          "message": "..."}
     """
 
@@ -193,7 +208,6 @@ class SopEngine119:
         self.case         = CaseInfo119()
         self._case_lock   = threading.Lock()
         self._extracted_caller_count = 0
-        self._extracted_caller_count = 0
 
     # ── 工具方法 ──────────────────────────────────────────────────────────────
 
@@ -265,7 +279,7 @@ class SopEngine119:
                 self.case.is_ohca = True
             self._notify_case_update()
             self._say(
-                "（判斷為ohca）救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
+                "（判斷為OHCA）救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
             )
             raise TransferToHumanError(
                 f"OHCA detected at {slot}", result="ohca_transfer"
@@ -302,11 +316,86 @@ class SopEngine119:
     def _apply_extracted_fields(self, extracted: Dict[str, Any]) -> None:
         """將跨欄位抽取結果合併進 case（空欄位優先填入，地址允許升級）。"""
         _BOOL_FIELDS = {"consciousness", "breathing", "abdomen_rise"}
+        _INTERNAL_OVERWRITE_FIELDS = {
+            "report_request_type",
+            "field_report_content",
+            "support_vehicle_type",
+            "support_vehicle_count",
+            "support_request_confirmed",
+            "has_additional_request",
+        }
+        _FIRE_OVERWRITE_FIELDS = {
+            "fire_or_smoke",
+            "smoke_color",
+            "burning_object",
+            "fire_trend",
+            "fire_extent",
+            "fire_category",
+            "caller_position",
+            "caller_role",
+            "people_trapped",
+            "trapped_count",
+            "building_total_floors",
+            "fire_floor",
+            "fire_spread",
+            "building_layout",
+            "factory_scale_type",
+            "factory_people_present",
+            "hazardous_materials",
+            "vehicle_type",
+            "vehicle_count",
+            "vehicle_occupants",
+            "vehicle_occupant_count",
+            "road_type",
+            "outdoor_fire_type",
+            "nearby_water_source",
+            "affected_targets",
+            "caller_salutation",
+        }
 
         for key, val in extracted.items():
             if val is None:
                 continue
             current = getattr(self.case, key, None)
+
+            if key == "ImportantCase":
+                # 通用重要性允許依本輪明確新證據升級或降級。
+                if (
+                    not isinstance(val, bool)
+                    and isinstance(val, int)
+                    and val in (0, 1, 2)
+                ):
+                    self.case.ImportantCase = val
+                continue
+
+            if key == "ImportantTag":
+                self.case.ImportantTag = merge_important_tags(
+                    self.case.ImportantTag,
+                    val,
+                )
+                continue
+
+            if key == "NeedAmbulance":
+                # 只有抽取器確認為明確布林證據時才覆蓋先前結果。
+                if isinstance(val, bool):
+                    self.case.NeedAmbulance = val
+                continue
+
+            if key == "call_type":
+                # 一旦辨識為局內回報，不讓後續一般案情描述把通話模式改回去。
+                if val == "局內回報" or not current:
+                    self.case.call_type = val
+                continue
+
+            if key in _INTERNAL_OVERWRITE_FIELDS:
+                # 局內回報需要接受覆誦更正，也要能處理同一通電話的下一項需求。
+                setattr(self.case, key, val)
+                continue
+
+            if key in _FIRE_OVERWRITE_FIELDS:
+                # 火災資訊以本輪明確新證據為準，允許報案人後續補充或更正。
+                setattr(self.case, key, val)
+                continue
 
             if key in _BOOL_FIELDS:
                 # 布林欄位：僅在尚未填入時寫入，後續專項問答可覆蓋
@@ -329,6 +418,109 @@ class SopEngine119:
             # 其他字串欄位：空欄位才填入
             if not current:
                 setattr(self.case, key, val)
+
+    def _apply_location_rules(self, caller_text: str) -> None:
+        """以确定性规则补强本轮地点组件，并重组可显示地址。"""
+        text = (caller_text or "").strip()
+        if not text:
+            return
+
+        district = extract_address_district(text)
+        roads = extract_intersection_roads(text)
+        highway = extract_highway_components(text)
+        explicit_type = classify_location_type(text)
+        explicit_candidate = (
+            clean_address_fragment(text)
+            if explicit_type in {"intersection", "highway", "mrt", "landmark"}
+            else ""
+        )
+
+        with self._case_lock:
+            if district:
+                self.case.address_district = district
+
+            if explicit_type in {"intersection", "highway", "mrt", "landmark"}:
+                self.case.location_type = explicit_type
+                if explicit_candidate:
+                    self.case.address = explicit_candidate
+
+            if explicit_type == "intersection" or self.case.location_type == "intersection":
+                if roads:
+                    if not self.case.intersection_road1:
+                        self.case.intersection_road1 = roads[0]
+                    elif (
+                        roads[0] != self.case.intersection_road1
+                        and roads[0] not in self.case.intersection_road1
+                        and self.case.intersection_road1 not in roads[0]
+                        and not self.case.intersection_road2
+                    ):
+                        self.case.intersection_road2 = roads[0]
+                    if len(roads) > 1:
+                        self.case.intersection_road2 = roads[1]
+
+            for key, value in highway.items():
+                if value:
+                    setattr(self.case, key, value)
+
+            if highway:
+                self.case.location_type = "highway"
+
+            if (
+                district
+                and is_usable_address(self.case.address)
+                and district not in (self.case.address or "")
+                and self.case.location_type == "address"
+            ):
+                self.case.address = f"{district}{self.case.address}"
+
+            intersection = build_intersection_address(
+                self.case.address_district,
+                self.case.intersection_road1,
+                self.case.intersection_road2,
+            )
+            highway_address = build_highway_address(
+                self.case.highway_name,
+                self.case.highway_direction,
+                self.case.highway_kilometer,
+            )
+            if intersection and self.case.location_type == "intersection":
+                self.case.address = intersection
+            elif highway_address and self.case.location_type == "highway":
+                self.case.address = highway_address
+
+            # 无 LLM 时，仍保留明确的地标、捷运或未完成路口/高速公路原话。
+            if (
+                not is_usable_address(self.case.address)
+                and explicit_type in {"intersection", "highway", "mrt", "landmark"}
+            ):
+                candidate = clean_address_fragment(text)
+                if candidate:
+                    self.case.address = candidate
+
+    def _refresh_location_type(self) -> Optional[str]:
+        """结合名单与规则校正地点类别，明确规则优先于 LLM 猜测。"""
+        address = self.case.address or ""
+        try:
+            mrt_names = list(load_mrt_location_names())
+        except Exception as exc:
+            self._debug_print("load_mrt_error", exc)
+            mrt_names = []
+        try:
+            landmark_names = list(load_landmark_names())
+        except Exception as exc:
+            self._debug_print("load_landmarks_error", exc)
+            landmark_names = []
+        rule_type = classify_location_type(
+            address,
+            mrt_names=mrt_names,
+            landmark_names=landmark_names,
+        )
+        with self._case_lock:
+            if rule_type:
+                self.case.location_type = rule_type
+            elif not self.case.location_type and is_usable_address(address):
+                self.case.location_type = "address"
+            return self.case.location_type
 
     def _try_extract_address(self, caller_text: str) -> bool:
         """專項地址抽取：規則備援 → LLM（不依賴當前問答類型）。"""
@@ -504,7 +696,13 @@ class SopEngine119:
                 with self._case_lock:
                     self._apply_extracted_fields(preg_hints)
 
-        # 2) 生命征象規則校正（僅填補空值 / 校正明顯誤填風險）
+        # 2) 全類型重要標籤規則補強（每輪執行、白名單、追加去重）
+        matched_tags = match_important_tags(caller_text)
+        if matched_tags:
+            with self._case_lock:
+                self._apply_extracted_fields({"ImportantTag": matched_tags})
+
+        # 3) 生命征象規則校正（僅填補空值 / 校正明顯誤填風險）
         vital_hints = extract_vital_signs_hint(caller_text)
         if vital_hints:
             with self._case_lock:
@@ -523,8 +721,10 @@ class SopEngine119:
                             if getattr(self.case, slot) is None:
                                 setattr(self.case, slot, val)
 
-        # 3) 專項地址抽取（規則 + LLM）
+        # 4) 專項地址抽取（規則 + LLM）
         self._try_extract_address(caller_text)
+        self._apply_location_rules(caller_text)
+        self._refresh_location_type()
 
     def _after_caller_input(
         self,
@@ -609,6 +809,21 @@ class SopEngine119:
         ])
         first_input = self._ask_and_extract(first_q)
 
+        if self._is_internal_report(first_input):
+            with self._case_lock:
+                self.case.call_type = "局內回報"
+                self.case.main_category = "局內回報"
+                self.case.main_conf = 1.0
+            self._emit({
+                "type": "classification",
+                "main": "局內回報", "main_conf": 1.0,
+                "sub": None, "sub_conf": None,
+            })
+            self._notify_case_update()
+            self._set_stage("main_classified")
+            self._run_局內回報()
+            return
+
         # ── 主分類 ────────────────────────────────────────────────────────────
         self._set_stage("main_classifying")
         main_cat, main_conf = self._do_main_classify(first_input)
@@ -637,6 +852,193 @@ class SopEngine119:
                 self.case.result = "dispatched"
             self._set_stage("completed")
             self._emit({"type": "stopped", "result": "dispatched"})
+
+    def _is_internal_report(self, text: str) -> bool:
+        """以每輪 LLM 抽取結果為主，明確局內用語為降級備援。"""
+        if self.case.call_type == "局內回報":
+            return True
+        normalized = re.sub(r"\s+", "", text or "")
+        return any(
+            keyword in normalized
+            for keyword in ("分隊回報", "局內回報", "局内回报", "同仁回報", "同仁回报")
+        )
+
+    def _detect_report_request_type(self, text: str = "") -> Optional[str]:
+        request_type = self.case.report_request_type
+        if request_type in ("現場回報", "支援請求"):
+            return request_type
+        normalized = re.sub(r"\s+", "", text or "")
+        if any(keyword in normalized for keyword in (
+            "要車", "增派", "加派", "支援車", "支援车辆", "支援車輛",
+        )):
+            return "支援請求"
+        if any(keyword in normalized for keyword in (
+            "現場回報", "现场回报", "回報現場", "回报现场", "回報案情", "回报案情",
+        )):
+            return "現場回報"
+        return None
+
+    def _ask_internal_request_type(self, initial_text: str = "") -> str:
+        request_type = self._detect_report_request_type(initial_text)
+        while request_type is None:
+            self._set_stage("局內回報_need")
+            answer = self._ask_and_extract(
+                "請問是要回報現場狀況，還是需要中心支援車輛？"
+            )
+            request_type = self._detect_report_request_type(answer)
+        with self._case_lock:
+            self.case.report_request_type = request_type
+        self._notify_case_update()
+        return request_type
+
+    def _collect_internal_address(self) -> None:
+        self._set_stage("局內回報_location")
+        self._ask_and_extract("請先給我現場的完整地址。")
+        while not is_usable_address(self.case.address):
+            self._set_stage("局內回報_location_reask")
+            self._ask_and_extract("目前地址資訊不足，請再提供現場的完整地址。")
+
+    def _run_field_report(self) -> str:
+        self._set_stage("局內回報_field_content")
+        answer = self._ask_and_extract("請問要回報的內容（案情）是什麼？")
+        if self._llm is None and answer.strip():
+            with self._case_lock:
+                self.case.field_report_content = answer.strip()
+            self._notify_case_update()
+        while not self._is_field_filled("field_report_content"):
+            answer = self._ask_and_extract("請問要回報的內容（案情）是什麼？")
+            if self._llm is None and answer.strip():
+                with self._case_lock:
+                    self.case.field_report_content = answer.strip()
+                self._notify_case_update()
+        self._say("收到，為您記錄。")
+        return "report_recorded"
+
+    def _run_support_request(self) -> str:
+        while True:
+            self._set_stage("局內回報_support_detail")
+            self._ask_and_extract("現場需要什麼車？幾台？")
+            while not (
+                self._is_field_filled("support_vehicle_type")
+                and self._is_field_filled("support_vehicle_count")
+            ):
+                self._ask_and_extract("現場需要什麼車？幾台？")
+
+            vehicle_type = self.case.support_vehicle_type
+            vehicle_count = self.case.support_vehicle_count
+            with self._case_lock:
+                self.case.support_request_confirmed = None
+
+            self._set_stage("局內回報_support_confirm")
+            confirm_answer = self._ask_and_extract(
+                f"跟您確認，是否要 {vehicle_count} 台 {vehicle_type}嗎？"
+            )
+            confirmed = self.case.support_request_confirmed
+            if confirmed is None:
+                confirmed = parse_yes_no_for_question(
+                    confirm_answer,
+                    f"是否要 {vehicle_count} 台 {vehicle_type}",
+                )
+            if confirmed is True:
+                with self._case_lock:
+                    self.case.support_request_confirmed = True
+                self._say(
+                    f"好的，中心將為您派遣 {vehicle_count} 台 {vehicle_type}。"
+                )
+                self._notify_case_update()
+                return "support_dispatched"
+            if confirmed is False:
+                with self._case_lock:
+                    self.case.support_vehicle_type = None
+                    self.case.support_vehicle_count = None
+                    self.case.support_request_confirmed = False
+                self._notify_case_update()
+                continue
+            self._say("抱歉，請明確告訴我以上車輛類型與數量是否正確。")
+
+    def _clear_internal_task_fields(self) -> None:
+        with self._case_lock:
+            self.case.report_request_type = None
+            self.case.field_report_content = None
+            self.case.support_vehicle_type = None
+            self.case.support_vehicle_count = None
+            self.case.support_request_confirmed = None
+            self.case.has_additional_request = None
+            self.case.address = None
+            self.case.address_confirmed = None
+            self.case.location_type = None
+            self.case.address_district = None
+            self.case.intersection_road1 = None
+            self.case.intersection_road2 = None
+            self.case.highway_name = None
+            self.case.highway_direction = None
+            self.case.highway_kilometer = None
+
+    def _run_局內回報(self) -> None:
+        self._set_stage("局內回報_need")
+        need_answer = self._ask_and_extract("長官您好，有什麼需要中心協助嗎？")
+        last_result = "report_recorded"
+
+        while True:
+            request_type = self._ask_internal_request_type(need_answer)
+            self._collect_internal_address()
+            if request_type == "支援請求":
+                last_result = self._run_support_request()
+            else:
+                last_result = self._run_field_report()
+
+            with self._case_lock:
+                previous_task = {
+                    "report_request_type": self.case.report_request_type,
+                    "field_report_content": self.case.field_report_content,
+                    "support_vehicle_type": self.case.support_vehicle_type,
+                    "support_vehicle_count": self.case.support_vehicle_count,
+                    "support_request_confirmed": self.case.support_request_confirmed,
+                    "address": self.case.address,
+                    "address_confirmed": self.case.address_confirmed,
+                    "location_type": self.case.location_type,
+                    "address_district": self.case.address_district,
+                    "intersection_road1": self.case.intersection_road1,
+                    "intersection_road2": self.case.intersection_road2,
+                    "highway_name": self.case.highway_name,
+                    "highway_direction": self.case.highway_direction,
+                    "highway_kilometer": self.case.highway_kilometer,
+                }
+            self._clear_internal_task_fields()
+            self._set_stage("局內回報_more")
+            more_answer = self._ask_and_extract("還有其他需要協助的嗎？")
+            has_more = self.case.has_additional_request
+            if has_more is None:
+                has_more = parse_yes_no_for_question(
+                    more_answer, "還有其他需要協助的嗎"
+                )
+            while has_more is None:
+                with self._case_lock:
+                    self.case.has_additional_request = None
+                more_answer = self._ask_and_extract(
+                    "請問是否還有其他需要中心協助的事項？"
+                )
+                has_more = self.case.has_additional_request
+                if has_more is None:
+                    has_more = parse_yes_no_for_question(
+                        more_answer, "是否還有其他需要中心協助"
+                    )
+            if has_more is False:
+                with self._case_lock:
+                    for key, value in previous_task.items():
+                        setattr(self.case, key, value)
+                    self.case.has_additional_request = False
+                    self.case.result = last_result
+                self._update_case_summary()
+                self._say("好的，已為您記錄，謝謝回報。")
+                self._set_stage("completed")
+                self._notify_case_update()
+                self._emit({"type": "stopped", "result": last_result})
+                return
+            need_answer = more_answer
+            if self._detect_report_request_type(need_answer) is None:
+                self._set_stage("局內回報_need")
+                need_answer = self._ask_and_extract("請問還需要中心協助什麼？")
 
     def _do_main_classify(self, text: str):
         """調用主分類器，返回 (main_category, confidence)。"""
@@ -690,6 +1092,207 @@ class SopEngine119:
 
     # ── 共用：地址詢問 + 覆頌確認 ─────────────────────────────────────────────
 
+    def _set_address_validation(
+        self,
+        status: str,
+        *,
+        office_name: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> None:
+        with self._case_lock:
+            self.case.address_validation_status = status
+            self.case.jurisdiction_office = office_name
+            self.case.address_error_reason = reason
+        self._notify_case_update()
+
+    def _mark_address_failure(self, reason: str) -> None:
+        """向前端发布地址错误标签，并统一转人工。"""
+        with self._case_lock:
+            self.case.address_confirmed = False
+            self.case.address_suspect_error = True
+            self.case.address_error_reason = reason
+            if self.case.address_validation_status not in {"invalid", "error"}:
+                self.case.address_validation_status = "invalid"
+        self._notify_case_update()
+        self._say(
+            "無法確認事發地址，請不要掛斷電話，我立即為您轉接專人。"
+        )
+        raise TransferToHumanError(reason, result="human_transfer")
+
+    def _reset_location_for_correction(self) -> None:
+        """清除旧地点，避免完整重报被 merge_address 保留为旧值。"""
+        with self._case_lock:
+            self.case.address = None
+            self.case.address_confirmed = None
+            self.case.location_type = None
+            self.case.address_district = None
+            self.case.intersection_road1 = None
+            self.case.intersection_road2 = None
+            self.case.highway_name = None
+            self.case.highway_direction = None
+            self.case.highway_kilometer = None
+            self.case.address_validation_status = "pending"
+            self.case.jurisdiction_office = None
+            self.case.address_error_reason = None
+
+    def _validate_location_once(
+        self,
+        *,
+        allow_component_reasks: bool,
+    ) -> tuple[bool, str, bool]:
+        """
+        完成并校验当前地点。
+
+        返回 (成功, 原因, 是否允许完整重报一次)。组件补问本身最多两次，
+        用尽后不再额外重报；外部名单/API 校验失败可完整重报一次。
+        """
+        location_type = self._refresh_location_type()
+        if not location_type:
+            return False, "無法判斷地址類別", False
+
+        self._set_address_validation("pending")
+
+        if location_type == "address":
+            district = extract_address_district(self.case.address or "")
+            if district:
+                with self._case_lock:
+                    self.case.address_district = district
+            if not self.case.address_district and allow_component_reasks:
+                for _ in range(2):
+                    self._set_stage("location_district_reask")
+                    self._ask_and_extract("請告訴我是那一區？")
+                    if self.case.address_district:
+                        break
+            if not self.case.address_district:
+                return False, "地址缺少行政區", False
+            if self.case.address_district not in (self.case.address or ""):
+                with self._case_lock:
+                    self.case.address = (
+                        f"{self.case.address_district}{self.case.address or ''}"
+                    )
+
+            self._set_stage("location_validating")
+            result = query_jurisdiction(self.case.address or "")
+            if result.valid is True:
+                self._set_address_validation(
+                    "valid", office_name=result.office_name
+                )
+                return True, "", False
+            if result.valid is False:
+                self._set_address_validation(
+                    "invalid", reason="地址查無管轄單位"
+                )
+                return False, "地址查無管轄單位", True
+            self._set_address_validation(
+                "error", reason="地址轄區 API 無法使用"
+            )
+            return False, "地址轄區 API 無法使用", True
+
+        if location_type == "intersection":
+            self._apply_location_rules(self.case.address or "")
+            if (
+                not self.case.intersection_road2
+                and allow_component_reasks
+            ):
+                for _ in range(2):
+                    road1 = self.case.intersection_road1 or "這條路"
+                    self._set_stage("location_intersection_reask")
+                    self._ask_and_extract(
+                        f"{road1}與哪條路或巷的路口？"
+                    )
+                    if self.case.intersection_road2:
+                        break
+            rebuilt = build_intersection_address(
+                self.case.address_district,
+                self.case.intersection_road1,
+                self.case.intersection_road2,
+            )
+            if not rebuilt:
+                return False, "交叉路口缺少第二條道路", False
+            with self._case_lock:
+                self.case.address = rebuilt
+            self._set_address_validation("valid")
+            return True, "", False
+
+        if location_type == "highway":
+            self._apply_location_rules(self.case.address or "")
+            complete = build_highway_address(
+                self.case.highway_name,
+                self.case.highway_direction,
+                self.case.highway_kilometer,
+            )
+            if not complete and allow_component_reasks:
+                for _ in range(2):
+                    self._set_stage("location_highway_reask")
+                    self._ask_and_extract(
+                        "請問在哪一條高速公路、南向或北向，以及幾公里處？"
+                    )
+                    complete = build_highway_address(
+                        self.case.highway_name,
+                        self.case.highway_direction,
+                        self.case.highway_kilometer,
+                    )
+                    if complete:
+                        break
+            if not complete:
+                return False, "高速公路地點資訊不完整", False
+            with self._case_lock:
+                self.case.address = complete
+            self._set_address_validation("valid")
+            return True, "", False
+
+        if location_type == "landmark":
+            self._set_stage("location_validating")
+            try:
+                valid = validate_landmark(self.case.address or "")
+            except Exception as exc:
+                self._debug_print("landmark_validation_error", exc)
+                self._set_address_validation(
+                    "error", reason="地標資料表無法讀取"
+                )
+                return False, "地標資料表無法讀取", True
+            if valid:
+                self._set_address_validation("valid")
+                return True, "", False
+            self._set_address_validation("invalid", reason="地標不在資料表中")
+            return False, "地標不在資料表中", True
+
+        if location_type == "mrt":
+            self._set_stage("location_validating")
+            try:
+                valid = validate_mrt(self.case.address or "")
+            except Exception as exc:
+                self._debug_print("mrt_validation_error", exc)
+                self._set_address_validation(
+                    "error", reason="捷運車站資料無法讀取"
+                )
+                return False, "捷運車站資料無法讀取", True
+            if valid:
+                self._set_address_validation("valid")
+                return True, "", False
+            self._set_address_validation("invalid", reason="查無捷運車站")
+            return False, "查無捷運車站", True
+
+        return False, "不支援的地址類別", False
+
+    def _complete_and_validate_location(self) -> tuple[bool, str]:
+        ok, reason, retryable = self._validate_location_once(
+            allow_component_reasks=True
+        )
+        if ok or not retryable:
+            return ok, reason
+
+        self._set_stage("location_validation_reask")
+        self._reset_location_for_correction()
+        self._notify_case_update()
+        self._ask_and_extract("地址無法確認，請重新提供完整正確的事發地點。")
+        if not is_usable_address(self.case.address):
+            return False, "重新提供的地址仍無法抽取"
+        ok, reason, _ = self._validate_location_once(
+            allow_component_reasks=False
+        )
+        return ok, reason
+
     def _run_address_flow(
         self,
         *,
@@ -699,9 +1302,10 @@ class SopEngine119:
         ask_questions: tuple[str, ...],
     ) -> None:
         """
-        詢問地址（依 ask_questions 順序，用滿則轉人工）→ 有可用地址再複讀確認。
+        询问地址 → 分类补问 → 数据/API 校验 → 覆诵确认。
 
-        覆頌句固定為「確定是{addr}這個地址嗎？」。
+        所有提问均经 _ask_and_extract，抽取失败或校验失败最多再问一遍；
+        最终失败时发布地址错误标签并转人工。
         """
         self._set_stage(stage_ask)
 
@@ -709,7 +1313,7 @@ class SopEngine119:
         self._notify_case_update()
 
         addr_asks = 0
-        ask_max = len(ask_questions)
+        ask_max = min(2, len(ask_questions))
         while not is_usable_address(self.case.address) and addr_asks < ask_max:
             addr_q = ask_questions[addr_asks]
             addr_asks += 1
@@ -721,86 +1325,72 @@ class SopEngine119:
                 self._clear_unusable_address()
             self._notify_case_update()
 
-        if is_usable_address(self.case.address):
-            if addr_asks == 0:
-                self._debug_print("skip_address_ask", self.case.address)
-
-            self._set_stage(stage_confirm)
-            _confirm_attempts = 0
-            while is_usable_address(self.case.address):
-                _confirm_attempts += 1
-                current_addr_display = self.case.display_address()
-                confirm_q = f"確定是{current_addr_display}這個地址嗎？"
-                confirm_text = self._ask_and_extract(confirm_q)
-                self._clear_unusable_address()
-                if not is_usable_address(self.case.address):
-                    self._debug_print("address_lost_during_confirm", None)
-                    break
-
-                if self.case.display_address() != current_addr_display:
-                    self._notify_case_update()
-                    continue
-
-                addr_update = self._resolve_address_correction(
-                    confirm_text, confirm_q, self.case.address or "",
-                )
-                if is_usable_address(addr_update):
-                    with self._case_lock:
-                        self.case.address = addr_update
-                    self._notify_case_update()
-                    continue
-
-                confirmed = parse_yes_no_for_question(confirm_q, confirm_text)
-                new_address = None
-
-                if self._llm:
-                    try:
-                        confirm_result = self._llm.extract_confirmation(
-                            question=confirm_q,
-                            caller_text=confirm_text,
-                            current_address=current_addr_display,
-                        )
-                        self._debug_print("extract_confirmation", confirm_result)
-                        confirmed = confirm_result.get("confirmed")
-                        new_address = confirm_result.get("new_address")
-                    except Exception as e:
-                        self._debug_print("extract_confirmation_error", e)
-
-                if is_usable_address(new_address):
-                    with self._case_lock:
-                        merged = merge_address(self.case.address, new_address)
-                        if is_usable_address(merged):
-                            self.case.address = merged
-                    self._notify_case_update()
-                    continue
-
-                if confirmed is True:
-                    with self._case_lock:
-                        self.case.address_confirmed = True
-                    self._notify_case_update()
-                    break
-
-                if _confirm_attempts >= 3:
-                    with self._case_lock:
-                        self.case.address_confirmed = True
-                    self._notify_case_update()
-                    break
-
-            if is_usable_address(self.case.address):
-                self._say(dispatch_line)
-            else:
-                self._say(
-                    "無法確認事發地址，請不要掛斷電話，我立即為您轉接專人。"
-                )
-                raise TransferToHumanError(
-                    "address_missing_after_confirm", result="human_transfer"
-                )
-        else:
+        if not is_usable_address(self.case.address):
             self._debug_print("address_ask_exhausted", {"asks": addr_asks})
-            self._say(
-                "無法確認事發地址，請不要掛斷電話，我立即為您轉接專人。"
+            self._mark_address_failure("地址抽取失敗")
+
+        if addr_asks == 0:
+            self._debug_print("skip_address_ask", self.case.address)
+
+        valid, reason = self._complete_and_validate_location()
+        if not valid:
+            self._mark_address_failure(reason or "地址校驗失敗")
+
+        self._set_stage(stage_confirm)
+        for _confirm_attempt in range(2):
+            current_addr_display = self.case.display_address()
+            confirm_q = f"確定是{current_addr_display}這個地址嗎？"
+            confirm_text = self._ask_and_extract(confirm_q)
+
+            confirmed = parse_yes_no_for_question(confirm_q, confirm_text)
+            new_address = None
+            addr_update = self._resolve_address_correction(
+                confirm_text, confirm_q, current_addr_display,
             )
-            raise TransferToHumanError("address_missing", result="human_transfer")
+            if self._llm:
+                try:
+                    confirm_result = self._llm.extract_confirmation(
+                        question=confirm_q,
+                        caller_text=confirm_text,
+                        current_address=current_addr_display,
+                    )
+                    self._debug_print("extract_confirmation", confirm_result)
+                    if confirm_result.get("confirmed") is not None:
+                        confirmed = confirm_result.get("confirmed")
+                    new_address = confirm_result.get("new_address")
+                except Exception as exc:
+                    self._debug_print("extract_confirmation_error", exc)
+
+            corrected = addr_update or new_address
+            if is_usable_address(corrected):
+                with self._case_lock:
+                    self.case.address = corrected
+                    self.case.address_confirmed = None
+                    self.case.location_type = None
+                    self.case.address_district = None
+                    self.case.intersection_road1 = None
+                    self.case.intersection_road2 = None
+                    self.case.highway_name = None
+                    self.case.highway_direction = None
+                    self.case.highway_kilometer = None
+                    self.case.address_validation_status = "pending"
+                    self.case.jurisdiction_office = None
+                self._apply_location_rules(corrected or "")
+                valid, reason = self._complete_and_validate_location()
+                if not valid:
+                    self._mark_address_failure(reason or "更正地址校驗失敗")
+                continue
+
+            if confirmed is True:
+                with self._case_lock:
+                    self.case.address_confirmed = True
+                    self.case.address_suspect_error = False
+                    self.case.address_error_reason = None
+                self._notify_case_update()
+                self._say(dispatch_line)
+                return
+
+        self._mark_address_failure("報警人未能明確確認地址")
 
     # ── 救護 handler ──────────────────────────────────────────────────────────
 
@@ -841,7 +1431,7 @@ class SopEngine119:
             if sub_conf is not None and sub_conf >= _SUB_CONF_THRESHOLD:
                 break
 
-            self._ask_and_extract("請問發生了什麼事")
+            self._ask_and_extract("請問發生了什麼事？")
             all_caller_text = self.case.full_caller_text()
             sub_cat, sub_conf, sub_source = self._do_sub_classify(
                 all_caller_text, "救護"
@@ -993,7 +1583,7 @@ class SopEngine119:
     # ── 火警 handler ──────────────────────────────────────────────────────────
 
     def _run_火警(self) -> None:
-        """火警大類通用對話 SOP（暫不做子類識別）。"""
+        """火警初期研判、四類燃燒標的分流與結案流程。"""
         from handlers.火警通用 import HuoJingGenericHandler
 
         # ════════════════════════════════════════════════════════
@@ -1011,44 +1601,20 @@ class SopEngine119:
         )
 
         # ════════════════════════════════════════════════════════
-        # 階段 2：市話報案 — 若尚未有聯繫方式，請給手機號碼
-        # ════════════════════════════════════════════════════════
-        self._ensure_known_fields_from_history()
-        if not self._is_field_filled("caller_contact"):
-            self._set_stage("火警_phone")
-            phone_q = "請給我手機號碼。"
-            self._ask_and_extract(phone_q)
-            # 專項補強電話
-            if self._llm and not self._is_field_filled("caller_contact"):
-                try:
-                    pairs = self._iter_caller_qa_pairs()
-                    if pairs:
-                        last_q, last_a = pairs[-1]
-                        ci = self._llm.extract_caller_info(last_q, last_a)
-                        if ci.get("caller_contact"):
-                            with self._case_lock:
-                                self.case.caller_contact = ci["caller_contact"]
-                            self._notify_case_update()
-                except Exception as e:
-                    self._debug_print("fire_phone_extract_error", e)
-        else:
-            self._debug_print("skip_火警_phone", self.case.caller_contact)
-
-        # ════════════════════════════════════════════════════════
-        # 階段 3：火/煙問診 + 觸發情境 2–14
+        # 階段 2：初期三題 + 四類燃燒標的分支
         # ════════════════════════════════════════════════════════
         handler = HuoJingGenericHandler()
         handler.run_generic_flow(self)
 
         # ════════════════════════════════════════════════════════
-        # 階段 4：案情摘要回填
+        # 階段 3：案情摘要回填
         # ════════════════════════════════════════════════════════
         self._set_stage("火警_summary_confirm")
         self._update_case_summary()
         self._notify_case_update()
 
         # ════════════════════════════════════════════════════════
-        # 階段 5：報案人訊息 + 流程結束
+        # 階段 4：回撥電話、稱呼確認 + 流程結束
         # ════════════════════════════════════════════════════════
         handler.collect_caller_info(self)
 

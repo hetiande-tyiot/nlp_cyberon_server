@@ -40,6 +40,7 @@ import re
 from threading import Lock
 from typing import Any, Dict, List, Optional
 
+from important_tags_119 import IMPORTANT_TAGS, normalize_important_tags
 from sop_utils_119 import (
     clean_address_fragment,
     format_qa_for_llm,
@@ -134,6 +135,9 @@ REPORT_FIELD_MAP: Dict[str, str] = {
     "目前狀況": "current_condition",
     "患者性別": "patient_gender",
     "患者年齡": "patient_age",
+    "案件重要性": "ImportantCase",
+    "重要標籤": "ImportantTag",
+    "需要救護車": "NeedAmbulance",
 }
 
 # ─── 工具函式 ─────────────────────────────────────────────────────────────────
@@ -827,6 +831,15 @@ class LLMExtractor119:
             "medical_history":      "string|null",
             "collapse_cause":       "string|null",
         }
+        location_schema = {
+            "location_type":      "address|intersection|landmark|highway|mrt|null",
+            "address_district":   "string|null",
+            "intersection_road1": "string|null",
+            "intersection_road2": "string|null",
+            "highway_name":       "string|null",
+            "highway_direction":  "南向|北向|null",
+            "highway_kilometer":  "string|null",
+        }
         ext_schema = {
             "injury_cause":          "string|null",
             "injury_location":       "string|null",
@@ -845,15 +858,49 @@ class LLMExtractor119:
             "prenatal_clinic":       "string|null",
             "caller_name":           "string|null",
             "caller_contact":        "string|null",
+            "caller_salutation":     "先生|小姐|null",
             "caller_address":        "string|null",
         }
         fire_schema = {
-            "fire_or_smoke":     "string|null",
-            "smoke_color":       "string|null",
-            "smoke_trend":       "string|null",
-            "flame_observation": "string|null",
-            "burning_object":    "string|null",
-            "fire_floor":        "string|null",
+            "fire_or_smoke":         "string|null",
+            "smoke_color":           "string|null",
+            "burning_object":        "string|null",
+            "fire_trend":            "string|null",
+            "fire_extent":           "string|null",
+            "fire_category":         "建築物|工廠|車輛|露天野外|null",
+            "caller_position":       "string|null",
+            "caller_role":           "string|null",
+            "people_trapped":        "true|false|null",
+            "trapped_count":         "string|null",
+            "building_total_floors": "string|null",
+            "fire_floor":            "string|null",
+            "fire_spread":           "true|false|null",
+            "building_layout":       "string|null",
+            "factory_scale_type":    "string|null",
+            "factory_people_present": "true|false|null",
+            "hazardous_materials":   "string|null",
+            "vehicle_type":          "string|null",
+            "vehicle_count":         "string|null",
+            "vehicle_occupants":     "true|false|null",
+            "vehicle_occupant_count": "string|null",
+            "road_type":             "一般道路|高速公路|null",
+            "outdoor_fire_type":     "string|null",
+            "nearby_water_source":   "string|null",
+            "affected_targets":      "string|null",
+        }
+        universal_schema = {
+            "ImportantCase":  "0|1|2|null",
+            "ImportantTag":   "string[]|null",
+            "NeedAmbulance":  "true|false|null",
+        }
+        internal_report_schema = {
+            "call_type":                    "局內回報|一般案件|null",
+            "report_request_type":          "現場回報|支援請求|null",
+            "field_report_content":         "string|null",
+            "support_vehicle_type":         "string|null",
+            "support_vehicle_count":        "integer|null",
+            "support_request_confirmed":    "true|false|null",
+            "has_additional_request":       "true|false|null",
         }
         core_rules = (
             "【抽取原則】結合問題語義，從報警人回答抽取；長答可同時填多欄；"
@@ -872,6 +919,19 @@ class LLMExtractor119:
             "- current_condition：目前症狀/狀況。\n"
             "- medical_history/collapse_cause：有才填，否則 null。"
         )
+        location_rules = (
+            "【地點結構化抽取】每一欄只依報警人本輪實際說出的內容填寫，未提及 → null。\n"
+            "- location_type：門牌地址=address；包含兩條道路交會、路口或巷口=intersection；"
+            "可辨識建物/市場/公園等地標=landmark；國道或高速公路=highway；"
+            "捷運站或捷運出口=mrt。\n"
+            "- address_district：只抽取行政區，格式如「板橋區」。\n"
+            "- intersection_road1/intersection_road2：分別抽取交叉路口的兩條路、街或巷；"
+            "只有一條時 road2 必須為 null。\n"
+            "- highway_name：如「國道一號」「國道3號」；highway_direction 只可為南向或北向；"
+            "highway_kilometer 只填公里數，可含小數，不含『公里處』。\n"
+            "- 回答只是補充「板橋區」「文化路」「北向32.5公里」時，即使無法單獨判定"
+            " location_type，也要抽取能確定的元件。"
+        )
         ext_rules = (
             "【抽取原則】從報警人回答抽取下列欄位；未提及 → null。\n"
             "- injury_cause/location/severity：受傷原因/部位/傷勢。\n"
@@ -880,16 +940,68 @@ class LLMExtractor119:
             "- blood_glucose/blood_pressure/seizure_info：血糖/血壓/抽搐。\n"
             "- pregnancy_week/due_date/multiple_pregnancy/"
             "water_broken_bleeding/contractions/prenatal_history/prenatal_clinic：孕產資訊。\n"
-            "- caller_name/caller_contact/caller_address：報案人姓名/電話/住址。"
+            "- caller_name/caller_contact/caller_address：報案人姓名/電話/住址。\n"
+            "- caller_salutation：只有報案人明確回答先生或小姐時才填；"
+            "不可依姓名、聲音或語氣推測。"
         )
         fire_rules = (
-            "【抽取原則】從報警人回答抽取火警 SOP 要素；未提及 → null。\n"
-            "- fire_or_smoke：看到火還是煙（如「火」「煙」「火和煙」）。\n"
+            "【火災欄位】只依報警人本輪實際回答抽取；可同時填多欄；"
+            "未提及 → null，不得從受理員問題複製答案。\n"
+            "- fire_or_smoke：看到火、煙或僅聞到氣味（如火、煙、火和煙、燒焦味）。\n"
             "- smoke_color：煙的顏色（黑煙/白煙等）。\n"
-            "- smoke_trend：煙勢（持續冒/變大/消散等）。\n"
-            "- flame_observation：火舌/火花/無等火焰觀察。\n"
             "- burning_object：燃燒物（房子/車子/雜草/電線/瓦斯桶等）。\n"
-            "- fire_floor：起火樓層（如「3樓」「頂樓」）。"
+            "- fire_trend/fire_extent：火勢變大、消退或穩定，以及約略燃燒範圍。\n"
+            "- fire_category：住宅、店面、房子或大樓=建築物；工廠/廠房=工廠；"
+            "汽機車、貨車、遊覽車等=車輛；雜草、垃圾、山林或其他戶外燃燒=露天野外。\n"
+            "- caller_position/caller_role：報案人在建物內或外，以及住戶、鄰居、路人等身分。\n"
+            "- people_trapped/trapped_count：建物、工廠或戶外案件是否有人受困及人數；"
+            "明確沒有受困 people_trapped=false。\n"
+            "- building_total_floors/fire_floor：建物總樓層與起火樓層。\n"
+            "- fire_spread/building_layout：是否延燒，以及連棟、頂樓加蓋等型態。\n"
+            "- factory_scale_type：工廠規模型態；factory_people_present：廠內是否有人；"
+            "hazardous_materials：化學品、危險物品狀況；"
+            "明確沒有危險物品可填「無」。\n"
+            "- vehicle_type/vehicle_count：車種及起火車輛數量。\n"
+            "- vehicle_occupants/vehicle_occupant_count：車內是否有人及人數；"
+            "明確無人 vehicle_occupants=false。\n"
+            "- road_type：只可填一般道路或高速公路。\n"
+            "- outdoor_fire_type：雜草垃圾、山林、高速公路旁等露天場域。\n"
+            "- nearby_water_source：附近水源或消防栓狀況。\n"
+            "- affected_targets：已波及或正威脅的建築物、車輛或人員。"
+        )
+        allowed_tags = "、".join(IMPORTANT_TAGS)
+        universal_rules = (
+            "【全類型通用標記】只依報警人本輪回答中的明確新證據抽取；"
+            "未提及或無法判斷必須輸出 null，不得沿用問題或先前內容。\n"
+            "- ImportantCase：0=明確為預設/無需特別處理，1=一般處理，"
+            "2=明確緊急處理；只可輸出整數 0、1、2 或 null。\n"
+            f"- ImportantTag：只可從此白名單選擇：{allowed_tags}。"
+            "可複選，輸出 JSON 字串陣列（例如 [\"持刀\",\"砍人\"]）；"
+            "沒有符合項目則輸出 null，禁止創造其他標籤。\n"
+            "- NeedAmbulance：報警人明確表示需要/要叫救護車才輸出 true；"
+            "明確表示不需要救護車才輸出 false；僅提到119、消防車、火警、"
+            "受傷或受理員詢問救護車，不足以判定，輸出 null。"
+        )
+        internal_report_rules = (
+            "【局內同仁回報】所有欄位只依本輪回答和受理員問題抽取；"
+            "不得把問題中的車種、數量或需求當成回答內容，未能確定必須輸出 null。\n"
+            "- call_type：回答明確表示「局內同仁、分隊、消防／救護單位回報、"
+            "分隊回報、局內回報」才輸出「局內回報」；明確為一般民眾報案才輸出"
+            "「一般案件」；僅說「回報火災」但無局內身分線索時不得猜測。\n"
+            "- report_request_type：只是回報現場狀況／案情輸出「現場回報」；"
+            "要求增派、支援、要車輸出「支援請求」。\n"
+            "- field_report_content：只有問題正在詢問回報內容／案情，或回答明確說"
+            "「回報內容是…」時，抽取完整但精簡的現場狀況；需求分類、地址、"
+            "單純車輛需求或是非回答不得填入。\n"
+            "- support_vehicle_type：抽取要求支援的車輛類型，如救護車、消防車、"
+            "水箱車、雲梯車；沒有車種則 null。\n"
+            "- support_vehicle_count：抽取要求支援的車輛數量並轉成正整數；"
+            "沒有明確數量則 null。\n"
+            "- support_request_confirmed：只有問題正在覆誦確認支援車種與數量時，"
+            "回答確認正確輸出 true，否認或更正輸出 false；其他問題一律 null。\n"
+            "- has_additional_request：只有問題在問「還有其他需要協助嗎」時，"
+            "回答有其他需求輸出 true，明確沒有／不用／謝謝輸出 false；"
+            "若回答直接描述另一項需求也輸出 true；其他問題一律 null。"
         )
         _aggressive_q = (
             "意識", "意识", "呼吸", "起伏", "是否", "確定", "對嗎",
@@ -902,8 +1014,11 @@ class LLMExtractor119:
         merged: Dict[str, Any] = {}
         for schema, rules in (
             (core_schema, core_rules),
+            (location_schema, location_rules),
             (ext_schema, ext_rules),
             (fire_schema, fire_rules),
+            (universal_schema, universal_rules),
+            (internal_report_schema, internal_report_rules),
         ):
             try:
                 out = self.extract_slots(
@@ -936,7 +1051,14 @@ class LLMExtractor119:
             except Exception:
                 pass
 
-        all_keys = list(core_schema) + list(ext_schema) + list(fire_schema)
+        all_keys = (
+            list(core_schema)
+            + list(location_schema)
+            + list(ext_schema)
+            + list(fire_schema)
+            + list(universal_schema)
+            + list(internal_report_schema)
+        )
         result: Dict[str, Any] = {}
         for key in all_keys:
             val = merged.get(key)
@@ -957,8 +1079,64 @@ class LLMExtractor119:
                     ):
                         continue
                     result[key] = bool_val
+            elif key == "NeedAmbulance":
+                bool_val = _coerce_bool(val)
+                if bool_val is not None:
+                    result[key] = bool_val
+            elif key == "ImportantCase":
+                try:
+                    level = int(str(val).strip())
+                except (TypeError, ValueError):
+                    level = -1
+                if not isinstance(val, bool) and level in (0, 1, 2):
+                    result[key] = level
+            elif key == "ImportantTag":
+                tags = normalize_important_tags(val)
+                if tags:
+                    result[key] = tags
+            elif key in (
+                "people_trapped", "fire_spread", "factory_people_present",
+                "vehicle_occupants",
+                "support_request_confirmed", "has_additional_request",
+            ):
+                bool_val = _coerce_bool(val)
+                if bool_val is not None:
+                    result[key] = bool_val
+            elif key == "support_vehicle_count":
+                try:
+                    count = int(str(val).strip())
+                except (TypeError, ValueError):
+                    count = 0
+                if count > 0:
+                    result[key] = count
             else:
                 cleaned = _clean_str(val)
+                if cleaned and key == "call_type" and cleaned not in {
+                    "局內回報", "一般案件",
+                }:
+                    cleaned = None
+                if cleaned and key == "report_request_type" and cleaned not in {
+                    "現場回報", "支援請求",
+                }:
+                    cleaned = None
+                if cleaned and key == "fire_category" and cleaned not in {
+                    "建築物", "工廠", "車輛", "露天野外",
+                }:
+                    cleaned = None
+                if cleaned and key == "road_type" and cleaned not in {
+                    "一般道路", "高速公路",
+                }:
+                    cleaned = None
+                if cleaned and key == "caller_salutation" and cleaned not in {
+                    "先生", "小姐",
+                }:
+                    cleaned = None
+                if cleaned and key == "location_type":
+                    cleaned = cleaned.lower()
+                    if cleaned not in {
+                        "address", "intersection", "landmark", "highway", "mrt",
+                    }:
+                        cleaned = None
                 if cleaned and key in ("address", "caller_address"):
                     cleaned = clean_address_fragment(cleaned) or None
                 if cleaned:
@@ -1091,18 +1269,22 @@ class LLMExtractor119:
 
         返回
         ----
-        include_address=False：{"caller_name": ..., "caller_contact": ...}
-        include_address=True ：{"caller_name": ..., "caller_contact": ..., "caller_address": ...}
+        include_address=False：{"caller_name": ..., "caller_contact": ...,
+                               "caller_salutation": ...}
+        include_address=True ：另含 {"caller_address": ...}
         """
         schema: Dict[str, str] = {
-            "caller_name":    "string|null",
-            "caller_contact": "string|null",
+            "caller_name":       "string|null",
+            "caller_contact":    "string|null",
+            "caller_salutation": "先生|小姐|null",
         }
         rules = (
             "- caller_name：報案人自述的姓名（可為全名/姓/稱謂）；未提及 → null。\n"
             "- caller_contact：報案人自述的電話號碼或手機號碼；抽取完整數字序列；"
             "未提及 → null。\n"
-            "  • 若文本中含多個號碼，優先取報案人自報的聯繫電話。"
+            "  • 若文本中含多個號碼，優先取報案人自報的聯繫電話。\n"
+            "- caller_salutation：只有報案人明確回答「先生」或「小姐」時才填；"
+            "不可依姓名、聲音或語氣推測。"
         )
         if include_address:
             schema["caller_address"] = "string|null"
@@ -1112,9 +1294,12 @@ class LLMExtractor119:
             )
         out = self.extract_slots(caller_text, schema, rules, question=question)
         result: Dict[str, Optional[str]] = {
-            "caller_name":    _clean_str(out.get("caller_name")),
-            "caller_contact": _clean_str(out.get("caller_contact")),
+            "caller_name":       _clean_str(out.get("caller_name")),
+            "caller_contact":    _clean_str(out.get("caller_contact")),
+            "caller_salutation": _clean_str(out.get("caller_salutation")),
         }
+        if result["caller_salutation"] not in ("先生", "小姐"):
+            result["caller_salutation"] = None
         if include_address:
             result["caller_address"] = _clean_str(out.get("caller_address"))
         return result
