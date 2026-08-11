@@ -264,4 +264,4 @@ class JiBingHandler(SubCategoryHandler):
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """詢問報案人姓名、聯繫方式與住址；委派給基類共用實作。"""
-        self._do_collect_caller_info(engine, include_address=True)
+        self._do_collect_caller_info(engine, include_address=false)
