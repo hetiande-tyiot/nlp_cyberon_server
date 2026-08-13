@@ -37,6 +37,38 @@ sop_119_engine.py
     engine = SopEngine119(io=io, ...)
     t = threading.Thread(target=engine.run, daemon=True)
     t.start()
+
+═══════════════════════════════════════════════════════════════════
+我們自己改的地方（從 0808 版搬過來，廠商的 0813 沒有）
+═══════════════════════════════════════════════════════════════════
+
+【一、拿地址去查之前，先補上縣市】
+
+  改在哪：_validate_address 裡面，呼叫 query_jurisdiction 的前一行
+
+  為什麼要改：
+    查地址的那個外部系統，沒有縣市就查不到。
+    報案人說「板橋區中山路一段161號」——地址是對的，只是沒說縣市——
+    系統查不到，我們就會回他「地址無法確認，請重新提供」。
+    可是板橋人打電話本來就不會特地說「新北市」，這樣等於刁難報案人。
+
+  怎麼改：
+    送出去查之前，先看看地址有沒有縣市，沒有就自動補「新北市」。
+    判斷和補字的做法都寫在 sop_utils_119.py 的 ensure_city_prefix()。
+    要改預設縣市設環境變數 DEFAULT_CITY_119 就好。
+
+【二、開場白的錯字】
+
+  改在哪：_run 開頭那三句隨機開場白的第二句
+
+  原本：「請問是需要消防車還救護車」  ← 漏了一個「是」
+  改成：「請問是需要消防車還是救護車」
+
+【沒有改的地方】
+
+  廠商在 0813 把「地址查不到就轉真人」的做法拿掉了，改成繼續問案情、
+  但把案子標記起來（重要性設 1、掛上「地址搜尋失敗」標籤）。
+  這是廠商刻意的設計，我們沒有動它。
 """
 
 from __future__ import annotations
@@ -70,6 +102,7 @@ from sop_utils_119 import (
     classify_location_type,
     clean_address_fragment,
     compose_street_address,
+    ensure_city_prefix,          # ← 我們加的：沒講縣市時自動補上
     extract_address_hint,
     extract_address_district,
     extract_address_number,
@@ -989,7 +1022,7 @@ class SopEngine119:
         self._set_stage("initial")
         first_q = random.choice([
             "119 您好，請問是火災還是救護",
-            "119 您好，請問是需要消防車還救護車",
+            "119 您好，請問是需要消防車還是救護車",   # ← 我們改的：原本漏了「是」
             "119 您好，請問是要報火災還是有人身體不舒服",
         ])
         first_input = self._ask_and_extract(first_q)
@@ -1405,6 +1438,11 @@ class SopEngine119:
                 return False, "門牌地址資訊不完整", False
             with self._case_lock:
                 self.case.address = rebuilt
+
+            # ← 我們加的：報案人沒講縣市時自動補上（預設新北市）。
+            # 查地址的外部系統沒有縣市就查不到，但報案人本來就不會特地講。
+            with self._case_lock:
+                self.case.address = ensure_city_prefix(self.case.address or "")
 
             self._set_stage("location_validating")
             result = query_jurisdiction(self.case.address or "")

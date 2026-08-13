@@ -18,8 +18,30 @@ app_119.py
 
 啟動方式
 --------
-  cd /root/work/119
-  streamlit run app_119.py
+  cd /home/cyberon2/nlp_cyberon_server
+  ./llmenv/bin/streamlit run ai/119_0813_adjustSOP/app_119.py
+
+═══════════════════════════════════════════════════════════════════
+我們自己改的地方（從 0808 版搬過來，廠商的 0813 沒有）
+═══════════════════════════════════════════════════════════════════
+
+【模型要去哪裡找】
+
+  為什麼要改：
+    廠商的程式寫死去 /root/autodl-tmp/ 這個資料夾找模型，
+    那是他們自己電腦上的位置，我們這台沒有那個資料夾。
+    不改的話，這個畫面一打開三個模型全部載入失敗。
+
+  怎麼改：
+    在檔案上方指定我們專案裡的正確位置，載入模型時把位置傳進去。
+    做法跟 sop_api_server.py（API 服務那支）一模一樣，兩邊保持一致。
+
+  可以用環境變數改，不用動程式：
+    BERT_MODELS_BASE   分類模型放哪
+    GGUF_MODEL_PATH    大模型檔案在哪
+    BERT_DEVICE        分類模型用 CPU 還是顯示卡（預設 CPU）
+
+  另外上面「啟動方式」的路徑也一併更新成我們這台的實際位置。
 """
 
 from __future__ import annotations
@@ -52,6 +74,26 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
+# ═══ 我們加的：模型放哪裡 ══════════════════════════════════════════════
+# 廠商的程式寫死去 /root/autodl-tmp/ 找模型，那是他們自己電腦的位置。
+# 我們的模型放在這個專案裡面，所以在這邊指定正確的位置。
+# 也可以用環境變數改，跟 sop_api_server.py 的做法一樣。
+_REPO_ROOT = os.path.dirname(os.path.dirname(_THIS_DIR))   # …/nlp_cyberon_server
+
+BERT_MODELS_BASE = os.environ.get(
+    "BERT_MODELS_BASE",
+    os.path.join(_REPO_ROOT, "ai") + os.sep,
+)
+GGUF_MODEL_PATH = os.environ.get(
+    "GGUF_MODEL_PATH",
+    os.path.join(_REPO_ROOT, "models", "TW-119-Model.gguf"),
+)
+# BERT 用 CPU 跑，把顯示卡的記憶體留給比較大的 LLM 模型
+BERT_DEVICE       = os.environ.get("BERT_DEVICE", "cpu")
+GGUF_N_CTX        = int(os.environ.get("GGUF_N_CTX", "4096"))
+GGUF_N_GPU_LAYERS = int(os.environ.get("GGUF_N_GPU_LAYERS", "-1"))
+GGUF_TEMPERATURE  = float(os.environ.get("GGUF_TEMPERATURE", "0.1"))
+
 # ─── 全域模型快取（跨 Streamlit rerun 保持模型實例）─────────────────────────
 @st.cache_resource(show_spinner="正在載入模型，請稍候…")
 def _load_models():
@@ -63,21 +105,36 @@ def _load_models():
     sub_clf  = None
     llm      = None
 
+    # ← 我們改的：下面三個載入都多帶了路徑參數，
+    #   讓它去我們專案裡找模型，而不是廠商寫死的 /root/autodl-tmp/
     try:
         from inference_pipeline import HierarchicalClassifier
-        main_clf = HierarchicalClassifier()
+        main_clf = HierarchicalClassifier(
+            models_base=BERT_MODELS_BASE,
+            device=BERT_DEVICE,
+        )
     except Exception as e:
         st.warning(f"主分類器未能載入（跳過）：{e}")
 
     try:
         from classifier_with_llm import build_classifiers
-        sub_clf = build_classifiers(enable_llm=False)
+        sub_clf = build_classifiers(
+            models_base=BERT_MODELS_BASE,
+            llm_model_path=None,   # 子分類器內建的 LLM 用不到，避免重複載入
+            device=BERT_DEVICE,
+            enable_llm=False,
+        )
     except Exception as e:
         st.warning(f"子分類器未能載入（跳過）：{e}")
 
     try:
         from llm_extractor_119 import LLMExtractor119
-        llm = LLMExtractor119()
+        llm = LLMExtractor119(
+            model_path=GGUF_MODEL_PATH,
+            n_ctx=GGUF_N_CTX,
+            n_gpu_layers=GGUF_N_GPU_LAYERS,
+            temperature=GGUF_TEMPERATURE,
+        )
     except Exception as e:
         st.warning(f"LLM 未能載入（跳過）：{e}")
 
