@@ -66,10 +66,13 @@ from sop_utils_119 import (
     build_intersection_address,
     classify_location_type,
     clean_address_fragment,
+    ensure_city_prefix,
     extract_address_hint,
     extract_address_district,
     extract_highway_components,
     extract_intersection_roads,
+    has_outdoor_location_hint,
+    strip_floor_question,
     is_street_address,
     is_usable_address,
     extract_patient_info_hint,
@@ -359,7 +362,9 @@ class SopEngine119:
             current = getattr(self.case, key, None)
 
             if key == "ImportantCase":
-                # 通用重要性允許依本輪明確新證據升級或降級。
+                # 等級 0 預設 / 1 一般 / 2 緊急。
+                # 允許依本輪明確新證據升級或降級：報警人更正誤聽的關鍵詞時
+                # （如「不是持刀，是賭博」），等級必須跟著降回來。
                 if (
                     not isinstance(val, bool)
                     and isinstance(val, int)
@@ -375,10 +380,10 @@ class SopEngine119:
                 )
                 continue
 
-            if key == "NeedAmbulance":
+            if key == "NeedPolice":
                 # 只有抽取器確認為明確布林證據時才覆蓋先前結果。
                 if isinstance(val, bool):
-                    self.case.NeedAmbulance = val
+                    self.case.NeedPolice = val
                 continue
 
             if key == "call_type":
@@ -804,7 +809,7 @@ class SopEngine119:
         self._set_stage("initial")
         first_q = random.choice([
             "119 您好，請問是火災還是救護",
-            "119 您好，請問是需要消防車還救護車",
+            "119 您好，請問是需要消防車還是救護車",
             "119 您好，請問是要報火災還是有人身體不舒服",
         ])
         first_input = self._ask_and_extract(first_q)
@@ -1170,6 +1175,9 @@ class SopEngine119:
                     self.case.address = (
                         f"{self.case.address_district}{self.case.address or ''}"
                     )
+            # 報警人未報縣市 → 補上預設市級單位（預設新北市）
+            with self._case_lock:
+                self.case.address = ensure_city_prefix(self.case.address or "")
 
             self._set_stage("location_validating")
             result = query_jurisdiction(self.case.address or "")
@@ -1293,6 +1301,13 @@ class SopEngine119:
         )
         return ok, reason
 
+    def _is_outdoor_case(self) -> bool:
+        """已知在戶外地點（路口/高速公路，或報警人講過巷口、路邊、天橋等）。"""
+        if self.case.location_type in {"intersection", "highway"}:
+            return True
+        blob = f"{self.case.full_caller_text()}{self.case.address or ''}"
+        return has_outdoor_location_hint(blob)
+
     def _run_address_flow(
         self,
         *,
@@ -1316,6 +1331,9 @@ class SopEngine119:
         ask_max = min(2, len(ask_questions))
         while not is_usable_address(self.case.address) and addr_asks < ask_max:
             addr_q = ask_questions[addr_asks]
+            # 報警人已表明在巷口/路邊/天橋等戶外地點 → 不再追問幾樓
+            if self._is_outdoor_case():
+                addr_q = strip_floor_question(addr_q)
             addr_asks += 1
             self._debug_print("address_ask", {"n": addr_asks, "q": addr_q})
             answer = self._ask_and_extract(addr_q)
@@ -1405,8 +1423,8 @@ class SopEngine119:
             stage_confirm="救護_location_confirm",
             dispatch_line="已確認地址，救護車已派出了喔。",
             ask_questions=(
-                "請先告訴我地址？樓層？",
-                "請問事發地址在哪裡？樓層？",
+                "請先告訴我地址？幾樓？",
+                "請問事發地址在哪裡？幾樓？",
             ),
         )
 
@@ -1594,7 +1612,7 @@ class SopEngine119:
             stage_confirm="火警_location_confirm",
             dispatch_line="已確認地址，消防車已派出了喔。",
             ask_questions=(
-                "請先告訴我地址？樓層？",
+                "請先告訴我地址？幾樓？",
                 "地址在哪裡呢？附近有明顯建物或標示嗎？",
                 "有路燈或電線桿嗎？給我路燈或電線桿上面的編號、大約靠近哪邊呢？",
             ),
@@ -1632,7 +1650,7 @@ class SopEngine119:
             stage_confirm="緊急救援_location_confirm",
             dispatch_line="已確認地址，救援人員已派出了喔。",
             ask_questions=(
-                "請先告訴我地址？樓層？",
+                "請先告訴我地址？幾層？",
                 "地址在哪裡呢？附近有明顯建物或標示嗎？",
                 "有路燈或電線桿嗎？給我路燈或電線桿上面的編號、大約靠近哪邊呢？",
             ),

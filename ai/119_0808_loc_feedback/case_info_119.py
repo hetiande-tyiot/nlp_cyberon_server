@@ -114,9 +114,9 @@ class CaseInfo119:
     caller_address:    Optional[str] = None  # 報案人住址（急病等次類別專用）
 
     # ── 全類型通用標記 ──────────────────────────────────────────────────────
-    ImportantCase: int = 0  # 0=預設, 1=一般處理, 2=緊急處理
+    ImportantCase: int = 0  # 0=預設, 1=一般處理, 2=緊急處理（只升不降）
     ImportantTag: List[str] = field(default_factory=list)  # AI 標籤（白名單、去重）
-    NeedAmbulance: Optional[bool] = None  # 是否需要救護車
+    NeedPolice: Optional[bool] = None  # 是否需轉介110
 
     # ── 局內同仁回報 ────────────────────────────────────────────────────────
     call_type: Optional[str] = None  # 局內回報 / 一般案件

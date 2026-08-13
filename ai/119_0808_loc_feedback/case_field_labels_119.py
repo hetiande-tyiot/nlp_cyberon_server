@@ -9,7 +9,7 @@ Source: case_info_119.py 的 CaseInfo119 dataclass 欄位註解（119_0808_loc_f
   - 新增地址型態與轄區校驗 11 欄位（location_type ... address_error_reason）
   - 火警要素 6 → 22 欄位，細分建築物 / 工廠 / 車輛 / 露天野外四類
   - 移除 flame_observation、smoke_trend（改由 fire_trend / fire_extent 表達）
-  - 新增全類型通用標記 3 欄位（ImportantCase / ImportantTag / NeedAmbulance）
+  - 新增全類型通用標記 3 欄位（ImportantCase / ImportantTag / NeedPolice）
   - 新增局內同仁回報 7 欄位（call_type ... has_additional_request）
 """
 
@@ -107,7 +107,7 @@ LABELS: Dict[str, str] = {
     # 全類型通用標記
     "ImportantCase": "案件重要程度",
     "ImportantTag": "AI 重要標籤",
-    "NeedAmbulance": "是否需要救護車",
+    "NeedPolice": "是否需轉介110",
     # 局內同仁回報
     "call_type": "來電類型",
     "report_request_type": "回報/請求類型",

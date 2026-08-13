@@ -53,7 +53,7 @@ class UniversalFieldTests(unittest.TestCase):
 
         self.assertEqual(data["ImportantCase"], 0)
         self.assertEqual(data["ImportantTag"], [])
-        self.assertIsNone(data["NeedAmbulance"])
+        self.assertIsNone(data["NeedPolice"])
         self.assertIsNone(data["call_type"])
         self.assertIsNone(data["report_request_type"])
         self.assertIsNone(data["support_vehicle_count"])
@@ -83,25 +83,52 @@ class UniversalFieldTests(unittest.TestCase):
         engine._apply_extracted_fields({
             "ImportantCase": 2,
             "ImportantTag": ["持刀"],
-            "NeedAmbulance": True,
+            "NeedPolice": True,
         })
         engine._apply_extracted_fields({
             "ImportantCase": None,
             "ImportantTag": None,
-            "NeedAmbulance": None,
+            "NeedPolice": None,
         })
         self.assertEqual(engine.case.ImportantCase, 2)
-        self.assertIs(engine.case.NeedAmbulance, True)
+        self.assertIs(engine.case.NeedPolice, True)
 
         engine._apply_extracted_fields({
             "ImportantCase": 1,
             "ImportantTag": ["持刀", "賭博"],
-            "NeedAmbulance": False,
+            "NeedPolice": False,
         })
 
+        # ImportantCase 可依本輪明確證據降級（更正誤聽的關鍵詞）
         self.assertEqual(engine.case.ImportantCase, 1)
         self.assertEqual(engine.case.ImportantTag, ["持刀", "賭博"])
-        self.assertIs(engine.case.NeedAmbulance, False)
+        self.assertIs(engine.case.NeedPolice, False)
+
+    def test_important_case_accepts_upgrade_and_downgrade(self) -> None:
+        engine = SopEngine119(io=ScriptedIO([]))
+
+        engine._apply_extracted_fields({"ImportantCase": 1})
+        self.assertEqual(engine.case.ImportantCase, 1)
+
+        engine._apply_extracted_fields({"ImportantCase": 2})
+        self.assertEqual(engine.case.ImportantCase, 2)
+
+        # 更正誤聽關鍵詞時必須能降回來
+        engine._apply_extracted_fields({"ImportantCase": 1})
+        self.assertEqual(engine.case.ImportantCase, 1)
+        engine._apply_extracted_fields({"ImportantCase": 0})
+        self.assertEqual(engine.case.ImportantCase, 0)
+
+    def test_important_case_rejects_bool_and_out_of_range(self) -> None:
+        engine = SopEngine119(io=ScriptedIO([]))
+        engine._apply_extracted_fields({"ImportantCase": 2})
+
+        # True 在 Python 中等於 1，若無 bool 防護會被誤當成「一般」降級
+        engine._apply_extracted_fields({"ImportantCase": True})
+        self.assertEqual(engine.case.ImportantCase, 2)
+
+        engine._apply_extracted_fields({"ImportantCase": 3})
+        self.assertEqual(engine.case.ImportantCase, 2)
 
     def test_internal_report_fields_accept_explicit_corrections(self) -> None:
         engine = SopEngine119(io=ScriptedIO([]))
@@ -129,18 +156,18 @@ class UniversalFieldTests(unittest.TestCase):
             {
                 "ImportantCase": 2,
                 "ImportantTag": ["持刀"],
-                "NeedAmbulance": True,
+                "NeedPolice": True,
             },
             {
                 "ImportantCase": 1,
                 "ImportantTag": ["賭博"],
-                "NeedAmbulance": False,
+                "NeedPolice": False,
             },
         ])
         engine = SopEngine119(
             io=ScriptedIO([
-                "有人持刀，需要救護車",
-                "更正，不用救護車，只是賭博",
+                "有人持刀，要幫我報警",
+                "更正，不是持刀，只是賭博",
             ]),
             llm_extractor=llm,  # type: ignore[arg-type]
         )
@@ -151,7 +178,7 @@ class UniversalFieldTests(unittest.TestCase):
         self.assertEqual(len(llm.general_calls), 2)
         self.assertEqual(engine.case.ImportantCase, 1)
         self.assertEqual(engine.case.ImportantTag, ["持刀", "賭博"])
-        self.assertIs(engine.case.NeedAmbulance, False)
+        self.assertIs(engine.case.NeedPolice, False)
 
     def test_llm_general_field_postprocessing_enforces_types_and_whitelist(self) -> None:
         extractor = LLMExtractor119.__new__(LLMExtractor119)
@@ -161,7 +188,7 @@ class UniversalFieldTests(unittest.TestCase):
                 return {
                     "ImportantCase": "2",
                     "ImportantTag": ["持刀", "未知標籤", "槍聲", "持刀"],
-                    "NeedAmbulance": "true",
+                    "NeedPolice": "true",
                 }
             if "caller_salutation" in schema:
                 return {"caller_salutation": "先生"}
@@ -193,7 +220,7 @@ class UniversalFieldTests(unittest.TestCase):
 
         self.assertEqual(result["ImportantCase"], 2)
         self.assertEqual(result["ImportantTag"], ["持刀", "槍聲"])
-        self.assertIs(result["NeedAmbulance"], True)
+        self.assertIs(result["NeedPolice"], True)
         self.assertEqual(result["caller_salutation"], "先生")
         self.assertEqual(result["fire_category"], "建築物")
         self.assertIs(result["people_trapped"], False)

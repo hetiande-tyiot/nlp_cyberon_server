@@ -40,7 +40,7 @@ API 介面（與 119_0625_code 版相同 endpoint 設計）：
   - 新增「局內同仁回報」流程（現場回報 / 支援請求），case.result 多兩個終止值
     "report_recorded"、"support_dispatched"
   - 新增全類型通用標記 important_tags_119.py → ImportantCase / ImportantTag /
-    NeedAmbulance 三欄位（ImportantTag 為 list，to_dict 空 list 會被濾掉）
+    NeedPolice 三欄位（ImportantTag 為 list，to_dict 空 list 會被濾掉）
   - CaseInfo119 欄位總數 46 → 87，case_field_labels_119.py 同步重建
   - 新依賴 openpyxl（讀 scripts/landmarks.xlsx 地標清單）
   - REST API 契約與引擎介面（SopEngine119.__init__、run()、DialogueIO 抽象方法、

@@ -18,8 +18,14 @@ app_119.py
 
 啟動方式
 --------
-  cd /root/work/119
-  streamlit run app_119.py
+  cd /home/cyberon2/nlp_cyberon_server
+  ./llmenv/bin/streamlit run ai/119_0808_loc_feedback/app_119.py
+
+模型路徑
+--------
+  預設指向 repo 內（ai/TW-119-BERT*、models/TW-119-Model.gguf），
+  可用 BERT_MODELS_BASE / GGUF_MODEL_PATH / BERT_DEVICE 等環境變數覆蓋，
+  與 sop_api_server.py 慣例一致。
 """
 
 from __future__ import annotations
@@ -52,6 +58,26 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 
+# ─── 模型路徑設定（與 sop_api_server.py 的 env 慣例一致）────────────────────
+# vendor 預設是 /root/autodl-tmp/models/，本機模型放在 repo 內，故在此覆蓋。
+# 可用環境變數改寫，不需動底層模組的預設值。
+_REPO_ROOT = os.path.dirname(os.path.dirname(_THIS_DIR))   # …/nlp_cyberon_server
+
+BERT_MODELS_BASE = os.environ.get(
+    "BERT_MODELS_BASE",
+    os.path.join(_REPO_ROOT, "ai") + os.sep,
+)
+GGUF_MODEL_PATH = os.environ.get(
+    "GGUF_MODEL_PATH",
+    os.path.join(_REPO_ROOT, "models", "TW-119-Model.gguf"),
+)
+# BERT 預設跑 CPU，把 VRAM 留給 LLM GGUF（跟 110/sop_api_server 慣例一致）
+BERT_DEVICE       = os.environ.get("BERT_DEVICE", "cpu")
+GGUF_N_CTX        = int(os.environ.get("GGUF_N_CTX", "4096"))
+GGUF_N_GPU_LAYERS = int(os.environ.get("GGUF_N_GPU_LAYERS", "-1"))
+GGUF_TEMPERATURE  = float(os.environ.get("GGUF_TEMPERATURE", "0.1"))
+
+
 # ─── 全域模型快取（跨 Streamlit rerun 保持模型實例）─────────────────────────
 @st.cache_resource(show_spinner="正在載入模型，請稍候…")
 def _load_models():
@@ -63,21 +89,43 @@ def _load_models():
     sub_clf  = None
     llm      = None
 
+    _main_dir = os.path.join(BERT_MODELS_BASE, "TW-119-BERT_main")
+    _sub_dir  = os.path.join(BERT_MODELS_BASE, "TW-119-BERT-sub_救護")
+    for _label, _path in (
+        ("主分類模型目錄", _main_dir),
+        ("救護子分類模型目錄", _sub_dir),
+        ("LLM GGUF", GGUF_MODEL_PATH),
+    ):
+        if not os.path.exists(_path):
+            st.warning(f"{_label}不存在：{_path}（將以規則備援運行，欄位抽取會不準）")
+
     try:
         from inference_pipeline import HierarchicalClassifier
-        main_clf = HierarchicalClassifier()
+        main_clf = HierarchicalClassifier(
+            models_base=BERT_MODELS_BASE,
+            device=BERT_DEVICE,
+        )
     except Exception as e:
         st.warning(f"主分類器未能載入（跳過）：{e}")
 
     try:
         from classifier_with_llm import build_classifiers
-        sub_clf = build_classifiers(enable_llm=False)
+        sub_clf = build_classifiers(
+            models_base=BERT_MODELS_BASE,
+            device=BERT_DEVICE,
+            enable_llm=False,
+        )
     except Exception as e:
         st.warning(f"子分類器未能載入（跳過）：{e}")
 
     try:
         from llm_extractor_119 import LLMExtractor119
-        llm = LLMExtractor119()
+        llm = LLMExtractor119(
+            model_path=GGUF_MODEL_PATH,
+            n_ctx=GGUF_N_CTX,
+            n_gpu_layers=GGUF_N_GPU_LAYERS,
+            temperature=GGUF_TEMPERATURE,
+        )
     except Exception as e:
         st.warning(f"LLM 未能載入（跳過）：{e}")
 
@@ -924,14 +972,14 @@ def main():
                     ),
                 ),
                 ("重要標籤", tags_display),
-                ("需要救護車", case.get("NeedAmbulance")),
+                ("是否需轉介110", case.get("NeedPolice")),
             ]
             rows_html = ""
             for label, val in universal_fields:
-                if label == "需要救護車":
+                if label == "是否需轉介110":
                     display = _val_html(
                         val,
-                        {True: "✅ 需要", False: "❌ 不需要"},
+                        {True: "🚔 需轉介110", False: "❌ 不需轉介"},
                     )
                 else:
                     display = _val_html(val)

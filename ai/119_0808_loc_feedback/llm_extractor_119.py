@@ -137,7 +137,7 @@ REPORT_FIELD_MAP: Dict[str, str] = {
     "患者年齡": "patient_age",
     "案件重要性": "ImportantCase",
     "重要標籤": "ImportantTag",
-    "需要救護車": "NeedAmbulance",
+    "需轉介110": "NeedPolice",
 }
 
 # ─── 工具函式 ─────────────────────────────────────────────────────────────────
@@ -653,7 +653,7 @@ class LLMExtractor119:
             "  • 口語以頓號/逗號逐步細化的同一地址必須合併；勿整句複述。\n"
             "  • 未提及可定位地點 → null；嚴禁「未知」「不明」「不詳」等佔位字。"
         )
-        question = "請先告訴我地址？樓層？" if use_question else None
+        question = "請先告訴我地址？幾樓？" if use_question else None
         out = self.extract_slots(caller_text, schema, rules, question=question)
         addr = _clean_str(out.get("address"))
         if addr:
@@ -891,7 +891,7 @@ class LLMExtractor119:
         universal_schema = {
             "ImportantCase":  "0|1|2|null",
             "ImportantTag":   "string[]|null",
-            "NeedAmbulance":  "true|false|null",
+            "NeedPolice":     "true|false|null",
         }
         internal_report_schema = {
             "call_type":                    "局內回報|一般案件|null",
@@ -978,9 +978,13 @@ class LLMExtractor119:
             f"- ImportantTag：只可從此白名單選擇：{allowed_tags}。"
             "可複選，輸出 JSON 字串陣列（例如 [\"持刀\",\"砍人\"]）；"
             "沒有符合項目則輸出 null，禁止創造其他標籤。\n"
-            "- NeedAmbulance：報警人明確表示需要/要叫救護車才輸出 true；"
-            "明確表示不需要救護車才輸出 false；僅提到119、消防車、火警、"
-            "受傷或受理員詢問救護車，不足以判定，輸出 null。"
+            "- NeedPolice：本案是否需轉介110（警方）。"
+            "案情涉及警務（持械、砍人、鬥毆、槍聲、賭博、毒品、性侵、"
+            "強盜、擄人、非法拘禁、屍體、毒駕等），或報警人明確表示"
+            "要報警／需要警察到場，輸出 true；"
+            "報警人明確表示不用報警、不需要警察才輸出 false；"
+            "僅提到119、救護車、消防車、一般疾病或意外受傷，"
+            "不足以判定，輸出 null。"
         )
         internal_report_rules = (
             "【局內同仁回報】所有欄位只依本輪回答和受理員問題抽取；"
@@ -1079,7 +1083,7 @@ class LLMExtractor119:
                     ):
                         continue
                     result[key] = bool_val
-            elif key == "NeedAmbulance":
+            elif key == "NeedPolice":
                 bool_val = _coerce_bool(val)
                 if bool_val is not None:
                     result[key] = bool_val

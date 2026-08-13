@@ -58,3 +58,7 @@ log_119/
 .DS_Store
 Thumbs.db
 .claude/settings.local.json
+
+# ===== AI 工具本地設定 =====
+.claude/skills/
+.agents/

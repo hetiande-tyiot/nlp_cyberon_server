@@ -219,11 +219,70 @@ sudo systemctl daemon-reload && sudo systemctl restart sop119.service
 
 - memory `119-model-swap`：工作目錄改成新版
 - 本 runbook §踩雷、§版本沿革 各補一筆
+- **§4「我們自己加的東西」補上這一版的清單**（下一節說明為什麼）
 - git commit（模型不進 git）；要部署才 `git push prod master`
 
 ---
 
-## 4. 只換模型（程式不動）
+## 4. 我們自己加的東西（換版時要逐項確認）
+
+### 為什麼要有這一節
+
+廠商給的新版，是從**他們自己的舊版**長出來的。我們在舊版上加的東西，廠商並不知道，所以新版裡通常沒有。
+
+換過去如果沒檢查，這些東西會**無聲無息地不見** —— 不會有錯誤訊息，程式照跑，只是某些行為悄悄變回舊的樣子。
+
+所以每次換版做完，就把「這一版我們自己加了什麼」寫在這裡。下次換版時打開這一節，一項一項去新版裡找：有的就算了，沒有的要補回去。
+
+不用每次重新比對，看這張表就好。
+
+### 119_0808_loc_feedback
+
+**A. 每一版都要做的（廠商永遠不會給）**
+
+| 加了什麼 | 說明 |
+|---|---|
+| `sop_api_server.py` | REST API 包裝層，從上一版複製過來 |
+| `case_field_labels_119.py` | 欄位中文對照表，依新版欄位重建（0808 為 86 條） |
+| 根目錄 `requirements-119.txt` | 套件清單，0808 加了 `openpyxl` |
+| 攤平目錄 | 0808 交付時多包一層同名資料夾 |
+
+**B. 0808 這一版特有的修改（換到下一版時要確認新版有沒有）**
+
+| 改了什麼 | 動到哪些檔 | 為什麼 |
+|---|---|---|
+| `NeedAmbulance` 改名為 `NeedPolice`，語意從「是否需要救護車」變成「是否需轉介110」 | `case_info_119.py`、`case_field_labels_119.py`、`sop_119_engine.py`、`llm_extractor_119.py`（含 prompt 判定規則）、`sop_api_server.py` | 實際需求是判斷要不要轉給警方，不是要不要派救護車 |
+| 報案人沒說縣市時自動補上（預設新北市，可用 `DEFAULT_CITY_119` 改） | `sop_utils_119.py` 新增 `ensure_city_prefix()`、25 個縣市白名單 | 沒有縣市的地址查不到轄區。白名單是為了避免「士林夜市」被當成已經有縣市 |
+| 在戶外的案件不再追問「幾樓」 | `sop_utils_119.py` 新增 `has_outdoor_location_hint()`、`strip_floor_question()`；`sop_119_engine.py` 新增 `_is_outdoor_case()` | 報案人說「巷口」「天橋」「路邊」時問幾樓不合理。清單約 50 個詞 |
+| 口語逐步講出來的地址會自動合併 | `sop_utils_119.py` 新增地址片段合併相關函式 | 報案人常分好幾句講完一個地址 |
+| `ImportantCase` 等級可以往下降 | `sop_119_engine.py` | 報案人更正誤聽的關鍵詞時（「不是持刀，是賭博」），緊急程度要跟著降回來 |
+| 話術修正 | `sop_119_engine.py`、`llm_extractor_119.py` | 「需要消防車還救護車」漏字；「樓層？」統一改成「幾樓？」 |
+| `app_119.py` 模型路徑改用環境變數 | `app_119.py` | 廠商寫死 `/root/autodl-tmp`，我們的模型放在 repo 內 |
+| 新增測試 | `tests/test_address_merge_119.py`、`tests/test_address_cases_119.py`、`streamlit_scenarios_119.json` | 地址相關改動的迴歸測試 |
+
+**怎麼確認新版有沒有：** 拿上表任一項的關鍵字（例如 `NeedPolice`、`ensure_city_prefix`）到新版目錄搜尋一下，找不到就是要補。
+
+```bash
+grep -rn "NeedPolice\|ensure_city_prefix\|has_outdoor_location_hint" $DST/
+```
+
+### 補充：想看完整的原始差異
+
+表格不夠、想看每一行到底怎麼改的話，可以拿「廠商原版」跟「我們用的版本」直接比。
+
+**什麼是存檔點？** 你每次下 `git commit`，git 就把當下所有檔案的樣子完整記一份下來，這一份就是一個存檔點。它記下來之後永遠不會變，之後檔案再怎麼改，那份都停在當初的樣子 —— 像打電動存檔。每個存檔點有一個七位數編號（例如 `587f38e`），打 `git log --oneline` 就看得到清單。
+
+0808 的廠商原版存在 `587f38e` 這個存檔點（訊息是「更新0808模型前」）：
+
+```bash
+git diff 587f38e HEAD -- ai/119_0808_loc_feedback/
+```
+
+**所以每次拿到廠商新版，第一件事是先 commit 一次、什麼都還沒改的狀態**，訊息寫「廠商原版，還沒動過」。沒有這個存檔點，之後就分不出哪些是廠商改的、哪些是我們改的。
+
+---
+
+## 5. 只換模型（程式不動）
 
 換 gguf：改 `GGUF_MODEL_PATH` → `daemon-reload` → `restart` → 走 §H。新模型 chat_format／prompt 若不同，`llm_extractor_119.py` 的 prompt 可能要調。
 
@@ -231,11 +290,11 @@ sudo systemctl daemon-reload && sudo systemctl restart sop119.service
 
 兩者都跳過 §A–F，其餘相同。
 
-## 5. 回滾
+## 6. 回滾
 
 還原 `sop119.service.bak.*` → `daemon-reload` → `restart`。舊版程式目錄保留未動，可作 code 層級回滾；`llmenv` 多裝的套件對舊版無害。
 
-## 6. 踩雷紀錄
+## 7. 踩雷紀錄
 
 - **VRAM 雙開 OOM**：一次放不下兩份 ~20GB gguf。任何會載模型的動作（含裸 `import sop_api_server`）都要先停舊服務，或用降級三件組。
 - **`import sop_api_server` 會載模型**：module-level 就載，不是輕量 import。
@@ -247,7 +306,7 @@ sudo systemctl daemon-reload && sudo systemctl restart sop119.service
 - **跑錯機器**：119 在 cyberon2／aitop6，不是 204／aitop4（110 系統）。
 - **`tests/` 無 `__init__.py`**：`unittest discover` 用不了，要逐支跑。
 
-## 7. 版本沿革
+## 8. 版本沿革
 
 | 日期 | 版本 | 重點 |
 |---|---|---|

@@ -1,0 +1,354 @@
+{
+  "version": "1.0",
+  "generated_from": "tests/",
+  "usage": "在 Streamlit 左栏输入框按 caller_turns 顺序逐轮粘贴；每轮等待系统回复后再输入下一句。对照 expected 与右栏字段面板验证。",
+  "scenarios": [
+    {
+      "id": "fire_building_indoor",
+      "name": "火警－建築物火災（報案人在內）",
+      "category": "火警",
+      "source": "test_fire_flow_119.py::test_building_flow_and_indoor_guidance",
+      "description": "建築物火災完整流程；報案人在建物內、有受困、延燒連棟，應播放室內逃生指引。",
+      "notes": "前 3 輪為 Streamlit 全路徑前綴（主分類＋地址確認）；需 jurisdiction API 可正常校驗板橋地址。",
+      "caller_turns": [
+        "火災",
+        "新北市板橋區文化路100號",
+        "是",
+        "看到火",
+        "房子在燒",
+        "火越來越大，大約10坪",
+        "我在裡面，是住戶",
+        "有2個人受困",
+        "總共5樓，3樓在燒",
+        "有延燒，是連棟",
+        "電話0912345678，我是先生"
+      ],
+      "expected": {
+        "main_category": "火警",
+        "fire_category": "建築物",
+        "trapped_count": "2",
+        "fire_floor": "3樓",
+        "fire_spread": true,
+        "result": "dispatched"
+      }
+    },
+    {
+      "id": "fire_factory_no_smoke_color",
+      "name": "火警－工廠火災（跳過煙色詢問）",
+      "category": "火警",
+      "source": "test_fire_flow_119.py::test_factory_flow_skips_smoke_color",
+      "description": "工廠火災；僅看到火時不應追問黑煙/白煙。",
+      "notes": "前 3 輪為 Streamlit 全路徑前綴；確認對話中未出現「黑煙還是白煙」。",
+      "caller_turns": [
+        "火災",
+        "新北市板橋區文化路100號",
+        "是",
+        "只看到火",
+        "工廠在燒",
+        "火正在消退，大約3坪",
+        "大型鐵皮工廠",
+        "廠內沒有人，沒有受困",
+        "沒有化學品或危險物品",
+        "電話0922333444，我是小姐"
+      ],
+      "expected": {
+        "main_category": "火警",
+        "fire_category": "工廠",
+        "factory_scale_type": "大型鐵皮工廠",
+        "hazardous_materials": "無",
+        "result": "dispatched"
+      }
+    },
+    {
+      "id": "fire_vehicle_highway",
+      "name": "火警－車輛火災（高速公路）",
+      "category": "火警",
+      "source": "test_fire_flow_119.py::test_vehicle_flow",
+      "description": "小客車起火、車內無人、位於高速公路。",
+      "notes": "前 3 輪為 Streamlit 全路徑前綴。",
+      "caller_turns": [
+        "火災",
+        "新北市板橋區文化路100號",
+        "是",
+        "看到火",
+        "小客車在燒",
+        "火越來越大，大約2坪",
+        "小客車，1台",
+        "車內沒有人",
+        "在高速公路",
+        "電話0933555777，我是先生"
+      ],
+      "expected": {
+        "main_category": "火警",
+        "fire_category": "車輛",
+        "vehicle_type": "小客車",
+        "vehicle_occupants": false,
+        "road_type": "高速公路",
+        "result": "dispatched"
+      }
+    },
+    {
+      "id": "fire_outdoor_black_smoke",
+      "name": "火警－露天野外（黑煙＋安全提醒）",
+      "category": "火警",
+      "source": "test_fire_flow_119.py::test_outdoor_flow_with_smoke_color_and_safety_message",
+      "description": "山林火災、黑煙、無水源；應播放山林火勢蔓延安全提醒。",
+      "notes": "前 3 輪為 Streamlit 全路徑前綴；確認出现「注意山林或雜草火勢蔓延」类指引。",
+      "caller_turns": [
+        "火災",
+        "新北市板橋區文化路100號",
+        "是",
+        "只看到煙",
+        "是黑煙",
+        "山林在燒",
+        "火越來越大，大約20坪",
+        "是山林",
+        "附近沒有水源或消防栓",
+        "沒有波及建築物車輛，也沒有人受困",
+        "電話0944666888，我是小姐"
+      ],
+      "expected": {
+        "main_category": "火警",
+        "smoke_color": "黑煙",
+        "fire_category": "露天野外",
+        "affected_targets": "無",
+        "result": "dispatched"
+      }
+    },
+    {
+      "id": "addr_missing_district",
+      "name": "地址－缺少行政區後合併",
+      "category": "地址",
+      "source": "test_address_flow_119.py::test_missing_district_is_merged_then_validated",
+      "description": "首輪地址缺區，系統追問行政區後合併並校驗成功。",
+      "notes": "第 1 輪為 Streamlit 救護主分類前綴；預期系統追問「請告訴我是那一區？」。",
+      "caller_turns": [
+        "救護",
+        "府中路32號",
+        "板橋區",
+        "是"
+      ],
+      "expected": {
+        "main_category": "救護",
+        "location_type": "address",
+        "address": "板橋區府中路32號",
+        "address_district": "板橋區",
+        "address_confirmed": true
+      }
+    },
+    {
+      "id": "addr_intersection",
+      "name": "地址－交叉路口（追問第二條路）",
+      "category": "地址",
+      "source": "test_address_flow_119.py::test_intersection_reasks_for_second_road",
+      "description": "路口地址缺第二條路名，系統追問後組裝完整路口地址。",
+      "notes": "第 1 輪為 Streamlit 救護主分類前綴。",
+      "caller_turns": [
+        "救護",
+        "板橋區仁化街路口",
+        "文化路",
+        "是"
+      ],
+      "expected": {
+        "main_category": "救護",
+        "location_type": "intersection",
+        "intersection_road1": "仁化街",
+        "intersection_road2": "文化路",
+        "address": "板橋區仁化街與文化路路口",
+        "address_confirmed": true
+      }
+    },
+    {
+      "id": "addr_highway",
+      "name": "地址－高速公路（追問國道/方向/公里）",
+      "category": "地址",
+      "source": "test_address_flow_119.py::test_highway_reasks_for_name_direction_and_kilometer",
+      "description": "高速公路事故，分輪補齊國道名稱、方向與公里數。",
+      "notes": "第 1 輪為 Streamlit 救護主分類前綴。",
+      "caller_turns": [
+        "救護",
+        "我在高速公路發生車禍了",
+        "國道三號北向32.5公里處",
+        "是"
+      ],
+      "expected": {
+        "main_category": "救護",
+        "location_type": "highway",
+        "highway_name": "國道三號",
+        "highway_direction": "北向",
+        "highway_kilometer": "32.5",
+        "address": "國道三號 北向 32.5公里處"
+      }
+    },
+    {
+      "id": "addr_landmark",
+      "name": "地址－特殊地標（Excel 校驗）",
+      "category": "地址",
+      "source": "test_address_flow_119.py::test_landmark_uses_excel_validation",
+      "description": "以地標名稱報案，通過 landmarks.xlsx 校驗。",
+      "notes": "第 1 輪為 Streamlit 救護主分類前綴；需 scripts/landmarks.xlsx 含「板橋大觀市場」。",
+      "caller_turns": [
+        "救護",
+        "板橋大觀市場旁邊",
+        "是"
+      ],
+      "expected": {
+        "main_category": "救護",
+        "location_type": "landmark",
+        "address_validation_status": "valid"
+      }
+    },
+    {
+      "id": "addr_mrt",
+      "name": "地址－捷運站（CSV 校驗）",
+      "category": "地址",
+      "source": "test_address_flow_119.py::test_mrt_uses_station_csv_validation",
+      "description": "以捷運站出口報案，通過 MRTstation.csv 校驗。",
+      "notes": "第 1 輪為 Streamlit 救護主分類前綴；需 scripts/MRTstation.csv 含「頂埔站出口1」。",
+      "caller_turns": [
+        "救護",
+        "捷運頂埔站出口1",
+        "是"
+      ],
+      "expected": {
+        "main_category": "救護",
+        "location_type": "mrt",
+        "address_validation_status": "valid"
+      }
+    },
+    {
+      "id": "addr_invalid_then_transfer",
+      "name": "地址－API 無效後重問並轉人工",
+      "category": "地址",
+      "source": "test_address_flow_119.py::test_invalid_api_result_reasks_once_then_transfers",
+      "description": "jurisdiction API 連續兩次回傳無效，應設 address_suspect_error 並轉人工。",
+      "notes": "第 1 輪為 Streamlit 救護主分類前綴；若 API 實際校驗通過，結果可能與預期不同。單元測試以 mock 模擬 invalid。",
+      "caller_turns": [
+        "救護",
+        "新北市新店區中央路133巷",
+        "新北市新店區中央路9999號"
+      ],
+      "expected": {
+        "main_category": "救護",
+        "address_suspect_error": true,
+        "address_confirmed": false,
+        "address_validation_status": "invalid",
+        "result": "human_transfer"
+      }
+    },
+    {
+      "id": "addr_confirm_refused_transfer",
+      "name": "地址－覆誦確認失敗轉人工",
+      "category": "地址",
+      "source": "test_address_flow_119.py::test_confirmation_is_not_forced_true",
+      "description": "地址抽取成功但報案人兩次無法確認，不強制 address_confirmed=true，轉人工。",
+      "notes": "第 1 輪為 Streamlit 救護主分類前綴；地址校驗需 API 通過。",
+      "caller_turns": [
+        "救護",
+        "新北市新店區中央路133巷",
+        "不知道",
+        "還是不知道"
+      ],
+      "expected": {
+        "main_category": "救護",
+        "address_confirmed": false,
+        "address_suspect_error": true,
+        "result": "human_transfer"
+      }
+    },
+    {
+      "id": "internal_field_report",
+      "name": "局內回報－現場狀況",
+      "category": "局內回報",
+      "source": "test_internal_report_flow_119.py::test_field_report_is_detected_recorded_and_closed",
+      "description": "分隊同仁回報現場狀況，記錄後結案。",
+      "notes": "首句含「分隊回報」即可進入局內回報流程，無需額外主分類前綴。",
+      "caller_turns": [
+        "板橋分隊回報",
+        "我要回報現場狀況",
+        "新北市板橋區文化路100號",
+        "現場火勢已撲滅，無人受傷",
+        "沒有其他需求"
+      ],
+      "expected": {
+        "main_category": "局內回報",
+        "call_type": "局內回報",
+        "report_request_type": "現場回報",
+        "field_report_content": "現場火勢已撲滅，無人受傷",
+        "result": "report_recorded"
+      }
+    },
+    {
+      "id": "internal_support_correction",
+      "name": "局內回報－支援請求（更正後派遣）",
+      "category": "局內回報",
+      "source": "test_internal_report_flow_119.py::test_support_request_reasks_after_correction_then_dispatches",
+      "description": "支援車輛需求覆誦後更正，重新確認後派遣。",
+      "notes": "預期「現場需要什麼車？幾台？」被追問 2 次。",
+      "caller_turns": [
+        "中和分隊回報",
+        "現場需要支援車輛",
+        "新北市中和區中正路200號",
+        "2台救護車",
+        "不是，要3台消防車",
+        "3台消防車",
+        "是",
+        "沒有"
+      ],
+      "expected": {
+        "main_category": "局內回報",
+        "report_request_type": "支援請求",
+        "support_vehicle_count": 3,
+        "support_vehicle_type": "消防車",
+        "support_request_confirmed": true,
+        "result": "support_dispatched"
+      }
+    },
+    {
+      "id": "internal_field_then_support",
+      "name": "局內回報－現場回報後追加支援",
+      "category": "局內回報",
+      "source": "test_internal_report_flow_119.py::test_additional_request_is_reclassified_in_same_call",
+      "description": "同一通電話先完成現場回報，再追加救護車支援請求。",
+      "notes": "預期先出现「收到，為您記錄。」，再轉入支援派遣流程。",
+      "caller_turns": [
+        "新店分隊回報",
+        "先回報現場狀況",
+        "新北市新店區北新路300號",
+        "現場已完成疏散",
+        "有，還要2台救護車支援",
+        "新北市新店區北新路300號",
+        "2台救護車",
+        "是",
+        "沒有"
+      ],
+      "expected": {
+        "main_category": "局內回報",
+        "report_request_type": "支援請求",
+        "support_vehicle_count": 2,
+        "support_vehicle_type": "救護車",
+        "result": "support_dispatched"
+      }
+    },
+    {
+      "id": "universal_important_tags_correction",
+      "name": "通用標記－重要標籤與更正",
+      "category": "通用標記",
+      "source": "test_universal_fields_119.py::test_every_answer_runs_general_extraction_and_updates_fields",
+      "description": "每輪輸入觸發通用字段抽取；持刀/賭博標籤合併，ImportantCase 可被更正降級，NeedPolice 可被更正。",
+      "notes": "前 3 輪為救護＋地址確認前綴。第 4–5 輪請在系統追問案情或相關問題時輸入；地址確認後可能還有子類別 SOP 問題，可穿插簡答（如意識/呼吸等）直至流程結束。實際欄位值依 LLM 抽取結果可能略有差異。注意 ImportantTag 目前只增不減——第 5 輪更正「不是持刀」後，持刀標籤仍會保留。",
+      "caller_turns": [
+        "救護",
+        "新北市板橋區文化路100號",
+        "是",
+        "有人持刀，要幫我報警",
+        "更正，不是持刀，只是賭博，不用報警"
+      ],
+      "expected": {
+        "ImportantCase": 1,
+        "ImportantTag": ["持刀", "賭博"],
+        "NeedPolice": false
+      }
+    }
+  ]
+}
