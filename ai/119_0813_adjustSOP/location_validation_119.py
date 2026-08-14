@@ -1,4 +1,22 @@
-"""119 地址类别的数据加载与外部辖区校验。"""
+"""119 地址驗測與地點名單載入。
+
+分兩件事：
+
+1. 驗測（地址確認）：全部類別走同一個 MapaddrCheck `/api/AddrCheck/Verify`
+   端點（見 API.md）。一個端點吃五種定位方式，帶 `type` 只查那一層，回傳
+   status / reason / address / hint。座標（lon/lat/x/y）目前用不到，只看
+   status 判斷有效與否。取代了原本三套各自為政的校驗：門牌舊 jurisdiction
+   API、地標比對 landmarks.xlsx、捷運比對 MRTstation.csv。
+
+2. 分類（判斷地點類別）：`_refresh_location_type` 仍用本地的捷運站名、地標
+   名單餵給 classify_location_type，協助把地址歸到正確的 location_type
+   （再轉成 API 的 type）。這部分的資料載入保留在下方。
+
+驗測設定（環境變數）：
+  ADDRCHECK_API_URL      Base URL，預設 http://localhost:8060
+  ADDRCHECK_API_TOKEN    Bearer token（與 ACRC 共用 Ingest__Token）
+  ADDRCHECK_API_TIMEOUT  逾時秒數，預設 2.5
+"""
 
 from __future__ import annotations
 
@@ -9,74 +27,129 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Optional
-from urllib.parse import urlencode
+from typing import Iterable, Optional
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_JURISDICTION_API_URL = (
-    "http://61.216.64.19:8055/Template/Office/data"
-)
 DEFAULT_MRT_CSV = BASE_DIR / "scripts" / "MRTstation.csv"
 DEFAULT_LANDMARK_XLSX = BASE_DIR / "scripts" / "landmarks.xlsx"
 
+DEFAULT_ADDRCHECK_BASE_URL = "http://localhost:8060"
+VERIFY_PATH = "/api/AddrCheck/Verify"
+
+# 內部 location_type → MapaddrCheck API 的 type（只查該層，不會退到其他層）。
+# 捷運沒有專屬 type，當地標查。
+LOCATION_TYPE_TO_API_TYPE = {
+    "address": "House",
+    "intersection": "Crossroad",
+    "highway": "Freeway",
+    "landmark": "Landmark",
+    "mrt": "Landmark",
+}
+
+
+# ───────────────────────── 驗測：MapaddrCheck /Verify ─────────────────────────
+
 
 @dataclass(frozen=True)
-class JurisdictionResult:
-    """辖区 API 结果；valid=None 表示网络或响应格式异常。"""
+class AddrCheckResult:
+    """`/Verify` 結果；status=None 代表網路或 API 例外，不是「查無」。"""
 
-    valid: Optional[bool]
-    office_name: Optional[str] = None
-    error: Optional[str] = None
-
-
-def _extract_office_name(payload: Any) -> Optional[str]:
-    if isinstance(payload, dict):
-        value = payload.get("officeName")
-        if value is not None and str(value).strip():
-            return str(value).strip()
-        for key in ("data", "result"):
-            nested = payload.get(key)
-            found = _extract_office_name(nested)
-            if found:
-                return found
-    elif isinstance(payload, list):
-        for item in payload:
-            found = _extract_office_name(item)
-            if found:
-                return found
-    return None
+    status: Optional[bool]
+    reason: Optional[str] = None   # valid / ambiguous / road_only / not_found / unparsable
+    address: Optional[str] = None  # 命中的正規化地址；status=False 時為 None
+    hint: Optional[str] = None     # 可直接轉成追問話術的中文提示
+    error: Optional[str] = None    # 網路／解析例外訊息（status=None 時才有）
 
 
-def query_jurisdiction(
+def _base_url() -> str:
+    return os.getenv("ADDRCHECK_API_URL", DEFAULT_ADDRCHECK_BASE_URL).rstrip("/")
+
+
+def _token() -> str:
+    for key in ("ADDRCHECK_API_TOKEN", "INGEST_TOKEN", "Ingest__Token"):
+        value = os.getenv(key)
+        if value:
+            return value
+    return ""
+
+
+def _timeout() -> float:
+    try:
+        return float(os.getenv("ADDRCHECK_API_TIMEOUT", "2.5"))
+    except ValueError:
+        return 2.5
+
+
+def verify_address(
     address: str,
     *,
+    location_type: Optional[str] = None,
+    town: Optional[str] = None,
     url: Optional[str] = None,
+    token: Optional[str] = None,
     timeout: Optional[float] = None,
-) -> JurisdictionResult:
-    """查询地址辖区；仅非空 officeName 代表地址有效。"""
-    api_url = url or os.getenv(
-        "JURISDICTION_API_URL", DEFAULT_JURISDICTION_API_URL
+) -> AddrCheckResult:
+    """把報案地址原文 POST 到 `/api/AddrCheck/Verify`。
+
+    location_type 為內部類別（address/intersection/highway/landmark/mrt），
+    會轉成 API 的 `type` 只查該層；判斷不出類別時傳 None，省略 `type` 讓後端
+    自動判斷。
+    """
+    address = (address or "").strip()
+    if not address:
+        return AddrCheckResult(False, reason="unparsable", hint="尚未取得地址")
+
+    body: dict[str, object] = {"address": address}
+    api_type = LOCATION_TYPE_TO_API_TYPE.get(location_type) if location_type else None
+    if api_type:
+        body["type"] = api_type
+    if town:
+        body["town"] = town
+
+    endpoint = f"{url or _base_url()}{VERIFY_PATH}"
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    bearer = token if token is not None else _token()
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+
+    request = Request(
+        endpoint,
+        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+        headers=headers,
+        method="POST",
     )
-    if timeout is None:
-        try:
-            timeout = float(os.getenv("JURISDICTION_API_TIMEOUT", "2.5"))
-        except ValueError:
-            timeout = 2.5
-    request_url = f"{api_url}?{urlencode({'addr': address})}"
-    request = Request(request_url, headers={"Accept": "application/json"})
+    call_timeout = timeout if timeout is not None else _timeout()
     try:
-        with urlopen(request, timeout=timeout) as response:
+        with urlopen(request, timeout=call_timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        # 400（body/type 不合法）、401（token 錯）等：盡量帶出後端的 hint
+        hint = None
+        try:
+            detail = json.loads(exc.read().decode("utf-8"))
+            if isinstance(detail, dict):
+                hint = detail.get("hint")
+        except Exception:
+            pass
+        return AddrCheckResult(None, error=f"HTTP {exc.code}", hint=hint)
     except Exception as exc:
-        return JurisdictionResult(None, error=str(exc))
-    office_name = _extract_office_name(payload)
-    return JurisdictionResult(bool(office_name), office_name=office_name)
+        return AddrCheckResult(None, error=str(exc))
+
+    if not isinstance(payload, dict):
+        return AddrCheckResult(None, error="回應格式非物件")
+
+    return AddrCheckResult(
+        status=bool(payload.get("status")),
+        reason=payload.get("reason"),
+        address=payload.get("address"),
+        hint=payload.get("hint"),
+    )
 
 
-def _normalized_name(value: str) -> str:
-    return re.sub(r"[\s　，,。．、;；/／()（）]+", "", str(value or "")).lower()
+# ───────────────────── 分類：捷運／地標名單載入（本地檔） ─────────────────────
 
 
 def _split_aliases(value: str) -> Iterable[str]:
@@ -88,7 +161,7 @@ def _split_aliases(value: str) -> Iterable[str]:
 
 @lru_cache(maxsize=4)
 def load_landmark_names(path: str = str(DEFAULT_LANDMARK_XLSX)) -> tuple[str, ...]:
-    """读取地标名称与别名；模板为空时返回空集合。"""
+    """讀取地標名稱與別名；模板為空時回傳空集合。供地點類別分類使用。"""
     try:
         from openpyxl import load_workbook
     except ImportError as exc:
@@ -116,7 +189,7 @@ def load_landmark_names(path: str = str(DEFAULT_LANDMARK_XLSX)) -> tuple[str, ..
 
 @lru_cache(maxsize=4)
 def load_mrt_location_names(path: str = str(DEFAULT_MRT_CSV)) -> tuple[str, ...]:
-    """读取 cp950 CSV 第二列，并补充不含出口编号的站名。"""
+    """讀取 cp950 CSV 第二列，並補充不含出口編號的站名。供地點類別分類使用。"""
     names: list[str] = []
     with open(path, "r", encoding="cp950", newline="") as handle:
         reader = csv.reader(handle)
@@ -132,28 +205,3 @@ def load_mrt_location_names(path: str = str(DEFAULT_MRT_CSV)) -> tuple[str, ...]
             if station:
                 names.append(station)
     return tuple(dict.fromkeys(names))
-
-
-def contains_known_name(location: str, names: Iterable[str]) -> bool:
-    """地点文字是否包含名单名称，忽略空白与常见标点。"""
-    target = _normalized_name(location)
-    return bool(target) and any(
-        normalized and normalized in target
-        for normalized in (_normalized_name(name) for name in names)
-    )
-
-
-def validate_landmark(
-    location: str,
-    *,
-    path: str = str(DEFAULT_LANDMARK_XLSX),
-) -> bool:
-    return contains_known_name(location, load_landmark_names(path))
-
-
-def validate_mrt(
-    location: str,
-    *,
-    path: str = str(DEFAULT_MRT_CSV),
-) -> bool:
-    return contains_known_name(location, load_mrt_location_names(path))

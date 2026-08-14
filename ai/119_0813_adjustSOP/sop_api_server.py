@@ -12,6 +12,7 @@ API 介面（與 119_0625_code 版相同 endpoint 設計）：
   - POST /session/{id}/hangup            → 強制結束（送 END_FLOW 哨兵）
   - GET  /session/{id}/result            → 拿 case JSON
   - GET  /session/{id}/output            → 輪詢未消化 events
+  - GET  /session/{id}/case/stream       → SSE 長連線，case 更新即推 case_updated，結束推 done
   - GET  /schema/case-fields/labels      → CaseInfo119 欄位中文對照
   - GET  /health
 
@@ -61,6 +62,7 @@ API 介面（與 119_0625_code 版相同 endpoint 設計）：
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import queue
@@ -74,6 +76,7 @@ from typing import Any, Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from case_field_labels_119 import LABELS as _CASE_FIELD_LABELS_119
@@ -222,6 +225,22 @@ class QueuedIO119(DialogueIO):
 # ═══════════════════════════════════════════════════════════════════════════
 # 工具
 # ═══════════════════════════════════════════════════════════════════════════
+
+def _current_case_dict(sess: Session) -> Optional[Dict[str, Any]]:
+    """
+    取當下最新的 case dict（原始欄位名，與 /result 同一份）。
+    engine 跑完後填 sess.case；跑的過程中 case 掛在 sess.engine.case 持續被更新。
+    """
+    case = sess.case
+    if case is None and sess.engine is not None:
+        case = getattr(sess.engine, "case", None)
+    if case is None:
+        return None
+    try:
+        return case.to_dict()
+    except Exception:  # noqa: BLE001
+        return None
+
 
 def _drain_now(sess: Session) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
@@ -383,6 +402,58 @@ def poll_output(sess_id: str):
         "events": events,
         "done": sess.done.is_set(),
     }
+
+
+@app.get("/session/{sess_id}/case/stream")
+async def stream_case(sess_id: str):
+    """
+    SSE 長連線：case 一有更新推一筆 `case_updated`，案子結束推一筆 `done` 後關閉。
+
+    - 回 HTTP 200 + Content-Type: text/event-stream
+    - `data` 為壓成一行的完整 case JSON（原始欄位名，與 /result 同一份）
+    - case 任一欄位變動即推一筆 `case_updated`（不 gate，首筆是否要 act_sub_class
+      有值由機器A自行過濾；我方 gate 會把過程事件整串吞掉，故不做）
+    - 每 ~15 秒送一行 `: keepalive` 防中間層斷線
+    """
+    with _sessions_lock:
+        sess = _sessions.get(sess_id)
+    if sess is None:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    POLL_INTERVAL = 0.3      # 秒；輪詢 case 變動的間隔
+    KEEPALIVE_INTERVAL = 15.0
+
+    def _dumps(obj: Any) -> str:
+        return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+
+    async def event_gen():
+        # 以「全空 case」當基準，連上瞬間那份還沒抽任何欄位的空 case 不推，
+        # 之後只要有實際變動（含 transcript）就推。
+        last_serialized: Optional[str] = _dumps(CaseInfo119().to_dict())
+        idle = 0.0
+        while True:
+            case = _current_case_dict(sess)
+            # case 任一欄位變動就推（不 gate，避免把過程事件整串吞掉）
+            if case is not None:
+                serialized = _dumps(case)
+                if serialized != last_serialized:
+                    last_serialized = serialized
+                    yield f"event: case_updated\ndata: {serialized}\n\n"
+                    idle = 0.0
+
+            if sess.done.is_set():
+                final = _current_case_dict(sess)
+                payload = {"done": True, "error": sess.error, "case": final}
+                yield f"event: done\ndata: {_dumps(payload)}\n\n"
+                return
+
+            await asyncio.sleep(POLL_INTERVAL)
+            idle += POLL_INTERVAL
+            if idle >= KEEPALIVE_INTERVAL:
+                idle = 0.0
+                yield ": keepalive\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 @app.get("/schema/case-fields/labels")

@@ -787,7 +787,7 @@ def extract_address_road(text: str) -> Optional[str]:
     """抽取門牌地址道路，包含段、巷、弄，但不包含門牌號。"""
     compact = re.sub(r"\s+", "", text or "")
     compact = re.sub(r"^.*?區", "", compact)
-    # compact = re.sub(r"路過|路人", "", compact)   # ← 新增這行
+    compact = re.sub(r"路過|路人", "", compact)   # ← 新增這行
     match = _ADDRESS_ROAD_RE.search(compact)
     return match.group(1) if match else None
 

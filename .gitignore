@@ -62,3 +62,6 @@ Thumbs.db
 # ===== AI 工具本地設定 =====
 .claude/skills/
 .agents/
+
+# ===== 測試/部署工具 =====
+deploy_nlp_model.sh

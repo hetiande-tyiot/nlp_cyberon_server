@@ -44,7 +44,7 @@ sop_119_engine.py
 
 【一、拿地址去查之前，先補上縣市】
 
-  改在哪：_validate_address 裡面，呼叫 query_jurisdiction 的前一行
+  改在哪：_validate_location_once 裡面，門牌送 MapaddrCheck /Verify 的前一行
 
   為什麼要改：
     查地址的那個外部系統，沒有縣市就查不到。
@@ -89,9 +89,7 @@ from llm_extractor_119 import LLMExtractor119, build_fallback_summary
 from location_validation_119 import (
     load_landmark_names,
     load_mrt_location_names,
-    query_jurisdiction,
-    validate_landmark,
-    validate_mrt,
+    verify_address,
 )
 from sop_utils_119 import (
     address_ask_should_include_floor,
@@ -1363,6 +1361,34 @@ class SopEngine119:
             self.case.jurisdiction_office = None
             self.case.address_error_reason = None
 
+    def _run_addrcheck(self, location_type: str) -> tuple[bool, str, bool]:
+        """呼叫 MapaddrCheck `/Verify`，依 status 設定校驗狀態。
+
+        回傳 (成功, 原因, 是否允許完整重報一次)。status=True→有效；
+        status=False→查無或需追問（可重報，reason 直接用後端 hint）；
+        status=None→網路/API 例外（可重報）。
+        """
+        self._set_stage("location_validating")
+        try:
+            result = verify_address(
+                self.case.address or "", location_type=location_type
+            )
+        except Exception as exc:  # verify_address 已吞例外，這裡只是保險
+            self._debug_print("addrcheck_error", exc)
+            self._set_address_validation("error", reason="地址驗測 API 無法使用")
+            return False, "地址驗測 API 無法使用", True
+
+        if result.status is True:
+            self._set_address_validation("valid")
+            return True, "", False
+        if result.status is False:
+            reason = result.hint or "地址查無或需要追問確認"
+            self._set_address_validation("invalid", reason=reason)
+            return False, reason, True
+        reason = result.hint or result.error or "地址驗測 API 無法使用"
+        self._set_address_validation("error", reason=reason)
+        return False, reason, True
+
     def _validate_location_once(
         self,
         *,
@@ -1447,22 +1473,7 @@ class SopEngine119:
             with self._case_lock:
                 self.case.address = ensure_city_prefix(self.case.address or "")
 
-            self._set_stage("location_validating")
-            result = query_jurisdiction(self.case.address or "")
-            if result.valid is True:
-                self._set_address_validation(
-                    "valid", office_name=result.office_name
-                )
-                return True, "", False
-            if result.valid is False:
-                self._set_address_validation(
-                    "invalid", reason="地址查無管轄單位"
-                )
-                return False, "地址查無管轄單位", True
-            self._set_address_validation(
-                "error", reason="地址轄區 API 無法使用"
-            )
-            return False, "地址轄區 API 無法使用", True
+            return self._run_addrcheck("address")
 
         if location_type == "intersection":
             self._apply_location_rules(self.case.address or "")
@@ -1487,8 +1498,7 @@ class SopEngine119:
                 return False, "交叉路口缺少第二條道路", False
             with self._case_lock:
                 self.case.address = rebuilt
-            self._set_address_validation("valid")
-            return True, "", False
+            return self._run_addrcheck("intersection")
 
         if location_type == "highway":
             self._apply_location_rules(self.case.address or "")
@@ -1514,40 +1524,14 @@ class SopEngine119:
                 return False, "高速公路地點資訊不完整", False
             with self._case_lock:
                 self.case.address = complete
-            self._set_address_validation("valid")
-            return True, "", False
+            return self._run_addrcheck("highway")
 
         if location_type == "landmark":
-            self._set_stage("location_validating")
-            try:
-                valid = validate_landmark(self.case.address or "")
-            except Exception as exc:
-                self._debug_print("landmark_validation_error", exc)
-                self._set_address_validation(
-                    "error", reason="地標資料表無法讀取"
-                )
-                return False, "地標資料表無法讀取", True
-            if valid:
-                self._set_address_validation("valid")
-                return True, "", False
-            self._set_address_validation("invalid", reason="地標不在資料表中")
-            return False, "地標不在資料表中", True
+            return self._run_addrcheck("landmark")
 
         if location_type == "mrt":
-            self._set_stage("location_validating")
-            try:
-                valid = validate_mrt(self.case.address or "")
-            except Exception as exc:
-                self._debug_print("mrt_validation_error", exc)
-                self._set_address_validation(
-                    "error", reason="捷運車站資料無法讀取"
-                )
-                return False, "捷運車站資料無法讀取", True
-            if valid:
-                self._set_address_validation("valid")
-                return True, "", False
-            self._set_address_validation("invalid", reason="查無捷運車站")
-            return False, "查無捷運車站", True
+            # 捷運沒有專屬 API type，當地標查（type=Landmark）。
+            return self._run_addrcheck("mrt")
 
         return False, "不支援的地址類別", False
 
