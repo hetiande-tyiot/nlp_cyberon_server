@@ -652,6 +652,8 @@ class SopEngine119:
 
     def _update_street_address_from_input(self, caller_text: str) -> None:
         """以本輪 LLM + 規則元件增量更新門牌地址。"""
+        if self.case.address_confirmed is True:   # ← 新增
+            return                                # ← 新增
         if self.case.location_type != "address":
             return
 
@@ -939,10 +941,11 @@ class SopEngine119:
                                 setattr(self.case, slot, val)
 
         # 4) 專項地址抽取（規則 + LLM）
-        self._try_extract_address(caller_text)
-        self._apply_location_rules(caller_text)
-        self._refresh_location_type()
-        self._update_street_address_from_input(caller_text)
+        if self.case.address_confirmed is not True:
+            self._try_extract_address(caller_text)
+            self._apply_location_rules(caller_text)
+            self._refresh_location_type()
+            self._update_street_address_from_input(caller_text)
 
     def _after_caller_input(
         self,
