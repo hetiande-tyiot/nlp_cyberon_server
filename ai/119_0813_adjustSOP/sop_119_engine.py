@@ -1879,7 +1879,7 @@ class SopEngine119:
         self._run_address_flow(
             stage_ask="火警_location",
             stage_confirm="火警_location_confirm",
-            dispatch_line="已確認地址，消防車已派出了喔。",
+            dispatch_line="已確認地址。",
             ask_questions=build_address_ask_questions(
                 include_floor=address_ask_should_include_floor(
                     self.case.full_caller_text()

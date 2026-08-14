@@ -42,9 +42,28 @@ class HuoJingGenericHandler(SubCategoryHandler):
         """完成初期研判，再執行對應燃燒標的分支。"""
         engine._ensure_known_fields_from_history()
 
+        engine._say(
+                "請不要緊張，再幫我確認一些事情。"
+            )
+
         self._ask_missing(
-            engine, "火警_initial_1", ("fire_or_smoke",),
-            "請問現在是看到火，還是只有看到煙，或聞到味道？",
+            engine, "火警_initial_1", ("caller_position", "caller_role"),
+            "請問你在裡面還是外面？是住戶、鄰居，還是路過民眾？",
+        )
+        position = engine.case.caller_position or ""
+        if "內" in position or "裡" in position or "里" in position:
+            engine._debug_print("caller_inside_fire_scene", position)
+            engine._say(
+                "請不要向上逃生，如無法下樓逃生，請在家關門避難，不要出門。"
+                "可以的話請移動到離起火點最遠的房間，關門避難並打開對外窗"
+            )
+            from sop_119_engine import TransferToHumanError
+            raise TransferToHumanError(
+                "caller_inside_fire_scene", result="human_transfer"
+            )
+        self._ask_missing(
+            engine, "火警_initial_2", ("fire_or_smoke",),
+            "請問現在是有看到火舌還是火光嗎？",
         )
         if _mentions_smoke(engine.case.fire_or_smoke):
             self._ask_missing(
@@ -52,11 +71,11 @@ class HuoJingGenericHandler(SubCategoryHandler):
                 "是黑煙還是白煙呢？",
             )
         self._ask_missing(
-            engine, "火警_initial_2", ("burning_object",),
+            engine, "火警_initial_3", ("burning_object",),
             "請問是什麼在燒？房子、車子，還是雜草？",
         )
         self._ask_missing(
-            engine, "火警_initial_3", ("fire_trend", "fire_extent"),
+            engine, "火警_initial_4", ("fire_trend", "fire_extent"),
             "火是越來越大還是消退呢？大概多大範圍？",
         )
 
@@ -73,7 +92,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
             for _attempt in range(2):
                 self._ask_missing(
                     engine, "火警_category", ("fire_category",),
-                    "請確認燃燒標的是建築物、工廠、車輛，還是露天野外？",
+                    "先和您確認一下，是什麼在燒呢？是房子、車子，還是戶外呢？",
                 )
                 category = engine.case.fire_category or _infer_fire_category(
                     engine.case.burning_object
@@ -144,31 +163,20 @@ class HuoJingGenericHandler(SubCategoryHandler):
             )
 
     def _run_building_flow(self, engine: "SopEngine119") -> None:
-        self._ask_missing(
-            engine, "火警_building_identity", ("caller_position", "caller_role"),
-            "你在裡面還是外面？是住戶、鄰居，還是路過民眾？",
-        )
-        position = engine.case.caller_position or ""
-        if "內" in position or "裡" in position or "里" in position:
-            engine._say(
-                "請不要往上逃生；若出口有煙火，請關閉房門避難，"
-                "移動到外窗並讓消防人員看見你。"
-            )
-        else:
-            engine._say("請不要進入建築物，請在安全位置協助確認現場狀況。")
+        
         self._ask_people_trapped(
             engine, "火警_building_trapped",
-            "幫我確認一下，裡面有沒有人？有幾個人？",
+            "請幫我確認一下，裡面有沒有人？有幾個人？",
         )
         self._ask_missing(
             engine, "火警_building_floors",
             ("building_total_floors", "fire_floor"),
-            "建築物總共幾層樓？幾樓在燒？",
+            "請問建築物總共幾層樓呢？是第幾樓在燒呢？",
         )
         self._ask_missing(
             engine, "火警_building_spread",
             ("fire_spread", "building_layout"),
-            "現場有延燒的狀況嗎？是連棟還是頂樓加蓋？",
+            "現場有延燒的狀況嗎？是連棟還是頂樓加蓋呢？",
         )
 
     def _run_factory_flow(self, engine: "SopEngine119") -> None:
@@ -292,11 +300,16 @@ class HuoJingGenericHandler(SubCategoryHandler):
                 correction = engine._ask_and_extract(correction_q)
                 self._extract_caller_info(correction, correction_q, engine)
 
-        while not engine._is_field_filled("caller_contact"):
+        # 最多各追問 2 次，避免抽不到欄位時無限跳針
+        for _attempt in range(2):
+            if engine._is_field_filled("caller_contact"):
+                break
             phone_q = "請提供可以回撥的聯絡電話。"
             phone_answer = engine._ask_and_extract(phone_q)
             self._extract_caller_info(phone_answer, phone_q, engine)
-        while not engine._is_field_filled("caller_salutation"):
+        for _attempt in range(2):
+            if engine._is_field_filled("caller_salutation"):
+                break
             salutation_q = "請問是先生還是小姐？"
             salutation_answer = engine._ask_and_extract(salutation_q)
             self._extract_caller_info(salutation_answer, salutation_q, engine)
