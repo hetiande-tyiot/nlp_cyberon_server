@@ -58,6 +58,7 @@ class ZhuiLuoShangHandler(SubCategoryHandler):
             engine,
             q_consciousness="請問患者有沒有清醒？",
             q_breathing="是否有正常呼吸？",
+            has_abdomen_followup=True,
             on_answer=lambda a: self._check_and_respond_to_triggers(a, engine),
         )
 

@@ -347,7 +347,7 @@ class SopEngine119:
                 self.case.is_ohca = True
             self._notify_case_update()
             self._say(
-                "（判斷為OHCA）救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
+                "救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
             )
             raise TransferToHumanError(
                 f"OHCA detected at {slot}", result="ohca_transfer"
@@ -1758,7 +1758,7 @@ class SopEngine119:
             # ════════════════════════════════════════════════════════
             handler.run_pre_vital(self)
 
-            # 階段 2：確認生命征象（3 問，已有值則跳過）
+            # 階段 2：漸進確認生命征象（前一項為否才問下一項）
             self._ensure_known_fields_from_history()
 
             vital_questions = [
@@ -1767,7 +1767,7 @@ class SopEngine119:
                 ("救護_vital_3", "abdomen_rise",  "請看一下他肚子有沒有起伏？"),
             ]
 
-            for stage, slot, question in vital_questions:
+            for question_i, (stage, slot, question) in enumerate(vital_questions):
                 self._ensure_known_fields_from_history()
 
                 if self._is_field_filled(slot):
@@ -1775,24 +1775,28 @@ class SopEngine119:
                         vital_val = getattr(self.case, slot)
                     self._debug_print(f"skip_{slot}", vital_val)
                     self._set_stage(stage)
+                else:
+                    self._set_stage(stage)
+                    vital_text = self._ask_and_extract(question)
+
+                    vital_val = parse_yes_no_for_question(question, vital_text)
+                    if vital_val is None and self._llm:
+                        try:
+                            vital_val = self._llm.extract_vital_sign(question, vital_text)
+                            self._debug_print(f"vital_{slot}", vital_val)
+                        except Exception as e:
+                            self._debug_print(f"vital_{slot}_error", e)
+
+                    with self._case_lock:
+                        setattr(self.case, slot, vital_val)
+                    self._notify_case_update()
+
+                # 任一項確認為有，即停止後續生命征象問題；只有明確為否才繼續。
+                if vital_val is True:
+                    self._debug_print("vital_confirmed", slot)
+                    break
+                if vital_val is None or question_i == len(vital_questions) - 1:
                     self._check_ohca_and_transfer(vital_val, slot)
-                    continue
-
-                self._set_stage(stage)
-                vital_text = self._ask_and_extract(question)
-
-                vital_val = parse_yes_no_for_question(question, vital_text)
-                if vital_val is None and self._llm:
-                    try:
-                        vital_val = self._llm.extract_vital_sign(question, vital_text)
-                        self._debug_print(f"vital_{slot}", vital_val)
-                    except Exception as e:
-                        self._debug_print(f"vital_{slot}_error", e)
-
-                with self._case_lock:
-                    setattr(self.case, slot, vital_val)
-                self._notify_case_update()
-                self._check_ohca_and_transfer(vital_val, slot)
 
             # 生命征象後次類別額外問題（如：一般受傷的傷因/部位/TOCC）
             handler.run_post_vital(self)

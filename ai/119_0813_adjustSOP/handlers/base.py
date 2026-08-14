@@ -11,15 +11,14 @@ SubCategoryHandler 定義三個鉤子介面：
 共用方法：
   _do_collect_caller_info(engine, include_address) — 供子類呼叫的帶住址版實作
   _run_s1_consciousness_breathing(...)            — S1 意識/呼吸（已填則跳過）
-  _run_s2_response_or_abdomen(...)                — S2 反應/起伏（已清醒則只問起伏）
+  _run_s2_response_or_abdomen(...)                — S2 起伏（前兩項皆否才詢問）
 
 所有次類別 Handler 繼承此類，選擇性覆寫所需鉤子。
 """
 
 from __future__ import annotations
 
-import random
-from typing import TYPE_CHECKING, List, Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence
 
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
@@ -48,13 +47,15 @@ class SubCategoryHandler:
         *,
         q_consciousness: str,
         q_breathing: str,
+        has_abdomen_followup: bool = False,
         on_answer=None,
     ) -> None:
         """
         S1：依序確認意識與呼吸。
         - 已填欄位直接使用，不重複詢問
-        - 意識明確為 True 才確認呼吸
-        - 任一欄位不是 True（False 或無法確認）→ 立即 OHCA，不再詢問下一項
+        - 意識為 False 才確認呼吸；任一項為 True 即停止後續生命征象問題
+        - 無法確認時立即 OHCA，不臆測為 False
+        - 呼吸為 False 時，有 S2 的子類繼續確認腹部起伏，否則立即 OHCA
         """
         questions = (
             ("consciousness", q_consciousness),
@@ -76,7 +77,15 @@ class SubCategoryHandler:
                 with engine._case_lock:
                     vital_val = getattr(engine.case, slot)
 
-            engine._check_ohca_and_transfer(vital_val, slot)
+            if vital_val is True:
+                engine._debug_print("S1_vital_confirmed", slot)
+                return
+            if vital_val is None:
+                engine._check_ohca_and_transfer(vital_val, slot)
+            if slot == "breathing":
+                if has_abdomen_followup:
+                    return
+                engine._check_ohca_and_transfer(vital_val, slot)
 
     def _run_s2_response_or_abdomen(
         self,
@@ -87,32 +96,31 @@ class SubCategoryHandler:
         on_answer=None,
     ) -> None:
         """
-        S2：反應或腹部起伏。
-        - abdomen_rise 已填 → 跳過
-        - 意識已確認為 True → 不再問叫/捏反應，只問腹部起伏
-        - 否則從反應選項 + 起伏中隨機一題
+        S2：前兩項皆為 False 時確認腹部起伏。
+        - 意識或呼吸任一為 True → 跳過本題
+        - abdomen_rise 已填 → 直接使用
+        - 不再以反應題替代腹部起伏題
         """
         engine._ensure_known_fields_from_history()
 
-        if engine._is_field_filled("abdomen_rise"):
-            engine._debug_print("skip_S2", engine.case.abdomen_rise)
-            self._check_ohca_after_s2(engine)
+        with engine._case_lock:
+            consciousness = engine.case.consciousness
+            breathing = engine.case.breathing
+
+        if consciousness is True or breathing is True:
+            engine._debug_print(
+                "skip_S2_vital_confirmed",
+                f"consciousness={consciousness}, breathing={breathing}",
+            )
             return
 
-        with engine._case_lock:
-            conscious = engine.case.consciousness is True
-
-        if conscious:
-            q2 = abdomen_question
-            engine._debug_print("S2_skip_reaction", "consciousness=True → abdomen only")
+        if engine._is_field_filled("abdomen_rise"):
+            engine._debug_print("skip_S2", engine.case.abdomen_rise)
         else:
-            options: List[str] = list(reaction_options) + [abdomen_question]
-            q2 = random.choice(options)
-
-        answer2 = engine._ask_and_extract(q2)
-        self._extract_s2_vitals(answer2, q2, engine)
-        if on_answer is not None:
-            on_answer(answer2)
+            answer2 = engine._ask_and_extract(abdomen_question)
+            self._extract_s2_vitals(answer2, abdomen_question, engine)
+            if on_answer is not None:
+                on_answer(answer2)
         self._check_ohca_after_s2(engine)
 
     def _extract_s1_vitals(
@@ -297,7 +305,7 @@ class SubCategoryHandler:
             engine.case.is_ohca = True
         engine._notify_case_update()
         engine._say(
-            "（判斷為OHCA）救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
+            "救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
         )
         from sop_119_engine import TransferToHumanError
         raise TransferToHumanError("OHCA detected at S1", result="ohca_transfer")
@@ -311,7 +319,7 @@ class SubCategoryHandler:
                 engine.case.is_ohca = True
             engine._notify_case_update()
             engine._say(
-                "（判斷為OHCA）救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
+                "救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
             )
             from sop_119_engine import TransferToHumanError
             raise TransferToHumanError("OHCA detected at S2", result="ohca_transfer")

@@ -63,6 +63,7 @@ class JiBingHandler(SubCategoryHandler):
             engine,
             q_consciousness="他是不是清醒呢？",
             q_breathing="有沒有正常呼吸？",
+            has_abdomen_followup=True,
             on_answer=lambda a: self._check_and_respond_to_triggers(a, engine),
         )
 
