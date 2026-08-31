@@ -206,6 +206,9 @@ def format_transcript_for_report(transcript: List[Dict[str, str]]) -> str:
             lines.append(f"受理員：{text}")
         elif role == "caller":
             lines.append(f"報警人：{text}")
+        elif role == "agent":
+            # /observe 轉真人後接手的受理員；不接會整句被丟掉
+            lines.append(f"真人受理員：{text}")
     return "\n".join(lines) if lines else "（無通話記錄）"
 
 
