@@ -146,9 +146,8 @@ if ENABLE_MAIN_CLASSIFIER:
         print(f"⚠️  119 主分類器跳過：{exc}", flush=True)
 if ENABLE_SUB_CLASSIFIER:
     try:
-        from classifier_with_llm import build_classifiers
-        # vendor build_classifiers 只註冊「救護」+「火警」兩個子分類器，
-        # 緊急救援/其他案類即使有 BERT 也不會自動 register（vendor 行為，未改）。
+        from classifier_with_llm import build_classifiers, SubCategoryClassifier
+        # vendor build_classifiers 只註冊「救護」+「火警」；緊急救援在下方補註冊。
         print(f"⏳ 載入 119 子分類器 from {BERT_MODELS_BASE} (device={BERT_DEVICE})…", flush=True)
         _shared_sub_classifiers = build_classifiers(
             models_base=BERT_MODELS_BASE,
@@ -156,6 +155,20 @@ if ENABLE_SUB_CLASSIFIER:
             device=BERT_DEVICE,
             enable_llm=False,
         )
+        # 補註冊「緊急救援」子分類器（vendor build_classifiers 未涵蓋）。
+        # 2026-08-31 起三個子分類升級：救護 14 類 / 火警 13 類 / 緊急救援 8 類。
+        _es_dir = os.path.join(BERT_MODELS_BASE, "TW-119-BERT-sub_緊急救援")
+        if os.path.isdir(_es_dir):
+            try:
+                _shared_sub_classifiers.register(SubCategoryClassifier(
+                    main_category="緊急救援",
+                    model_dir=_es_dir,
+                    llm_model_path=None,
+                    device=BERT_DEVICE,
+                ))
+                print("✅ 補註冊 緊急救援 子分類器", flush=True)
+            except Exception as exc2:  # noqa: BLE001
+                print(f"⚠️  緊急救援 子分類器補註冊失敗：{exc2}", flush=True)
         print("✅ 119 子分類器就緒", flush=True)
     except Exception as exc:  # noqa: BLE001
         print(f"⚠️  119 子分類器跳過：{exc}", flush=True)

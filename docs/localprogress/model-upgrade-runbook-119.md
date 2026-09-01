@@ -18,7 +18,7 @@
 
 - **機器**：cyberon2（開發主力，192.168.5.132）。⚠️ 別跟 204/aitop4（那是 **110 系統**）搞混。切換 systemd 一定在 cyberon2。
 - **線上服務**：systemd `sop119.service`，REST API `http://0.0.0.0:8200`
-- **進入點**：`sop_api_server:app`（uvicorn），`WorkingDirectory` = 當前版本目錄（2026-07-30 起 = `ai/119_0724_add_2maincategory/`）
+- **進入點**：`sop_api_server:app`（uvicorn），`WorkingDirectory` = 當前版本目錄（2026-09-01 起 = `ai/119_0813_adjustSOP/`）
 - **venv**：`/home/cyberon2/nlp_cyberon_server/llmenv/`（Python 3.12）
 - **部署目標機**：aitop6（見 memory `deploy-aitop6-tailscale`，git push + rsync 雙管道）
 

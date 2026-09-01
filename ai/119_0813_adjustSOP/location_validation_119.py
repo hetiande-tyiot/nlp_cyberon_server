@@ -13,7 +13,7 @@
    （再轉成 API 的 type）。這部分的資料載入保留在下方。
 
 驗測設定（環境變數）：
-  ADDRCHECK_API_URL      Base URL，預設 http://localhost:8060
+  ADDRCHECK_API_URL      Base URL，預設 http://192.168.5.120:8088
   ADDRCHECK_API_TOKEN    Bearer token（與 ACRC 共用 Ingest__Token）
   ADDRCHECK_API_TIMEOUT  逾時秒數，預設 2.5
 """
@@ -36,7 +36,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_MRT_CSV = BASE_DIR / "scripts" / "MRTstation.csv"
 DEFAULT_LANDMARK_XLSX = BASE_DIR / "scripts" / "landmarks.xlsx"
 
-DEFAULT_ADDRCHECK_BASE_URL = "http://localhost:8060"
+DEFAULT_ADDRCHECK_BASE_URL = "http://192.168.5.120:8088"
 VERIFY_PATH = "/api/AddrCheck/Verify"
 
 # 內部 location_type → MapaddrCheck API 的 type（只查該層，不會退到其他層）。
