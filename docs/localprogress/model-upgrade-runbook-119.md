@@ -140,6 +140,45 @@ curl -s $B/session/$SID/result | $PY -m json.tool   # 確認 main_category=火�
 | **vendor 硬編路徑** `/root/autodl-tmp` | `grep -rn "/root/autodl-tmp" *.py` | 只在函式 DEFAULT，API 全靠 env 覆蓋 → 無妨 |
 | **介面符號簽名** | 見 Step 1 | SopEngine119.__init__ / END_FLOW_SENTINEL / to_dict 至今未變 |
 
+## 3.5 換版客製修改清單（vendor 版沒有／原用 jurisdiction，每次要重新套用）
+
+vendor 新 Streamlit 版只含 `app_119.py` + 引擎/handlers，以下 server 端客製要 port / 重加：
+
+**① `sop_api_server.py`（整檔 port，vendor 沒有）**
+- 從當前線上版 cp + 改版本標識（docstring 部署路徑、`FastAPI(version=)`）
+- 含 `/observe` 端點（轉真人後聽對話 + 背景重算 `case_summary`；SSE 收線改由 `/hangup`；相依 `build_fallback_summary` / `StreamingResponse` / `OBSERVE_*` env）
+- **緊急救援子分類補註冊**（vendor `build_classifiers` 只註冊救護+火警）：
+  ```python
+  from classifier_with_llm import build_classifiers, SubCategoryClassifier
+  _es_dir = os.path.join(BERT_MODELS_BASE, "TW-119-BERT-sub_緊急救援")
+  if os.path.isdir(_es_dir):
+      _shared_sub_classifiers.register(SubCategoryClassifier(
+          main_category="緊急救援", model_dir=_es_dir, llm_model_path=None, device=BERT_DEVICE))
+  ```
+
+**② `case_field_labels_119.py`（重建，vendor 沒有）** — 對照新版 `case_info` 重建 + 交叉驗證（缺/多皆空）。0901 = 106 欄 / 105 labels。
+
+**③ 地址驗測改 addrCheck（`location_validation_119.py`）** — vendor 原用 jurisdiction 轄區 API，每次要改成 addrCheck：
+- 常數 `DEFAULT_ADDRCHECK_BASE_URL` / `ADDRCHECK_VERIFY_PATH` / `LOCATION_TYPE_TO_API_TYPE`（address→House、intersection→Crossroad、highway→Freeway、landmark/mrt→Landmark）
+- 核心 `verify_address_detail()`→(status,hint,reason) + `verify_address_status()` 薄包裝 + `_addrcheck_token()`
+- reason 分類 `ADDRCHECK_REASON_TEXT` + `addrcheck_failure_reason()`；`JurisdictionResult.api_reason`
+- `query_jurisdiction`(→House) / `validate_landmark` / `validate_mrt`(→Landmark) 改走 addrCheck
+- **119 只看 `status:true`、不取分局名**（分局是 110 才要）；地標/捷運本地檔 `landmarks.xlsx`/`MRTstation.csv` 保留（引擎用於「型態分類」）
+
+**④ 引擎 intersection/highway 分支改 addrCheck（`sop_119_engine.py`，動 vendor）** — import `verify_address_status`；兩分支組出地址後加 addrCheck 驗證（True→valid / False→invalid reask / None→error）。highway 需帶里程才驗得過。
+
+**⑤ reason 接引擎 — TODO（尚未做）**：`location_validation` 已備 `addrcheck_failure_reason()` / `verify_address_detail`(回 reason) / `api_reason`，但引擎失敗仍用固定訊息（「路口查無」等）。待辦：引擎各 invalid 分支改用 `addrcheck_failure_reason(result.api_reason)` 產生正確錯誤說明（查無門牌/查無路段…）。
+
+**⑥ systemd `sop119.service` env**：`WorkingDirectory`→新版；`ADDRCHECK_API_URL=http://100.107.145.7:8088` + `ADDRCHECK_API_TOKEN` + `ADDRCHECK_API_TIMEOUT=2.5`（0901 起不需 `JURISDICTION_API_URL`）；其餘 `GGUF_MODEL_PATH`/`BERT_MODELS_BASE`/`LOG_DIR`/`BERT_DEVICE` 不變。
+
+**⑦ 模型目錄 / 換子分類模型**：子分類統一用**無後綴**目錄名 `TW-119-BERT-sub_{救護|火警|緊急救援}` 當「原版檔名」。
+**換新模型慣例：原版目錄改名 `_bak_<日期>`、新版內容放進無後綴原檔名，`_MODEL_DIRS` 路徑不用改。** 例：0903 換火警 → 無後綴 `火警`(13類) 改 `火警_bak_0903`、`火警_v5`(21類) 放進無後綴 `火警`。
+⚠️ **vendor 從 0901 起把火警 `_MODEL_DIRS` 寫成 `火警_v2`（多後綴、偏離無後綴慣例），每次換版必須 sed 改回無後綴**：
+```bash
+sed -i 's#TW-119-BERT-sub_火警_v2#TW-119-BERT-sub_火警#g' classifier_with_llm.py
+```
+救護本來就無後綴（vendor 正確）、緊急救援靠 ① 補註冊。
+
 ## 4. 只換模型（程式不動）
 
 - **換 LLM gguf**：改 service `GGUF_MODEL_PATH` → `daemon-reload` + `restart`。新模型 chat_format/prompt 若不同，`llm_extractor_119.py` 的 prompt 可能要調。
