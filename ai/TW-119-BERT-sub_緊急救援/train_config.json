@@ -1,0 +1,40 @@
+{
+  "main_category": "緊急救援",
+  "source_jsonl": "/root/autodl-tmp/119_20260609stt_case_public.jsonl",
+  "data_dir": "/root/autodl-tmp/119_sub_v2_data",
+  "base_model": "/root/autodl-tmp/models/chinese-macbert-base",
+  "output_dir": "/root/autodl-tmp/models/TW-119-BERT-sub_緊急救援_v2",
+  "n_records": 1104,
+  "n_labels": 8,
+  "distribution": {
+    "其他": 513,
+    "車禍救助": 171,
+    "電梯受困": 143,
+    "瓦斯漏氣(建築物)": 142,
+    "跳樓": 60,
+    "山難": 49,
+    "跳水": 16,
+    "開瓦斯自殺": 10
+  },
+  "split": {
+    "train": 884,
+    "val": 110,
+    "test": 110,
+    "train_ratio": 0.8,
+    "val_ratio": 0.1,
+    "notes": {
+      "n1_all_train": [],
+      "n2_train_test": []
+    }
+  },
+  "max_len": 128,
+  "batch_size": 64,
+  "epochs": 5,
+  "lr": 2e-05,
+  "warmup_ratio": 0.1,
+  "weight_decay": 0.01,
+  "seed": 42,
+  "fp16": false,
+  "use_class_weight": true,
+  "cuda": false
+}

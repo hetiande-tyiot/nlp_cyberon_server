@@ -1,0 +1,20 @@
+{
+  "data_dir": "/root/autodl-tmp/sub_category_cleaned",
+  "model_name": "/root/autodl-tmp/models/chinese-macbert-base",
+  "output_dir": "/root/autodl-tmp/TW-119-BERT-sub_救護_new_2",
+  "max_length": 512,
+  "batch_size": 32,
+  "eval_batch_size": 64,
+  "num_epochs": 5,
+  "learning_rate": 2e-05,
+  "weight_decay": 0.01,
+  "warmup_ratio": 0.1,
+  "test_size": 0.1,
+  "seed": 42,
+  "fp16": true,
+  "max_grad_norm": 1.0,
+  "save_best_metric": "macro_f1",
+  "use_weighted_loss": true,
+  "use_weighted_sampler": false,
+  "log_steps": 100
+}

@@ -1,0 +1,8 @@
+              precision    recall  f1-score   support
+
+          捉蛇     0.8889    1.0000    0.9412       120
+        轉報案件     1.0000    0.9537    0.9763       324
+
+    accuracy                         0.9662       444
+   macro avg     0.9444    0.9769    0.9587       444
+weighted avg     0.9700    0.9662    0.9668       444

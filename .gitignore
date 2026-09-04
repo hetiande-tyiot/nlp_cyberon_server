@@ -7,11 +7,11 @@ venv/
 # ===== 整包走 rsync 的模型資料夾（不進 git，以資料夾為單位）=====
 # 這些資料夾是純模型，視為一個整體用 rsync 傳，不在內部分裂。
 models/
-ai/TW-119-BERT_main/
-ai/TW-119-BERT-sub_火警/
-ai/TW-119-BERT-sub_救護/
-ai/TW-119-BERT-sub_緊急救援/
-ai/TW-119-BERT-sub_其他案類/
+# BERT 模型：無後綴原檔案夾 = 當前正式模型（其 config/label_map 進 git 追蹤類別結構）；
+# 帶後綴 _* 的 = 備份/版本/過渡目錄（_bak_日期 / _v2 / _v5 / _new_2…），整個排除。
+# 權重檔（model.safetensors / pytorch_model.bin）另由下方權重副檔名排除、走 rsync。
+ai/TW-119-BERT-sub_*_*/
+ai/TW-119-BERT_main_*/
 
 # ===== 權重副檔名（安全網）=====
 # STT-Whisper 為例外：server 程式與 config 進 git，只有 model.bin 被這裡擋掉走 rsync。
