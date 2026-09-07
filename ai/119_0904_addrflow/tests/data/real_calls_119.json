@@ -1,0 +1,1063 @@
+{
+ "source": "log_119 真實通話",
+ "note": "utterances = 報案人原話與期望抽出的地址元件（人工判讀）；api_snapshots = addrCheck 回應快照，供測試離線回放。observed 僅供產生當下對照，測試不以它為準。",
+ "cases": [
+  {
+   "id": "case119_20260907_170134_38f5a733",
+   "note": "樹林和平街23號1樓：案情與地址擠在同一句，一問一答就派遣",
+   "orig_case_address": "新北市樹林區和平街23號1樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "我媽媽現在那個血壓跟血血氧去急速效機，我這邊需要救護車。然後我的地地址是那個樹林區和平街23號1樓。趕快請那個救護車。來。",
+     "expect_district": "樹林區",
+     "expect_road": "和平街",
+     "expect_number": "23號",
+     "observed": {
+      "district": "樹林區",
+      "road": "和平街",
+      "number": "23號",
+      "rebuilt": "樹林區和平街23號1樓"
+     }
+    },
+    {
+     "text": "是。一個人，就我媽媽。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260907_170456_9e43911a",
+   "note": "永和永鎮路→永貞路：addrCheck 依讀音修正，正規化後的地址不得被原話蓋回去",
+   "orig_case_address": "新北市永和區永鎮路128號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "你好，那個有個老人家倒在路上騎不來。地址在那個新北市永和區永鎮路128號。",
+     "expect_district": "永和區",
+     "expect_road": "永鎮路",
+     "expect_number": "128號",
+     "observed": {
+      "district": "永和區",
+      "road": "永鎮路",
+      "number": "128號",
+      "rebuilt": "新北市永和區永鎮路128號"
+     }
+    },
+    {
+     "text": "是。有清醒。他狀況。還好，他是說不用救護車，但是他沒辦法移動。我建議還是。幫他報警，我是路人了。是。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260907_170711_6d731ae6",
+   "note": "三重安慶街295號：區名與路名連著講（三重安慶街），由 strip 剝掉前綴",
+   "orig_case_address": "新北市三重區安慶街295號2樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "喂，你好，那個我在三重安慶街。295號。有看到那個。對面有在冒白煙，對面2樓有沒有白煙。",
+     "expect_district": "三重區",
+     "expect_road": "三重安慶街",
+     "expect_number": "295號",
+     "observed": {
+      "district": "三重區",
+      "road": "三重安慶街",
+      "number": "295號",
+      "rebuilt": "三重區安慶街295號2樓"
+     }
+    },
+    {
+     "text": "欸是那個透透天的。應該是。現在目前看到2樓有白煙。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "我是看到白煙。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_103532_2f48aa65",
+   "note": "板橋民生路二段200之1號：句中沒有區也沒有縣市，路名 regex 連贅詞一起吃",
+   "orig_case_address": "新北市板橋區民生路二段200之1號8樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "我這邊是民生路2段。兩百。號之18樓。",
+     "expect_district": null,
+     "expect_road": "民生路2段",
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": "民生路2段",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "呃，板橋區。",
+     "expect_district": "板橋區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "板橋區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "是。200之1號8樓。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": "200之1號",
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": "200之1號",
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "民生路。二段。",
+     "expect_district": null,
+     "expect_road": "民生路二段",
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": "民生路二段",
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_103756_b42e2e3b",
+   "note": "五股六合街92號5樓：一句話講完整，一問一答就派遣",
+   "orig_case_address": "新北市五股區六合街92號5樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "嗯，我我這邊是那個五股區的。六合街。然後是92號5樓。",
+     "expect_district": "五股區",
+     "expect_road": "六合街",
+     "expect_number": "92號",
+     "observed": {
+      "district": "五股區",
+      "road": "六合街",
+      "number": "92號",
+      "rebuilt": "五股區六合街92號5樓"
+     }
+    },
+    {
+     "text": "男生好像沒有呼吸了。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_104014_db0ed721",
+   "note": "五股六合街92號5樓（陸光新城）：覆誦時補地標，不得蓋掉已確認的門牌",
+   "orig_case_address": "新北市五股區六合街92號5樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "嘿嘿對。五股區六合街。92號5樓。",
+     "expect_district": "五股區",
+     "expect_road": "六合街",
+     "expect_number": "92號",
+     "observed": {
+      "district": "五股區",
+      "road": "六合街",
+      "number": "92號",
+      "rebuilt": "五股區六合街92號5樓"
+     }
+    },
+    {
+     "text": "對對對，就是那個陸光新城。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "就有一個伯伯，他說，他快要不行了。然後他叫我們幫他叫救護車。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_104210_977b9e28",
+   "note": "新店中興路3段290號1樓：報案人先問問題再給地址",
+   "orig_case_address": "新北市新店區中興路3段290號1樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "新店區中興路3段。290號1樓。",
+     "expect_district": "新店區",
+     "expect_road": "中興路3段",
+     "expect_number": "290號",
+     "observed": {
+      "district": "新店區",
+      "road": "中興路3段",
+      "number": "290號",
+      "rebuilt": "新店區中興路3段290號1樓"
+     }
+    },
+    {
+     "text": "他是清醒，三三就是講話的時候，會有一點點口齒不清。然後行動，感覺有點怪怪的。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_044240_256543d2",
+   "note": "鶯歌：省略「區」的口語區名，修正前判成地標，AI 問「確定是鶯歌這個地址嗎」",
+   "orig_case_address": "鶯歌",
+   "orig_location_type": "landmark",
+   "utterances": [
+    {
+     "text": "欸我我我我我要一個那個救護車在那個。鶯歌那邊。",
+     "expect_district": "鶯歌區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "鶯歌區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_044450_14c7cb5d",
+   "note": "鶯歌區國慶街164號：裸區名 ＋ 區路連著講（鶯歌國慶街）",
+   "orig_case_address": "新北市鶯歌區國慶街164號2樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "呃，我要那個救護車在那個鶯歌。",
+     "expect_district": "鶯歌區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "鶯歌區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "鶯歌國慶街慶。那個164號2樓。",
+     "expect_district": "鶯歌區",
+     "expect_road": "鶯歌國慶街",
+     "expect_number": "164號",
+     "observed": {
+      "district": "鶯歌區",
+      "road": "鶯歌國慶街",
+      "number": "164號",
+      "rebuilt": "鶯歌區國慶街164號2樓"
+     }
+    },
+    {
+     "text": "鶯歌區。",
+     "expect_district": "鶯歌區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "鶯歌區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "欸，就是那個跌倒。媽媽跌倒。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260904_195416_de7f3a53",
+   "note": "五股區明德路：「那個新北市」贅詞污染縣市，修正前繞三輪才問到",
+   "orig_case_address": "新北市五股區我是路人路28號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "嗯，在那個新北市五股區明德路12巷。",
+     "expect_district": "五股區",
+     "expect_road": "明德路12巷",
+     "expect_number": null,
+     "observed": {
+      "district": "五股區",
+      "road": "明德路12巷",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "五股區明德路。12巷28號這個地址。",
+     "expect_district": "五股區",
+     "expect_road": "明德路12巷",
+     "expect_number": "28號",
+     "observed": {
+      "district": "五股區",
+      "road": "明德路12巷",
+      "number": "28號",
+      "rebuilt": "五股區明德路12巷28號"
+     }
+    },
+    {
+     "text": "呃，我是路人，所以我沒有開車，就看到有有人那個機車自摔。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "我是路人路過現場。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260904_195651_82c607e9",
+   "note": "蘆洲區長安街：報案人以地標帶出路名",
+   "orig_case_address": "蘆洲區長安街31號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "那個。蘆洲成功國小旁邊。長安街。三十一三十一。好。",
+     "expect_district": null,
+     "expect_road": "長安街",
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": "長安街",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "對對對，就是在。蘆洲區成功國小旁邊，沒錯。",
+     "expect_district": "蘆洲區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "蘆洲區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260904_195931_b6e8bf99",
+   "note": "永和區：STT 破碎，59 字整段話一度被存成 case.address",
+   "orig_case_address": "欸，我跟你講喔，那個就是他的身體也很不舒服。趕快來好不好，我，我要送醫院。在那個。那個新北市永和區。合約那個422號",
+   "orig_location_type": "landmark",
+   "utterances": [
+    {
+     "text": "欸，我跟你講喔，那個就是他的身體也很不舒服。趕快來好不好，我，我要送醫院。在那個。那個新北市永和區。合約那個422號。",
+     "expect_district": "永和區",
+     "expect_road": null,
+     "expect_number": "422號",
+     "observed": {
+      "district": "永和區",
+      "road": null,
+      "number": "422號",
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260904_200225_e132df76",
+   "note": "三重正義南路：門牌真的不存在（API 實測該路只有 4/6/20 號）",
+   "orig_case_address": "三重區不知道他躺在路12號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "三重區的正義南路。",
+     "expect_district": "三重區",
+     "expect_road": "正義南路",
+     "expect_number": null,
+     "observed": {
+      "district": "三重區",
+      "road": "正義南路",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "不知道他躺在路邊，感覺。感覺沒有清醒。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260902_133949_4540ae40",
+   "note": "土城區中央路：贅詞「那個辦」污染行政區（09-02 事故）",
+   "orig_case_address": "土城區中央路3段二十六11巷2號4樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "欸我住在那個辦土城區中央路3段61巷2號4樓。",
+     "expect_district": "土城區",
+     "expect_road": "中央路3段61巷",
+     "expect_number": "2號",
+     "observed": {
+      "district": "土城區",
+      "road": "中央路3段61巷",
+      "number": "2號",
+      "rebuilt": "土城區中央路3段61巷2號4樓"
+     }
+    },
+    {
+     "text": "對。來。好。阿母。好了。土城區中央路3段二十六11巷2號4樓。",
+     "expect_district": "土城區",
+     "expect_road": "中央路3段二十六11巷",
+     "expect_number": "2號",
+     "observed": {
+      "district": "土城區",
+      "road": "中央路3段二十六11巷",
+      "number": "2號",
+      "rebuilt": "土城區中央路3段二十六11巷2號4樓"
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260904_094500_df9769a8",
+   "note": "土城區亞洲路：產檢醫院覆寫已派遣地址（09-04 事故）",
+   "orig_case_address": "國泰醫院",
+   "orig_location_type": "landmark",
+   "utterances": [
+    {
+     "text": "嗯，那個亞洲路3號2樓。",
+     "expect_district": null,
+     "expect_road": "亞洲路",
+     "expect_number": "3號",
+     "observed": {
+      "district": null,
+      "road": "亞洲路",
+      "number": "3號",
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "土城區。",
+     "expect_district": "土城區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "土城區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260902_133653_4189b666",
+   "note": "板橋區大華街：門牌不存在，API 給鄰近 1/5/7 號",
+   "orig_case_address": "板橋區大華街2號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "板橋區大華街2號4樓。",
+     "expect_district": "板橋區",
+     "expect_road": "大華街",
+     "expect_number": "2號",
+     "observed": {
+      "district": "板橋區",
+      "road": "大華街",
+      "number": "2號",
+      "rebuilt": "板橋區大華街2號4樓"
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260905_104526_3bd6c9f4",
+   "note": "瑞芳明里路：STT 把路名斷成「明里。路」，第一句抽不到路（已知限制）",
+   "orig_case_address": "新北市瑞芳區明里路14號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "欸，我這邊是水南洞明里。路。14號我要去護車。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": "14號",
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": "14號",
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "呃，就是那個。新北市瑞芳區。明里路14號。",
+     "expect_district": "瑞芳區",
+     "expect_road": "明里路",
+     "expect_number": "14號",
+     "observed": {
+      "district": "瑞芳區",
+      "road": "明里路",
+      "number": "14號",
+      "rebuilt": "新北市瑞芳區明里路14號"
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260905_104817_d7eb1155",
+   "note": "汐止後德路：STT 重複「後得後德路」；API 建議福德路但引導式沒追問",
+   "orig_case_address": "汐止區後德路18號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "後德路18號。",
+     "expect_district": null,
+     "expect_road": "後德路",
+     "expect_number": "18號",
+     "observed": {
+      "district": null,
+      "road": "後德路",
+      "number": "18號",
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "汐止區。",
+     "expect_district": "汐止區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "汐止區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260905_105142_cf78b6aa",
+   "note": "新莊中港路648巷：覆誦時報案人更正門牌，重驗後通過（⑩-13）",
+   "orig_case_address": "新北市新莊區中港路648巷6號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "我這邊是那個。中港路。648巷。6號這邊，我看到有一個老人家。那個。好像血壓過高，然後。就在旁邊。有點傳播起來。",
+     "expect_district": null,
+     "expect_road": "中港路648巷",
+     "expect_number": "6號",
+     "observed": {
+      "district": null,
+      "road": "中港路648巷",
+      "number": "6號",
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "新莊區。中港路。",
+     "expect_district": "新莊區",
+     "expect_road": "中港路",
+     "expect_number": null,
+     "observed": {
+      "district": "新莊區",
+      "road": "中港路",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "不是是新莊。區中港路648巷6號。",
+     "expect_district": "新莊區",
+     "expect_road": "中港路648巷",
+     "expect_number": "6號",
+     "observed": {
+      "district": "新莊區",
+      "road": "中港路648巷",
+      "number": "6號",
+      "rebuilt": "新莊區中港路648巷6號"
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260905_105417_26455048",
+   "note": "板橋國光路31巷：地址有效但報案人沒明確確認 → 標「地址未確認」（⑩-14）",
+   "orig_case_address": "新北市板橋區國光路31巷11號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "板橋國光路。是是。",
+     "expect_district": "板橋區",
+     "expect_road": "板橋國光路",
+     "expect_number": null,
+     "observed": {
+      "district": "板橋區",
+      "road": "板橋國光路",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "還有31巷。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "不是是。板橋區國光路31巷。11號。",
+     "expect_district": "板橋區",
+     "expect_road": "國光路31巷",
+     "expect_number": "11號",
+     "observed": {
+      "district": "板橋區",
+      "road": "國光路31巷",
+      "number": "11號",
+      "rebuilt": "板橋區國光路31巷11號"
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_003050_e2236f44",
+   "note": "淡水民德路：報案人前後改區、STT 再錯成「雲德路」，標記失敗轉真人",
+   "orig_case_address": "淡水區民德路18號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "欸那個。土城區明德路。那個是那個。8號。",
+     "expect_district": "土城區",
+     "expect_road": "明德路",
+     "expect_number": "8號",
+     "observed": {
+      "district": "土城區",
+      "road": "明德路",
+      "number": "8號",
+      "rebuilt": "土城區明德路8號"
+     }
+    },
+    {
+     "text": "淡水區。明德路。18號。",
+     "expect_district": "淡水區",
+     "expect_road": "明德路",
+     "expect_number": "18號",
+     "observed": {
+      "district": "淡水區",
+      "road": "明德路",
+      "number": "18號",
+      "rebuilt": "淡水區明德路18號"
+     }
+    },
+    {
+     "text": "就明德路啊。",
+     "expect_district": null,
+     "expect_road": "明德路",
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": "明德路",
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_003354_bbee02e4",
+   "note": "板橋光武街136巷8弄：巷弄第一次就要抽到（⑩-21，標點分隔）",
+   "orig_case_address": "新北市板橋區光武街136巷8弄16號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "那個欸光武街，啊，那個板橋區光武街。136巷。8弄16號。",
+     "expect_district": "板橋區",
+     "expect_road": "光武街136巷8弄",
+     "expect_number": "16號",
+     "observed": {
+      "district": "板橋區",
+      "road": "光武街136巷8弄",
+      "number": "16號",
+      "rebuilt": "板橋區光武街136巷8弄16號"
+     }
+    },
+    {
+     "text": "還有136巷8弄。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_003709_575f6cf4",
+   "note": "中和景平路431巷：hint 導向修正「中和景平路」→「景平路」後通過",
+   "orig_case_address": "新北市中和區景平路431巷27號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "那個中和景平路。1元431巷。27號。",
+     "expect_district": "中和區",
+     "expect_road": "中和景平路",
+     "expect_number": "27號",
+     "observed": {
+      "district": "中和區",
+      "road": "中和景平路",
+      "number": "27號",
+      "rebuilt": "中和區景平路27號"
+     }
+    },
+    {
+     "text": "中和區景平路。",
+     "expect_district": "中和區",
+     "expect_road": "景平路",
+     "expect_number": null,
+     "observed": {
+      "district": "中和區",
+      "road": "景平路",
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_003819_e682d34b",
+   "note": "觀音山隧道：landmark 型態，精確比對不需額外確認",
+   "orig_case_address": "觀音山隧道",
+   "orig_location_type": "landmark",
+   "utterances": [
+    {
+     "text": "我跟你好，在那個觀音山隧道那邊有個大冒大大貨車拋錨，然後有冒煙。感覺快要燒起來了。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_011553_2e6e4a61",
+   "note": "關山隧道：地標模糊比對兩次都被報案人否認（⑩-4 機制生效，見 fuzzy_matches.jsonl）",
+   "orig_case_address": "台北港網無古方向的關山隧道",
+   "orig_location_type": "landmark",
+   "utterances": [
+    {
+     "text": "喂，你，我剛剛在台北港網無古方向的關山隧道裡面。有看到一個大卡車在冒煙，感覺是著火了。是",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "關山隧道。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_011911_fa60d893",
+   "note": "汐止橫科路351巷31號1樓：hint 導向修正「分科路」→「橫科路」，巷弄與樓層都保住",
+   "orig_case_address": "新北市汐止區橫科路351巷31號1樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "我跟你說，我這裡是那個分科路。351巷31號。1樓。我需要救護車。",
+     "expect_district": null,
+     "expect_road": "分科路351巷",
+     "expect_number": "31號",
+     "observed": {
+      "district": null,
+      "road": "分科路351巷",
+      "number": "31號",
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "汐止區。",
+     "expect_district": "汐止區",
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": "汐止區",
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "351巷31號1樓。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": "31號",
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": "31號",
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260906_012545_48b2da11",
+   "note": "土城明德路一段22號：段單獨補述要併回路名（⑩-23），修正後由 invalid 變 valid",
+   "orig_case_address": "土城區明德路22號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "嗯。土城區明德路。對。105巷。",
+     "expect_district": "土城區",
+     "expect_road": "明德路",
+     "expect_number": null,
+     "observed": {
+      "district": "土城區",
+      "road": "明德路",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "一段22號。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": "22號",
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": "22號",
+      "rebuilt": null
+     }
+    }
+   ]
+  }
+ ],
+ "api_snapshots": {
+  "新北市五股區明德路12巷28號": {
+   "valid": true,
+   "hint": "地址有效：新北市五股區明德路12巷28號",
+   "reason": "valid"
+  },
+  "五股區明德路28號": {
+   "valid": true,
+   "hint": "地址有效：新北市五股區明德路28號",
+   "reason": "valid"
+  },
+  "蘆洲區長安街31號": {
+   "valid": true,
+   "hint": "地址有效：新北市蘆洲區長安街31號",
+   "reason": "valid"
+  },
+  "新北市三重區正義南路12號": {
+   "valid": false,
+   "hint": "「新北市三重區正義南路12號」查無此門牌；同路段鄰近門牌為 新北市三重區正義南路6號、新北市三重區正義南路4號、新北市三重區正義南路20號，請向報案人確認號碼。",
+   "reason": "road_only"
+  },
+  "土城區中央路3段61巷2號": {
+   "valid": true,
+   "hint": "地址有效：新北市土城區中央路三段61巷2號",
+   "reason": "valid"
+  },
+  "土城區中央路3段二十六11巷2號": {
+   "valid": false,
+   "hint": "查無「中央路三段二十六」，是否為 新北市土城區中央路？",
+   "reason": "not_found"
+  },
+  "土城區亞洲路3號": {
+   "valid": false,
+   "hint": "「新北市土城區亞洲路3號」查無此門牌；同路段鄰近門牌為 新北市土城區亞洲路2號、新北市土城區亞洲路6號、新北市土城區亞洲路7之1號，請向報案人確認號碼。",
+   "reason": "road_only"
+  },
+  "板橋區大華街2號": {
+   "valid": false,
+   "hint": "「新北市板橋區大華街2號」查無此門牌；同路段鄰近門牌為 新北市板橋區大華街1號、新北市板橋區大華街5號、新北市板橋區大華街7號，請向報案人確認號碼。",
+   "reason": "road_only"
+  },
+  "新北市瑞芳區明里路14號": {
+   "valid": true,
+   "hint": "地址有效：新北市瑞芳區明里路14號",
+   "reason": "valid"
+  },
+  "汐止區後德路18號": {
+   "valid": false,
+   "hint": "查無「後德路」，是否為 新北市汐止區福德路、新北市汐止區福德一路、新北市汐止區福德三路？",
+   "reason": "not_found"
+  },
+  "新北市新莊區中港路648巷6號": {
+   "valid": true,
+   "hint": "地址有效：新北市新莊區中港路648巷6號",
+   "reason": "valid"
+  },
+  "新北市板橋區國光路31巷11號": {
+   "valid": true,
+   "hint": "地址有效：新北市板橋區國光路31巷11號",
+   "reason": "valid"
+  },
+  "淡水區明德路18號": {
+   "valid": false,
+   "hint": "查無「明德路」，是否為 新北市淡水區原德路、新北市淡水區民族路、新北市淡水區民權路？",
+   "reason": "not_found"
+  },
+  "新北市板橋區光武街136巷8弄16號": {
+   "valid": true,
+   "hint": "地址有效：新北市板橋區光武街136巷8弄16號",
+   "reason": "valid"
+  },
+  "新北市中和區景平路431巷27號": {
+   "valid": true,
+   "hint": "地址有效：新北市中和區景平路431巷27號",
+   "reason": "valid"
+  },
+  "觀音山隧道": {
+   "valid": true,
+   "hint": "地標比對成功（共 2 個相近，已取最相符的）：地標：觀音山隧道往五股方向(台64) → 新北市五股區觀音山隧道往五股方向(台64)。若不確定請向報案人確認是否為此處，其他可能：地標：觀音山隧道往八里方向(台64)。",
+   "reason": "valid"
+  },
+  "新北市汐止區橫科路351巷31號": {
+   "valid": true,
+   "hint": "地址有效：新北市汐止區橫科路351巷31號",
+   "reason": "valid"
+  },
+  "土城區明德路一段22號": {
+   "valid": true,
+   "hint": "地址有效：新北市土城區明德路一段22號",
+   "reason": "valid"
+  },
+  "土城區明德路22號": {
+   "valid": false,
+   "hint": "最接近的是 新北市土城區明德路一段22號（報案人未提及段別），請向報案人確認。",
+   "reason": "ambiguous"
+  }
+ }
+}
