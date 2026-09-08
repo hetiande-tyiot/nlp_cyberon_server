@@ -527,7 +527,8 @@ def _run_engine(sess: Session) -> None:
         debug=False,
     )
     # 模糊比對取樣用；讓樣本能對回 case119_*.json 這通完整對話。
-    engine._session_tag = sess.sess_id[:8]
+    # 標籤優先用 A 側 call_uuid（與錄音/TTS 檔名尾碼一致），A 沒傳才退回 sess_id。
+    engine._session_tag = (sess.call_uuid or sess.sess_id)[:8]
     sess.engine = engine
     try:
         engine.run()  # 新版 run() 無參數；內部 try/except 收斂所有終止狀態
@@ -549,7 +550,10 @@ def _run_engine(sess: Session) -> None:
             try:
                 os.makedirs(LOG_DIR, exist_ok=True)
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                log_path = os.path.join(LOG_DIR, f"case119_{ts}_{sess.sess_id[:8]}.json")
+                # 檔名尾碼直接用 A 側 call_uuid[:8]，與錄音檔名 <ts>_<uuid[:8]>.wav
+                # 同尾碼，靠檔名就能對上、不必開檔讀欄位。A 沒傳才退回 sess_id。
+                file_tag = (sess.call_uuid or sess.sess_id)[:8]
+                log_path = os.path.join(LOG_DIR, f"case119_{ts}_{file_tag}.json")
                 with sess.lock:
                     sess.result_log_path = log_path
                     with open(log_path, "w", encoding="utf-8") as f:
