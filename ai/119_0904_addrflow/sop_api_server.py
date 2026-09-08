@@ -93,7 +93,7 @@ from typing import Any, Dict, List, Optional
 # ── 確保可以 import 本目錄的模組 ──────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -214,6 +214,9 @@ app = FastAPI(title="SopEngine119 API", version="4.0-119_0904_addrflow")
 class Session:
     def __init__(self, sess_id: str) -> None:
         self.sess_id = sess_id
+        # 機器 A（交換機/apiserver）的通話 UUID，由 /session/new 傳入。
+        # 用來讓 case log 對回 A 側與測試回饋表；A 沒傳時為 None。
+        self.call_uuid: Optional[str] = None
         # 119 input_q 只進字串（含 END_FLOW_SENTINEL 哨兵）
         self.input_q: "queue.Queue[str]" = queue.Queue()
         # 119 output_q 進 typed events: {"type": "chat"|"case_update"|...}
@@ -298,6 +301,17 @@ def _current_case_dict(sess: Session) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _inject_ids(sess: Session, case: Dict[str, Any]) -> Dict[str, Any]:
+    """把 NLP session_id 與 A 側 call_uuid 併進 case dict，供對回 A/測試回饋。
+
+    call_uuid 只在 A 有傳時才寫，避免舊資料多出一個 null 欄位。
+    """
+    case["session_id"] = sess.sess_id
+    if sess.call_uuid:
+        case["call_uuid"] = sess.call_uuid
+    return case
+
+
 def _rewrite_case_log(sess: Session) -> None:
     """把最新 case 蓋回 _run_engine 當初寫的那個 JSON 檔（含 /observe 期間的更新）。"""
     with sess.lock:
@@ -307,6 +321,7 @@ def _rewrite_case_log(sess: Session) -> None:
     case = _current_case_dict(sess)
     if case is None:
         return
+    _inject_ids(sess, case)
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(case, f, ensure_ascii=False, indent=2)
@@ -538,7 +553,8 @@ def _run_engine(sess: Session) -> None:
                 with sess.lock:
                     sess.result_log_path = log_path
                     with open(log_path, "w", encoding="utf-8") as f:
-                        json.dump(sess.case.to_dict(), f, ensure_ascii=False, indent=2)
+                        json.dump(_inject_ids(sess, sess.case.to_dict()), f,
+                                  ensure_ascii=False, indent=2)
                 print(f"[SOP119 {sess.sess_id[:8]}] 📝 case JSON → {log_path}", flush=True)
             except Exception as exc:  # noqa: BLE001
                 print(f"[SOP119 {sess.sess_id[:8]}] ⚠️  寫 case log 失敗：{exc}", flush=True)
@@ -557,11 +573,23 @@ class ObservePayload(BaseModel):
     role: str   # "caller"（民眾）或 "agent"（接手的真人受理員）
 
 
+class SessionNewPayload(BaseModel):
+    # 機器 A（交換機/apiserver）的通話 UUID，選填。傳了就會寫進 case log 的
+    # call_uuid 欄，讓 log 對回 A 側與測試回饋表。不傳維持原行為。
+    call_uuid: Optional[str] = None
+
+
 @app.post("/session/new")
-def new_session():
-    """新通話：開 engine 背景 thread，等到第一個 hear_text 出現再 return。"""
+def new_session(payload: Optional[SessionNewPayload] = Body(default=None)):
+    """新通話：開 engine 背景 thread，等到第一個 hear_text 出現再 return。
+
+    payload 選填；機器 A 若帶入 call_uuid，會寫進 case log 供對回。
+    無 body（舊呼叫方式）時 payload=None，行為不變。
+    """
     sess_id = str(uuidlib.uuid4())
     sess = Session(sess_id)
+    if payload is not None:
+        sess.call_uuid = payload.call_uuid
     with _sessions_lock:
         _sessions[sess_id] = sess
 
@@ -572,6 +600,7 @@ def new_session():
     events = _wait_for_turn_complete(sess, timeout=30.0)
     return {
         "session_id": sess_id,
+        "call_uuid": sess.call_uuid,
         "outputs": _events_to_outputs(events),
         "events": events,
         "done": sess.done.is_set(),
