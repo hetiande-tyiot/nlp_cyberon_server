@@ -37,6 +37,7 @@ LABELS: Dict[str, str] = {
     "jurisdiction_office": "管轄單位",
     "address_suspect_error": "地址疑似有誤",
     "address_error_reason": "地址錯誤原因",
+    "address_corrected_note": "地址讀音更正提示",
     # 生命征象（救護專用）
     "consciousness": "是否有意識",
     "breathing": "是否有呼吸",
