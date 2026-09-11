@@ -665,10 +665,8 @@ def is_street_address(addr: str) -> bool:
 _DISTRICT_RE = re.compile(
     r"(?:[\u4e00-\u9fff]{2,3}[市縣])?([\u4e00-\u9fff]{1,4}區)"
 )
-# 受理範圍內的行政區名單。純 regex 的 {1,4}區 會把口語贅詞吃進區名
-#（「那個辦土城區」→「個辦土城區」），拼出的地址送 addrCheck 必然查無。
-# 註：address_mapper_119 另有一份 _DISTRICT_CANDIDATES_FOR_NORM（僅新北、
-# 供臺語模糊比對），用途不同；兩份都增修時要一起看。
+# 受理範圍內的行政區名單；純 regex 會把口語贅詞吃進區名
+#（「那個辦土城區」→「個辦土城區」），先比對名單再退回 regex。
 _KNOWN_DISTRICTS = frozenset(
     # 新北市
     "板橋區 三重區 中和區 永和區 新莊區 新店區 樹林區 鶯歌區 三峽區 淡水區 "
@@ -689,20 +687,11 @@ _HIGHWAY_NAME_RE = re.compile(
 )
 
 
-# 以「區」結尾但不是行政區的常見詞。regex 退路會把它們當區名抽出來
-#（報案人答「不分區」→ 組成「不分區亞洲路3號」→ addrCheck 必然查無）。
-_NON_DISTRICT_WORDS = frozenset(
-    "不分區 選區 學區 社區 園區 市區 郊區 地區 區域 行政區 工業區 住宅區 "
-    "商業區 科學區 科技區 災區 山區 市轄區 管制區 警戒區 責任區 轄區".split()
-)
-
-
 def extract_address_district(text: str) -> Optional[str]:
     """抽取台灣行政區名稱（例如「板橋區」）。
 
     先掃描名單內的區名，避免 regex 把「那個辦土城區」誤抽成「個辦土城區」；
-    名單未收錄（例如受理範圍外的縣市）時才退回 regex，並濾掉「不分區」
-    這類以「區」結尾但不是行政區的詞。
+    名單未收錄時才退回原本的 regex。
     """
     compact = re.sub(r"\s+", "", text or "")
     for index, char in enumerate(compact):
@@ -716,12 +705,7 @@ def extract_address_district(text: str) -> Optional[str]:
             if candidate in _KNOWN_DISTRICTS:
                 return candidate
     match = _DISTRICT_RE.search(text or "")
-    if not match:
-        return None
-    candidate = match.group(1)
-    if candidate in _NON_DISTRICT_WORDS:
-        return None
-    return candidate
+    return match.group(1) if match else None
 
 
 _ADDRESS_NUMBER_TOKEN = r"[零〇一二三四五六七八九十百千兩\d]+"
@@ -736,38 +720,12 @@ _ADDRESS_NUMBER_RE = re.compile(
 )
 
 
-# 路名前常見的口語贅詞；regex 的 {1,12}(路|街|大道) 會把它們吃進路名
-#（「嗯，那個亞洲路3號」→「那個亞洲路」）。
-_ROAD_PREFIX_FILLERS = (
-    "那個", "那个", "這個", "这个", "就是", "在", "位於", "位于",
-    "我家在", "我在", "地址是", "地址在", "呃", "嗯", "欸", "喔", "唉",
-)
-
-
-def strip_road_fillers(road: Optional[str]) -> Optional[str]:
-    """去掉路名前緣的口語贅詞，必要時逐字剝到剩合法路名。"""
-    value = (road or "").strip()
-    if not value:
-        return road
-    changed = True
-    while changed:
-        changed = False
-        for filler in _ROAD_PREFIX_FILLERS:
-            if value.startswith(filler) and len(value) > len(filler):
-                remainder = value[len(filler):]
-                if _ADDRESS_ROAD_RE.fullmatch(remainder):
-                    value = remainder
-                    changed = True
-                    break
-    return value or road
-
-
 def extract_address_road(text: str) -> Optional[str]:
     """抽取門牌地址道路，包含段、巷、弄，但不包含門牌號。"""
     compact = re.sub(r"\s+", "", text or "")
     compact = re.sub(r"^.*?區", "", compact)
     match = _ADDRESS_ROAD_RE.search(compact)
-    return strip_road_fillers(match.group(1)) if match else None
+    return match.group(1) if match else None
 
 
 def extract_address_number(text: str) -> Optional[str]:
@@ -785,18 +743,6 @@ def extract_street_address_components(text: str) -> Dict[str, str]:
         "address_number": extract_address_number(text),
     }
     return {key: value for key, value in components.items() if value}
-
-
-_PREGNANCY_COUNT_RE = re.compile(r"(胞胎|雙胎|双胎|龍鳳胎|龙凤胎)")
-
-
-def looks_like_pregnancy_count(value: object) -> bool:
-    """判斷傷患人數是否誤抽成胎數。
-
-    孕婦急產案問「單胞胎還是雙胞胎？」，答「三胞胎」曾被填進 patient_count；
-    胎數屬 multiple_pregnancy，傷病患仍是孕婦本人。
-    """
-    return bool(_PREGNANCY_COUNT_RE.search(str(value or "")))
 
 
 def build_street_address(

@@ -25,6 +25,7 @@ from sop_utils_119 import (
     dropped_address_details,
     extract_address_district,
     extract_address_number,
+    extract_alley_only,
     extract_address_road,
     extract_street_address_components,
     is_bare_district_or_city,
@@ -1279,3 +1280,76 @@ class PhoneticCorrectionNoteTests(unittest.TestCase):
         engine.case.address = "新北市永和區永鎮路128號"
         engine._adopt_normalized_address(self.HINT)
         self.assertNotIn("address_corrected_note", engine.case.filled_fields_for_summary())
+
+
+class StandaloneAlleyTests(unittest.TestCase):
+    """報案人在覆誦時單獨補「弄」（2026-09-08 00:49 實測）。
+
+    AI 覆誦「中和街155巷30號」，報案人答「是還有24弄」——`parse_yes_no`
+    看到開頭的「是」就判定確認，弄整個丟掉，派往 155巷30號。
+
+    危險在於**兩個都是有效門牌**：中和街155巷30號 與 155巷24弄30號
+    都存在、都是不同的地方，addrCheck 不會有任何警訊。
+    """
+
+    def test_standalone_alley_is_extracted(self) -> None:
+        for text in ("是還有24弄", "還有24弄", "24弄", "155巷24弄30號"):
+            with self.subTest(text=text):
+                self.assertEqual(extract_alley_only(text), "24弄")
+
+    def test_no_alley_no_match(self) -> None:
+        for text in ("30號", "155巷", "是的", ""):
+            with self.subTest(text=text):
+                self.assertIsNone(extract_alley_only(text))
+
+    def test_alley_is_appended_to_a_road_that_already_has_a_lane(self) -> None:
+        engine = SopEngine119(io=SilentIO())
+        engine.case.address = "新北市新莊區中和街155巷30號"
+        engine.case.address_district = "新莊區"
+        engine.case.address_road = "中和街155巷"
+        engine.case.address_number = "30號"
+        self.assertTrue(engine._merge_lane_into_road("是還有24弄"))
+        self.assertEqual(engine.case.address_road, "中和街155巷24弄")
+
+    def test_existing_alley_is_not_duplicated(self) -> None:
+        engine = SopEngine119(io=SilentIO())
+        engine.case.address_road = "中和街155巷24弄"
+        self.assertFalse(engine._merge_lane_into_road("是還有24弄"))
+        self.assertEqual(engine.case.address_road, "中和街155巷24弄")
+
+    def test_road_without_a_lane_still_takes_the_lane_path(self) -> None:
+        """沒有巷的路名走原本的 extract_lane_alley，不受這條新分支影響。"""
+        engine = SopEngine119(io=SilentIO())
+        engine.case.address_road = "中和街"
+        self.assertTrue(engine._merge_lane_into_road("還有155巷"))
+        self.assertEqual(engine.case.address_road, "中和街155巷")
+
+
+class InternalFillerRunTests(unittest.TestCase):
+    """贅詞夾在路名中間（2026-09-08 00:43 實測）。
+
+    「永豐公園在那個中山路2段」——地標名不是贅詞字，剝不掉開頭，
+    整串被當成路名送驗，存成 address_road =「永豐公園在那個中山路2段」。
+    """
+
+    def test_cuts_after_an_internal_filler_run(self) -> None:
+        cases = {
+            "永豐公園在那個中山路2段。三百九。309巷。41號。前面。": "中山路2段",
+            "永豐公園在那個中山路2段": "中山路2段",
+            "板橋國小這邊的長安街": "長安街",
+        }
+        for text, want in cases.items():
+            with self.subTest(text=text[:20]):
+                self.assertEqual(extract_address_road(text), want)
+
+    def test_a_single_filler_char_does_not_cut(self) -> None:
+        """門檻是連續兩個以上——「旁邊」的「旁」不在表內，只剩一個「邊」。"""
+        self.assertEqual(
+            extract_address_road("那個。蘆洲成功國小旁邊。長安街。三十一三十一。好。"),
+            "長安街",
+        )
+
+    def test_real_roads_are_never_cut(self) -> None:
+        for name in ("中山北路二段", "中正路一段", "大觀路1段", "民生路二段"):
+            with self.subTest(name=name):
+                self.assertEqual(extract_address_road(name), name)

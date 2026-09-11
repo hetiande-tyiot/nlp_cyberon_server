@@ -106,11 +106,20 @@ GGUF_MODEL_PATH=/nonexistent ENABLE_MAIN_CLASSIFIER=0 ENABLE_SUB_CLASSIFIER=0 LO
 
 ### Step 5 — 切 systemd
 
+> ⚠️⚠️ **restart 前必先檢查有沒有進行中的通話！** 119 是緊急報案服務，`restart` 會**當場中斷所有 active session**（真實報案通話直接斷線）。切換/重啟前一定要：
+> ```bash
+> curl -s http://127.0.0.1:8200/health   # 看 "sessions" / "active_sessions" 數
+> # aitop6：ssh ... curl -s http://127.0.0.1:8100/health
+> ```
+> **`sessions` 不為 0 就不要 restart** —— 等歸零、或約定深夜/離峰維護時窗再切。兩台（cyberon2 + aitop6）都要各自檢查。
+
 ```bash
 sudo cp /etc/systemd/system/sop119.service /etc/systemd/system/sop119.service.bak.$(date +%Y%m%d_%H%M%S)
 sudo sed -i "s#WorkingDirectory=.*#WorkingDirectory=$DST_ABS#" /etc/systemd/system/sop119.service
 sudo systemctl daemon-reload && sudo systemctl restart sop119.service
 ```
+
+> ⚠️ **驗證測試不要打線上（8200/8100）** —— 那會在真實服務上建 session、佔資源、也無法跟真實通話區分。smoke test 一律用降級 alt port（8201，見 Step 4）；完整驗證若必須用線上，先確認 `sessions=0` 且在離峰時段。
 
 ### Step 6 — 完整驗證
 

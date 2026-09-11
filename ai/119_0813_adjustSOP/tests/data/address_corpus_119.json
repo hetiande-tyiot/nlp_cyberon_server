@@ -1,0 +1,1532 @@
+[
+  {
+    "case_id": "case119_20260715_152229_97ca0808",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "台北市信義區松高路十九號一樓",
+    "category": "乾淨完整",
+    "system_address": "台北市信義區松高路十九號一樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260715_155537_f9e3b04e",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "在桃園市中壢區中央路50號三樓",
+    "category": "乾淨完整",
+    "system_address": "桃園市中壢區中央路50號三樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_165947_372e8cfe",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "呃，在。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_170430_d4770f65",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "在。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_170743_b8c9d448",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "在板橋區雙十路99號。",
+    "category": "乾淨完整",
+    "system_address": "在板橋區板橋區雙十路99號",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_181954_013eddf3",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "在板橋區雙十路18號。有了。",
+    "category": "句號碎片",
+    "system_address": "在板橋區雙十路18",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_182038_e27f3b4b",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "我什麼是我，你是我睡啊。",
+    "category": "無地址內容",
+    "system_address": "三",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_182252_7219b7d4",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "還是。好。你打都沒有進來這邊。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_182359_18bfe70e",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "為什麼。你現在就是攝影機。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260721_182636_8909c3b3",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "一定。30樓。",
+    "category": "句號碎片",
+    "system_address": "30樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_010024_46380ba2",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "台北市信義區市府路1號一樓",
+    "category": "乾淨完整",
+    "system_address": "台北市信義區市府路1號一樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_010445_c9f920a3",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區中山路一段161號3樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區中山路一段161號3樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_011630_e62af8fe",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "欸。中和區板橋路。一對。",
+    "category": "句號碎片",
+    "system_address": "中和區板橋路一段3號2樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_021400_d872d3ad",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "車禍在。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_021741_1491038c",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "嗯，成功路1段111號。",
+    "category": "語助詞開頭",
+    "system_address": "成功路1段111號",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_022037_f0d75214",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "那中山北路1段1號1樓。",
+    "category": "乾淨完整",
+    "system_address": "中山北路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_022405_a93e5afb",
+    "question": "請先告訴我地址？幾層？",
+    "utterance": "有人暈倒。中和路1段1號。1樓。",
+    "category": "句號碎片",
+    "system_address": "中和路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_022547_55aeee18",
+    "question": "請先告訴我地址？幾層？",
+    "utterance": "土城區亞洲路1段1號2樓。是。",
+    "category": "句號碎片",
+    "system_address": "土城區亞洲路1段1號2樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_022656_b1b8f8a9",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "亞洲路1段1號1樓。",
+    "category": "乾淨完整",
+    "system_address": "亞洲路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_023030_070834bc",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "是。亞洲路1段1號1樓。",
+    "category": "句號碎片",
+    "system_address": "亞洲路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_104718_dcf3bdc2",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "我們這邊南亞南路2段15號4樓。",
+    "category": "指示詞開頭",
+    "system_address": "南亞南路2段15號4樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_105036_432b5006",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "南亞南路2段15號8樓。",
+    "category": "乾淨完整",
+    "system_address": "南亞南路2段15號8樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_170534_976bd1c5",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "不錯。土城區亞洲路1段1號1樓。",
+    "category": "句號碎片",
+    "system_address": "土城區亞洲路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260722_171131_86e9d040",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "土城區。中中和路1段1號1樓。",
+    "category": "句號碎片",
+    "system_address": "土城區中中和路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260724_104347_ce7e2e3b",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "新北市板橋區中山路一段161號3樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區中山路一段161號3樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260730_163118_4f61d7fa",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "對。三。我現在車子。好。",
+    "category": "無地址內容",
+    "system_address": "中和區黃河東路3段3號2樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260730_163118_4f61d7fa",
+    "question": "請問事發地址在哪裡？幾樓？",
+    "utterance": "謝謝。呃，在那個中和區。",
+    "category": "句號碎片",
+    "system_address": "中和區黃河東路3段3號2樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260730_172206_b4b98ee3",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "台北市信義區松高路1號5樓",
+    "category": "乾淨完整",
+    "system_address": "台北市信義區松高路1號5樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260804_145936_38a4a6cb",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "對啊，他這個就沒問題啊。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260805_174446_0b81730d",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區文化路一段100號3樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區文化路一段100號3樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260805_174516_d591f108",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "台中市西屯區台灣大道三段99號8樓",
+    "category": "乾淨完整",
+    "system_address": "台中市西屯區台灣大道三段99號8樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260805_175600_202287e5",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "在土城。",
+    "category": "無地址內容",
+    "system_address": "土城",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260805_175753_69d5f2ec",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "土城區中央路1段2號3樓。",
+    "category": "乾淨完整",
+    "system_address": "土城區中央路1段2號3樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260806_121254_8615156d",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "嗯，土城區要州路1段1號。1樓。",
+    "category": "句號碎片",
+    "system_address": "是土城區土城區亞洲路一段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260806_175038_fab7fb23",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "是。板橋區南亞南路2段。",
+    "category": "句號碎片",
+    "system_address": "板橋區南亞南路2段",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260806_182206_101dd4b0",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "板橋區南雅南路。",
+    "category": "只到路名",
+    "system_address": "板橋區南雅南路",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260806_190754_23b8313f",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "板橋區南南路。知道。",
+    "category": "句號碎片",
+    "system_address": "板橋區南亞南路二段4樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260807_092227_79a9480a",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "覺得前面很像是那個真真的他們的聲音。喔明。",
+    "category": "無地址內容",
+    "system_address": "中華路1段3號5樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260807_092227_79a9480a",
+    "question": "請問事發地址在哪裡？樓層？",
+    "utterance": "中華路1段3號5樓。",
+    "category": "乾淨完整",
+    "system_address": "中華路1段3號5樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260807_092848_1a6da883",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "嗯。交付費給繳款。什麼。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260807_093135_8eb3f027",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "呃，中和路。",
+    "category": "語助詞開頭",
+    "system_address": "中和路",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260807_101704_8d087f46",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "我我要救護車。呃，那個。",
+    "category": "無地址內容",
+    "system_address": "中和區中和路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260807_101704_8d087f46",
+    "question": "請問事發地址在哪裡？樓層？",
+    "utterance": "對。中和區中和路1段1號1樓。",
+    "category": "句號碎片",
+    "system_address": "中和區中和路1段1號1樓",
+    "system_location_type": null,
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260810_162049_96c1f9f8",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區中山路一段161號",
+    "category": "乾淨完整",
+    "system_address": "是住宅大樓",
+    "system_location_type": "landmark",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260810_162459_4e97e48e",
+    "question": "請先給我現場的完整地址。",
+    "utterance": "新北市板橋區文化路一段188號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區文化路一段188號",
+    "system_location_type": "address",
+    "system_status": null,
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260810_162636_7cc388aa",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區文化路一段188號3樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區文化路一段188號3樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260810_163216_15b9710e",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "台北市信義區松高路1號",
+    "category": "乾淨完整",
+    "system_address": "台北市信義區松高路1號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260810_163216_15b9710e",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "台北市信義區松高路1號",
+    "category": "乾淨完整",
+    "system_address": "台北市信義區松高路1號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260810_192417_553f9694",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "板橋區南亞南路。二段。4樓。",
+    "category": "句號碎片",
+    "system_address": "板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260810_192417_553f9694",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "板橋區南雅南路2段152號。4樓。",
+    "category": "句號碎片",
+    "system_address": "板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260810_192547_dd29dbf1",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "板橋區南雅南路2段152號4樓。",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_094829_f53cdd52",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "中和區黃河東路3段3號2樓",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "重新提供的地址仍無法抽取"
+  },
+  {
+    "case_id": "case119_20260811_094829_f53cdd52",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "對",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "重新提供的地址仍無法抽取"
+  },
+  {
+    "case_id": "case119_20260811_094902_423995d2",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "在那個中和區",
+    "category": "指示詞開頭",
+    "system_address": "黃河東路3段3號2樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260811_094902_423995d2",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "黃河東路3段3號2樓",
+    "category": "乾淨完整",
+    "system_address": "黃河東路3段3號2樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260811_094914_c21e14a2",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "土城區亞洲路1段1號1樓",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "重新提供的地址仍無法抽取"
+  },
+  {
+    "case_id": "case119_20260811_095036_0a0b0bee",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市中和區黃河東路3段3號2樓",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095053_706803d2",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市土城區亞洲路1段1號",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095102_f29e4bac",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "台北市信義區市府路1號",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095814_c792a2cc",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "板橋區南雅南路2段152號4樓",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095841_67fe90f1",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區南雅南路2段152號4樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095849_292f0825",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "板橋區南雅南路二段152號4樓",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095858_8bf491cf",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區南雅南路二段152號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路二段152號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095906_40a752ca",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "板橋區南雅南路2段152號",
+    "category": "乾淨完整",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_095915_323c7677",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區南雅南路一段152號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路一段152號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_114853_ce32e572",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "是。好。來。謝謝呃，亞洲路。三段2號。5樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區亞洲路3段2號5樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_114853_ce32e572",
+    "question": "請告訴我是那一區？",
+    "utterance": "呃，土城區。",
+    "category": "語助詞開頭",
+    "system_address": "新北市土城區亞洲路3段2號5樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_114853_ce32e572",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "呃，新北市土城區亞洲路3段2號5樓。",
+    "category": "語助詞開頭",
+    "system_address": "新北市土城區亞洲路3段2號5樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_115005_61b3b8ba",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "快。新北市土城區亞洲路。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區亞洲路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "報警人未能明確確認地址"
+  },
+  {
+    "case_id": "case119_20260811_120606_7857c8dd",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "很奇怪，好像。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "地址抽取失敗"
+  },
+  {
+    "case_id": "case119_20260811_120606_7857c8dd",
+    "question": "請問事發地址在哪裡？樓層？",
+    "utterance": "好像。很怪。這聲音很討厭。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "地址抽取失敗"
+  },
+  {
+    "case_id": "case119_20260811_120829_8e540f15",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "他的人不會有一點。的",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "地址抽取失敗"
+  },
+  {
+    "case_id": "case119_20260811_120829_8e540f15",
+    "question": "請問事發地址在哪裡？樓層？",
+    "utterance": "好了。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "地址抽取失敗"
+  },
+  {
+    "case_id": "case119_20260811_162220_1c300dff",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "喔，新北市板橋區南雅南路。",
+    "category": "語助詞開頭",
+    "system_address": "新北市板橋區南雅南路2段152號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_162220_1c300dff",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "欸。新北市板橋區南雅南路2段152號。",
+    "category": "句號碎片",
+    "system_address": "新北市板橋區南雅南路2段152號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_163257_7fbcacf2",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "呃，土城區要走路1段2號3樓。",
+    "category": "語助詞開頭",
+    "system_address": "新北市土城區",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_163257_7fbcacf2",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "新北市土城區。",
+    "category": "只到路名",
+    "system_address": "新北市土城區",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_172340_a9560613",
+    "question": "請告訴我是那一區？",
+    "utterance": "三。中和區中和路。",
+    "category": "句號碎片",
+    "system_address": "中和區中和路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_172340_a9560613",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "中和區中和路。",
+    "category": "只到路名",
+    "system_address": "中和區中和路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_172433_4c74a707",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "是。是。嗯。中和路。中和區。二路。",
+    "category": "句號碎片",
+    "system_address": "中和區中和路2號3樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_172433_4c74a707",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "是。是。中和區中和路。2號3樓。",
+    "category": "句號碎片",
+    "system_address": "中和區中和路2號3樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_172631_3b753ab1",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "新北市。土城區中央路2段11號3樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路2段11號3樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_172709_6005e2ab",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "是。",
+    "category": "無地址內容",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "invalid",
+    "system_error_reason": "重新提供的地址仍無法抽取"
+  },
+  {
+    "case_id": "case119_20260811_173138_09066a55",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "新北市板橋區南雅南路。",
+    "category": "只到路名",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_173138_09066a55",
+    "question": "請告訴我是那一區？",
+    "utterance": "板橋區。",
+    "category": "只到路名",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260811_173640_00fdc9fb",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "淡水區八四路八四。路52巷。3號。5樓。",
+    "category": "句號碎片",
+    "system_address": "新北市淡水區",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_173640_00fdc9fb",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "是。新北市淡水區。",
+    "category": "句號碎片",
+    "system_address": "新北市淡水區",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_173728_d4022c41",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "淡水區。",
+    "category": "只到路名",
+    "system_address": "新北市淡水區",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_173925_a6548d0a",
+    "question": "請告訴我是那一區？",
+    "utterance": "土城區。",
+    "category": "只到路名",
+    "system_address": "新北市土城區中正東路2段143巷2號5樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260811_173925_a6548d0a",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "土城區中正東路2段143巷2號5樓。",
+    "category": "乾淨完整",
+    "system_address": "新北市土城區中正東路2段143巷2號5樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260812_112038_92f5e1a4",
+    "question": "請先告訴我地址？樓層？",
+    "utterance": "嗯。",
+    "category": "無地址內容",
+    "system_address": "新北市板橋區中和路中國時報廣場",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260812_112038_92f5e1a4",
+    "question": "請問事發地址在哪裡？樓層？",
+    "utterance": "是。嘿。板橋區。",
+    "category": "句號碎片",
+    "system_address": "新北市板橋區中和路中國時報廣場",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260812_112038_92f5e1a4",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "板橋區中和路，中國。時報廣場。",
+    "category": "句號碎片",
+    "system_address": "新北市板橋區中和路中國時報廣場",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260812_175202_9b2e5a63",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "那是。在那個中央路1段3號。5樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號5樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260812_175202_9b2e5a63",
+    "question": "請告訴我是那一區？",
+    "utterance": "還可以。呃。",
+    "category": "無地址內容",
+    "system_address": "新北市土城區中央路3號5樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260812_175202_9b2e5a63",
+    "question": "請告訴我是那一區？",
+    "utterance": "四。土城區。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號5樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260812_175202_9b2e5a63",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "好。土城區中央路。3號5樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號5樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_001145_e68e8e21",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "新北市板橋區中山路一段161號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區中山路一段161號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_001436_fe8c3a5d",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "新北市板橋區文化路一段188號3樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區文化路一段188號3樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_001918_a5a4f163",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "台北市信義區松高路1號",
+    "category": "乾淨完整",
+    "system_address": "台北市信義區松高路1號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址查無管轄單位"
+  },
+  {
+    "case_id": "case119_20260814_004326_b9b0ecd7",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "板橋區中山路一段161號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區中山路一段161號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_004433_79721e4e",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "新北市板橋區南雅南路2段152號4樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_004451_4e70df1c",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "新北市板橋區南雅南路2段152號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路2段152號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_004505_7deaf9cb",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "不知道耶，好像是隔壁傳來的",
+    "category": "不知道地址",
+    "system_address": "新北市板橋區中山路一段161號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_004505_7deaf9cb",
+    "question": "地址在哪裡呢？附近有明顯建物或標示嗎？",
+    "utterance": "新北市板橋區中山路一段161號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區中山路一段161號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_010328_512dff17",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "新北市板橋區南雅南路2段152號4樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_010405_59ec9d03",
+    "question": "請先告訴我地址？",
+    "utterance": "新北市板橋區南雅南路2段152號4樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_105122_c207ec11",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "板橋區南雅南路2段152號4樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_141452_3ae197d0",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "在四維公園旁邊",
+    "category": "無地址內容",
+    "system_address": "重慶國小這邊的四維公園",
+    "system_location_type": "landmark",
+    "system_status": "invalid",
+    "system_error_reason": "地標不在資料表中"
+  },
+  {
+    "case_id": "case119_20260814_141452_3ae197d0",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "重慶國小這邊的四維公園",
+    "category": "無地址內容",
+    "system_address": "重慶國小這邊的四維公園",
+    "system_location_type": "landmark",
+    "system_status": "invalid",
+    "system_error_reason": "地標不在資料表中"
+  },
+  {
+    "case_id": "case119_20260814_141558_98ad81f6",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "嗯。土城區。中央路。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_141558_98ad81f6",
+    "question": "請問是幾號",
+    "utterance": "400142。請問要回來，最終還是。3號。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_141925_7b2bea87",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "南雅南路二段5樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區我是路5號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_141925_7b2bea87",
+    "question": "請告訴我是那一區？",
+    "utterance": "板橋區",
+    "category": "只到路名",
+    "system_address": "新北市板橋區我是路5號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_141925_7b2bea87",
+    "question": "請問是幾號",
+    "utterance": "5號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區我是路5號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_142022_9a233ff1",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "板橋區南雅南路5巷8號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區南雅南路5巷8號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_143121_b57194a4",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "板橋區南雅南路3巷7號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區我是路7號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_151602_be20f649",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "我是路過民眾",
+    "category": "不知道地址",
+    "system_address": "我是路",
+    "system_location_type": "address",
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_151602_be20f649",
+    "question": "請告訴我是那一區？",
+    "utterance": "我是路過的民眾，不知道地址",
+    "category": "不知道地址",
+    "system_address": "我是路",
+    "system_location_type": "address",
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_152101_606e1733",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "然後。對吧。呃。是。新北市蘆洲區中山一路375號。",
+    "category": "句號碎片",
+    "system_address": "新北市蘆洲區中山一路375號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_154206_fc6f2b08",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "嗯，中央路1段3號5樓。",
+    "category": "語助詞開頭",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_154206_fc6f2b08",
+    "question": "請告訴我是那一區？",
+    "utterance": "有256。板橋區。",
+    "category": "句號碎片",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_154431_efac927d",
+    "question": "請告訴我是那一區？",
+    "utterance": "我不知道欸 我只是路過的",
+    "category": "不知道地址",
+    "system_address": "我不知道欸我只是路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260814_154431_efac927d",
+    "question": "請告訴我是那一區？",
+    "utterance": "呃…我不是這附近的人 我真的不知道地址",
+    "category": "不知道地址",
+    "system_address": "我不知道欸我只是路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260814_155045_90e00f95",
+    "question": "請告訴我是那一區？",
+    "utterance": "新北市板橋區南雅南路2段152號4樓",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區一般道路就路152號4樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_155551_4d1d8cf7",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "板橋區南雅南路6巷65號",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區我是路65號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_160919_dabac52c",
+    "question": "請告訴我是那一區？",
+    "utterance": "呃…我真的不知道 我不是這附近的人",
+    "category": "不知道地址",
+    "system_address": "我不知道欸我只是路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260814_161438_38433f8e",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "對。土城區。中央路2號3樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路2號3樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_161646_6f84abdc",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "媽。欸，在那個中央路1段2號的外面。",
+    "category": "句號碎片",
+    "system_address": null,
+    "system_location_type": null,
+    "system_status": "pending",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_195440_81f0de8d",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "新北市板橋區中山路一段161號。",
+    "category": "乾淨完整",
+    "system_address": "新北市板橋區中山路一段161號",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260814_204440_46e598eb",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "土城區亞洲路。",
+    "category": "只到路名",
+    "system_address": "土城區亞洲路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少門牌號"
+  },
+  {
+    "case_id": "case119_20260814_204440_46e598eb",
+    "question": "請問是幾號",
+    "utterance": "土城區亞洲路。",
+    "category": "只到路名",
+    "system_address": "土城區亞洲路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少門牌號"
+  },
+  {
+    "case_id": "case119_20260814_204440_46e598eb",
+    "question": "請問是幾號",
+    "utterance": "你好。",
+    "category": "無地址內容",
+    "system_address": "土城區亞洲路",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少門牌號"
+  },
+  {
+    "case_id": "case119_20260817_093106_19d737a1",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "謝謝。土城區亞洲路。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區一般道路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "「新北市土城區亞洲路3號」查無此門牌；同路段鄰近門牌為 新北市土城區亞洲路2號、新北市土城區亞洲路6號、新北市土城區亞洲路7之1號，請向報案人確認號碼。"
+  },
+  {
+    "case_id": "case119_20260817_093106_19d737a1",
+    "question": "請問是幾號",
+    "utterance": "3號5樓。",
+    "category": "乾淨完整",
+    "system_address": "新北市土城區一般道路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "「新北市土城區亞洲路3號」查無此門牌；同路段鄰近門牌為 新北市土城區亞洲路2號、新北市土城區亞洲路6號、新北市土城區亞洲路7之1號，請向報案人確認號碼。"
+  },
+  {
+    "case_id": "case119_20260817_093106_19d737a1",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "不知道。30公斤。土城區亞洲路。",
+    "category": "不知道地址",
+    "system_address": "新北市土城區一般道路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "「新北市土城區亞洲路3號」查無此門牌；同路段鄰近門牌為 新北市土城區亞洲路2號、新北市土城區亞洲路6號、新北市土城區亞洲路7之1號，請向報案人確認號碼。"
+  },
+  {
+    "case_id": "case119_20260817_100905_6cfdf82d",
+    "question": "請先告訴我地址？",
+    "utterance": "對。",
+    "category": "無地址內容",
+    "system_address": "南亞南路2段15號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260817_100905_6cfdf82d",
+    "question": "請問事發地址在哪裡？",
+    "utterance": "南亞南路。欸哪裡。喔是喔，是沒有南路貴興路口。",
+    "category": "句號碎片",
+    "system_address": "南亞南路2段15號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260817_100905_6cfdf82d",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "南亞南路2段15號前面。",
+    "category": "乾淨完整",
+    "system_address": "南亞南路2段15號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260817_101245_8aac1460",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "欸，我這邊南亞南路2段15號10樓。",
+    "category": "指示詞開頭",
+    "system_address": "新北市板橋區板橋板橋南亞南路2段15號10樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "查無「板橋板橋南亞南路二段」，是否為 新北市板橋區南雅南路、新北市板橋區南雅西路？"
+  },
+  {
+    "case_id": "case119_20260817_101245_8aac1460",
+    "question": "請告訴我是那一區？",
+    "utterance": "在板橋板橋。",
+    "category": "無地址內容",
+    "system_address": "新北市板橋區板橋板橋南亞南路2段15號10樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "查無「板橋板橋南亞南路二段」，是否為 新北市板橋區南雅南路、新北市板橋區南雅西路？"
+  },
+  {
+    "case_id": "case119_20260817_101245_8aac1460",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "呃，板橋板橋南亞南路2段15號10樓。",
+    "category": "語助詞開頭",
+    "system_address": "新北市板橋區板橋板橋南亞南路2段15號10樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "查無「板橋板橋南亞南路二段」，是否為 新北市板橋區南雅南路、新北市板橋區南雅西路？"
+  },
+  {
+    "case_id": "case119_20260819_110345_102eea5f",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "請問沒有我不會來，但是在我媽家，因為。對不對。他原本我們就不會特別去，然後。中山北路1段1號1樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區亞洲路1號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "「新北市土城區亞洲路1號」查無此門牌；同路段鄰近門牌為 新北市土城區亞洲路2號、新北市土城區亞洲路6號、新北市土城區亞洲路7之1號，請向報案人確認號碼。"
+  },
+  {
+    "case_id": "case119_20260819_110345_102eea5f",
+    "question": "請告訴我是那一區？",
+    "utterance": "對。他。那會很奇怪。只是這個犯法，不能說他們。那我覺得證。不是我。每個人。就是說，我不知道。尤其是他們以前。對啊。土城區。",
+    "category": "不知道地址",
+    "system_address": "新北市土城區亞洲路1號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "「新北市土城區亞洲路1號」查無此門牌；同路段鄰近門牌為 新北市土城區亞洲路2號、新北市土城區亞洲路6號、新北市土城區亞洲路7之1號，請向報案人確認號碼。"
+  },
+  {
+    "case_id": "case119_20260819_110345_102eea5f",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "土城區亞洲路。",
+    "category": "只到路名",
+    "system_address": "新北市土城區亞洲路1號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "「新北市土城區亞洲路1號」查無此門牌；同路段鄰近門牌為 新北市土城區亞洲路2號、新北市土城區亞洲路6號、新北市土城區亞洲路7之1號，請向報案人確認號碼。"
+  },
+  {
+    "case_id": "case119_20260819_135647_8b851ec8",
+    "question": "在哪裡產檢？",
+    "utterance": "不知道",
+    "category": "不知道地址",
+    "system_address": "新北市板橋區南雅南路2段152號4樓",
+    "system_location_type": "address",
+    "system_status": "valid",
+    "system_error_reason": null
+  },
+  {
+    "case_id": "case119_20260820_114522_45dce886",
+    "question": "請先告訴我地址？幾樓？",
+    "utterance": "為什麼他沒事。金額不到。",
+    "category": "無地址內容",
+    "system_address": "新北市土城區中央路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "未找到完全相符的門牌，最接近的是 新北市土城區中央路三段3號，請向報案人確認。"
+  },
+  {
+    "case_id": "case119_20260820_114522_45dce886",
+    "question": "請問事發地址在哪裡？幾樓？",
+    "utterance": "還有。土城區中央路3樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "未找到完全相符的門牌，最接近的是 新北市土城區中央路三段3號，請向報案人確認。"
+  },
+  {
+    "case_id": "case119_20260820_114522_45dce886",
+    "question": "請問是幾號",
+    "utterance": "帳號。",
+    "category": "乾淨完整",
+    "system_address": "新北市土城區中央路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "未找到完全相符的門牌，最接近的是 新北市土城區中央路三段3號，請向報案人確認。"
+  },
+  {
+    "case_id": "case119_20260820_114522_45dce886",
+    "question": "請問是幾號",
+    "utterance": "是。3號。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "未找到完全相符的門牌，最接近的是 新北市土城區中央路三段3號，請向報案人確認。"
+  },
+  {
+    "case_id": "case119_20260820_114522_45dce886",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "問題。土城區中央路。3樓。",
+    "category": "句號碎片",
+    "system_address": "新北市土城區中央路3號",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "未找到完全相符的門牌，最接近的是 新北市土城區中央路三段3號，請向報案人確認。"
+  },
+  {
+    "case_id": "case119_20260820_114619_6ba5888e",
+    "question": "請問是幾號",
+    "utterance": "三。來。好。3號。",
+    "category": "句號碎片",
+    "system_address": "中央路3號3樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  },
+  {
+    "case_id": "case119_20260820_114619_6ba5888e",
+    "question": "地址無法確認，請重新提供完整正確的事發地點。",
+    "utterance": "中央路3號3樓。",
+    "category": "乾淨完整",
+    "system_address": "中央路3號3樓",
+    "system_location_type": "address",
+    "system_status": "invalid",
+    "system_error_reason": "地址缺少行政區"
+  }
+]

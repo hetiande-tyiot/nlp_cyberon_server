@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -30,6 +31,13 @@ try:
 except Exception:
     _chinese_to_tl = None  # type: ignore[assignment]
     _similarity_score = None  # type: ignore[assignment]
+
+# 行政區臺語音近比對的最低採信分數；低於此值不猜區，讓流程重問報案人。
+# 可用 env ADDR_DISTRICT_FUZZY_MIN 覆寫。
+try:
+    DISTRICT_FUZZY_MIN_SCORE = float(os.getenv("ADDR_DISTRICT_FUZZY_MIN", "0.6"))
+except ValueError:
+    DISTRICT_FUZZY_MIN_SCORE = 0.6
 
 _DISTRICT_CANDIDATES_FOR_NORM: list[str] = [
     "八里區", "三芝區", "三重區", "三峽區", "土城區", "中和區", "五股區",
@@ -100,6 +108,13 @@ class ThreeStageLocationMapper:
         return pattern.sub(_sub, text)
 
     def _fuzzy_match_district_by_tl(self, wrong_name: str) -> Optional[str]:
+        """臺語音近比對回推行政區；不夠像就不猜，交回流程重問。
+
+        沒有門檻時任何輸入都會match到某一區（STT 誤聽的「不分區」曾被
+        比成「瑞芳區」，形成看似合法、實際完全錯誤的派遣地址）。
+        實測分數：板橋去→板橋區 0.909、土成區→土城區 0.800、
+        汐只區→汐止區 0.636；而非行政區的詞多在 0.58 以下。
+        """
         if not self._district_tl:
             return None
         if not isinstance(wrong_name, str) or not wrong_name:
@@ -116,39 +131,67 @@ class ThreeStageLocationMapper:
             if score > best_score:
                 best_score = score
                 best_name = name
+        if best_score < DISTRICT_FUZZY_MIN_SCORE:
+            logging.getLogger(__name__).info(
+                "行政區音近比對分數不足，放棄猜測：%s → %s (%.3f < %.3f)",
+                wrong_name, best_name, best_score, DISTRICT_FUZZY_MIN_SCORE,
+            )
+            return None
         return best_name
 
-    def _apply_district_with_fallback(self, text: str) -> str:
+    def _apply_district_with_fallback(
+        self, text: str
+    ) -> tuple[str, Optional[tuple[str, str]]]:
+        """回 (映射後文字, 音近猜測資訊)。
+
+        猜測資訊為 (原片段, 猜出的行政區)，None 表示沒有用到音近猜測。
+        查表命中不算猜測；只有臺語音近比對推出來的才是。
+        """
         if not isinstance(text, str) or not text:
-            return text
+            return text, None
         replaced = self._apply_simple_mapping(
             text, self.district_mapping, self._district_pattern,
         )
         if replaced != text:
-            return replaced
+            return replaced, None
         try:
             idx = text.index("區")
         except ValueError:
-            return text
+            return text, None
         if idx < 2:
-            return text
+            return text, None
         wrong_segment = text[idx - 2: idx + 1]
         best_district = self._fuzzy_match_district_by_tl(wrong_segment)
         if not best_district:
-            return text
-        return text.replace(wrong_segment, best_district, 1)
+            return text, None
+        if best_district == wrong_segment:
+            return text, None
+        return (
+            text.replace(wrong_segment, best_district, 1),
+            (wrong_segment, best_district),
+        )
 
     def map_location(self, location: str) -> str:
         """依序執行三輪映射：行政區 → 街路 → 其他地址。"""
+        return self.map_location_detail(location)[0]
+
+    def map_location_detail(
+        self, location: str
+    ) -> tuple[str, Optional[tuple[str, str]]]:
+        """map_location 的完整版，另回音近猜測資訊。
+
+        行政區若是臺語音近「猜」出來的，呼叫端必須讓報案人覆誦確認，
+        不得靜默採用（單例共用，故猜測資訊走回傳值而非實例狀態）。
+        """
         if not isinstance(location, str):
-            return location
+            return location, None
         text = location.strip()
         if not text:
-            return location
-        s1 = self._apply_district_with_fallback(text)
+            return location, None
+        s1, guess = self._apply_district_with_fallback(text)
         s2 = self._apply_simple_mapping(s1, self.street_mapping, self._street_pattern)
         s3 = self._apply_simple_mapping(s2, self.other_mapping, self._other_pattern)
-        return s3
+        return s3, guess
 
 
 _LOCATION_MAPPER_INSTANCE: Optional[ThreeStageLocationMapper] = None

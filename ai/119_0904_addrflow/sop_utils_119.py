@@ -921,6 +921,24 @@ _ROAD_FILLER_CHARS = frozenset(
 )
 
 
+def _last_filler_run_end(value: str) -> int:
+    """最後一段「連續 >=2 個贅詞字」的結束位置；沒有就回 0。
+
+    門檻設 2 是為了不誤傷單字：「旁」不在表內、「邊」在表內，
+    「成功國小旁邊長安街」只有一個連續贅詞字，不會被切。
+    """
+    end = 0
+    run = 0
+    for index, char in enumerate(value):
+        if char in _ROAD_FILLER_CHARS:
+            run += 1
+            continue
+        if run >= 2:
+            end = index
+        run = 0
+    return end
+
+
 def strip_road_fillers(road: Optional[str]) -> Optional[str]:
     """去掉路名前緣的口語贅詞，必要時逐字剝到剩合法路名。"""
     value = (road or "").strip()
@@ -950,6 +968,15 @@ def strip_road_fillers(road: Optional[str]) -> Optional[str]:
             index += 1
         candidate = value[index:]
         if index and _ADDRESS_ROAD_RE.fullmatch(candidate):
+            return candidate
+    # 贅詞也會夾在中間：「永豐公園在那個中山路2段」——地標名不是贅詞字，
+    # 剝不掉開頭，整串就被當成路名送去驗（2026-09-08 00:43 實測）。
+    # 從**最後一段連續兩個以上的贅詞字**之後重切；真的路名不會含「在那個」
+    # 「這邊的」這種連續虛詞。
+    cut = _last_filler_run_end(value)
+    if cut:
+        candidate = value[cut:]
+        if _ADDRESS_ROAD_RE.fullmatch(candidate) and looks_like_real_road(candidate):
             return candidate
     return value or road
 
@@ -1031,6 +1058,29 @@ def extract_lane_alley(text: str) -> Optional[str]:
     )
     match = _LANE_ALLEY_RE.search(compact)
     return match.group(1) if match else None
+
+
+_ALLEY_ONLY_RE = re.compile(rf"({_ADDRESS_NUMBER_TOKEN}弄)")
+
+
+def extract_alley_only(text: str) -> Optional[str]:
+    """抽取單獨補述的「N弄」。
+
+    `extract_lane_alley` 要求「N巷」開頭，報案人在覆誦時單獨補一句
+    「是還有24弄」就抽不到。2026-09-08 00:49 實測：最終派往
+    「中和街155巷30號」，而報案人要的是「中和街155巷24弄30號」——
+    **兩個都是有效門牌，是不同的地方**，API 不會有任何警訊。
+    """
+    compact = _ROAD_SEGMENT_PUNCT_RE.sub(
+        r"\1", re.sub(r"\s+", "", text or "")
+    )
+    match = _ALLEY_ONLY_RE.search(compact)
+    return match.group(1) if match else None
+
+
+def road_has_alley(road: Optional[str]) -> bool:
+    """路名是否已含弄。"""
+    return bool(_ALLEY_ONLY_RE.search(road or ""))
 
 
 def extract_road_section(text: str) -> Optional[str]:

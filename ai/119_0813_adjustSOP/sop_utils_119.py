@@ -992,6 +992,14 @@ def merge_address(current: Optional[str], new: Optional[str]) -> Optional[str]:
     # 門牌地址更正地標，或換成另一條路 → 直接採用新址
     road_cur = _extract_road_core(cur)
     road_new = _extract_road_core(n)
+
+    # 新片段只是路段/門牌延續（如「2段1號3樓」）→ 接在舊址後，勿丟失路名
+    if road_cur and _is_address_continuation(n):
+        merged = _join_address_continuation(cur, n)
+        if "附近" in (new or "") and "附近" not in merged:
+            merged += "附近"
+        return merged
+
     if is_street_address(n) and (
         _is_landmark_only(cur)
         or (road_new and road_cur and not _same_road_base(road_cur, road_new)
@@ -1023,12 +1031,90 @@ def merge_address(current: Optional[str], new: Optional[str]) -> Optional[str]:
     return n if len(n_cmp) > len(cur_cmp) else cur
 
 
+def strip_admin_prefix(addr: str) -> str:
+    """去掉開頭的縣市與行政區，只留路名之後的部分。"""
+    s = str(addr or "").strip()
+    for city in TAIWAN_CITIES:
+        if s.startswith(city):
+            s = s[len(city):]
+            break
+    return re.sub(r"^[一-鿿]{1,4}區", "", s)
+
+
 def _extract_road_core(addr: str) -> str:
+    # 先去縣市/區，否則貪婪匹配會把「新北市土城區中央路」整串當成路名，
+    # 導致與只報路名的新址（「中央路2段1號」）比對不出是同一條路。
+    addr = strip_admin_prefix(addr)
     m = re.search(
         r"([\u4e00-\u9fff0-9]+(?:路|街|大道)(?:\d+)?(?:巷|弄)?(?:\d+)?(?:弄)?(?:\d+)?號?)",
         addr,
     )
     return m.group(1) if m else ""
+
+
+_NUM = r"[一二三四五六七八九十百兩两\d]"
+
+_CONTINUATION_RE = re.compile(
+    rf"^{_NUM}+\s*(?:段|巷|弄|號|号|樓|楼|F|f|之)"
+)
+
+# 門牌成分的同義寫法，用於判斷新片段是否在更正舊址的同一層級
+_UNIT_ALIASES = (
+    ("段",),
+    ("巷",),
+    ("弄",),
+    ("號", "号"),
+    ("樓", "楼", "F", "f"),
+)
+
+
+def _is_address_continuation(addr: str) -> bool:
+    """新片段是否僅為路段/門牌延續（如「2段1號3樓」「5號」），本身不含路名。"""
+    if not addr:
+        return False
+    s = addr.strip()
+    if re.search(r"(?:路|街|大道|區)", s):
+        return False
+    return bool(_CONTINUATION_RE.match(s))
+
+
+def _component_count(addr: str) -> int:
+    """片段含幾個門牌成分（段/巷/弄/號/樓）。"""
+    return len(
+        re.findall(rf"{_NUM}+\s*(?:段|巷|弄|號|号|樓|楼|F|f)", addr or "")
+    )
+
+
+def _join_address_continuation(cur: str, new: str) -> str:
+    """
+    把延續片段接在舊址後。
+
+    - 新片段起始成分若舊址已有（如舊址已含「3樓」、新報「5樓」），
+      從該成分起截斷舊址再接上，視為更正而非累加。
+    - 其餘情況去除重疊字串後直接串接（如「2段」重報）。
+    """
+    cur_s = re.sub(r"\s+", "", cur)
+    new_s = re.sub(r"\s+", "", new)
+
+    head = re.match(rf"^{_NUM}+\s*(段|巷|弄|號|号|樓|楼|F|f)", new_s)
+    if head:
+        aliases = next(
+            (a for a in _UNIT_ALIASES if head.group(1) in a), (head.group(1),)
+        )
+        matches = list(
+            re.finditer(rf"{_NUM}+\s*(?:{'|'.join(aliases)})", cur_s)
+        )
+        if matches:
+            hit = matches[-1]
+            # 新片段只更正單一成分（如只報「3號」）→ 原地替換，保留後面的樓層
+            if _component_count(new_s) == 1:
+                return cur_s[: hit.start()] + new_s + cur_s[hit.end():]
+            return cur_s[: hit.start()] + new_s
+
+    for k in range(min(len(cur_s), len(new_s)), 0, -1):
+        if cur_s[-k:] == new_s[:k]:
+            return cur_s + new_s[k:]
+    return cur_s + new_s
 
 
 def _same_road_base(a: str, b: str) -> bool:
@@ -1083,8 +1169,14 @@ def extract_address_hint(text: str) -> Optional[str]:
                 return tail
 
     # 區 + 路/街 + 門牌（允許口語空格：「景興街 210 巷 2 弄 33 號 4 樓」）
+    # 路名後可接路段（「中央路2段1號3樓」「民權街二段87號」），數字含國字；
+    # 成分可帶「之N」（100之1號 / 148號2樓之3），結尾可帶地下樓層（50號B1）
+    _num = r"[一二三四五六七八九十百兩两\d]"
     _addr_tail = (
-        r"(?:\s*\d+\s*(?:巷|弄|號|楼|樓|F|f))+"
+        rf"(?:\s*{_num}+\s*段)?"
+        rf"(?:\s*{_num}+(?:\s*之\s*{_num}+)?\s*(?:巷|弄|號|号|楼|樓|F|f)"
+        rf"(?:\s*之\s*{_num}+)?)+"
+        r"(?:\s*[Bb]\d+)?"
         r"(?:\s*(?:附近))?"
     )
     m = re.search(
@@ -1117,12 +1209,13 @@ def extract_address_hint(text: str) -> Optional[str]:
         r"((?:[\u4e00-\u9fff]{1,8}區)?"
         r"[\u4e00-\u9fff0-9]*"
         r"(?:路|街|大道)"
+        rf"(?:{_num}+段)?"
         r"\d*"
         r"(?:巷|弄)?"
         r"\d*"
         r"(?:弄)?"
-        r"(?:\d+號)?"
-        r"(?:\d+[楼樓Ff])?"
+        rf"(?:{_num}+[號号])?"
+        rf"(?:{_num}+[楼樓Ff])?"
         r"(?:附近)?)",
         s,
     )

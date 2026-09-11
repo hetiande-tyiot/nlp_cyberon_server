@@ -3,6 +3,114 @@
  "note": "utterances = 報案人原話與期望抽出的地址元件（人工判讀）；api_snapshots = addrCheck 回應快照，供測試離線回放。observed 僅供產生當下對照，測試不以它為準。",
  "cases": [
   {
+   "id": "case119_20260908_004328_31ec6c64",
+   "note": "永豐公園中山路2段41號：地標名黏在路名前面，中間隔著贅詞",
+   "orig_case_address": "永豐公園在那個中山路2段41號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "你好，我們那個永豐公園這邊有一個人躺。躺在那邊。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "永豐公園在那個中山路2段。三百九。309巷。41號。前面。",
+     "expect_district": null,
+     "expect_road": "中山路2段",
+     "expect_number": "41號",
+     "observed": {
+      "district": null,
+      "road": "中山路2段",
+      "number": "41號",
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260908_004630_73213f58",
+   "note": "三重仁愛街283巷28號5樓：一句話講完整，一問一答就派遣",
+   "orig_case_address": "新北市三重區仁愛街283巷28號5樓",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "欸，你好，我這邊是。三重區仁愛街。283巷28號5樓。我需要救護車。",
+     "expect_district": "三重區",
+     "expect_road": "仁愛街283巷",
+     "expect_number": "28號",
+     "observed": {
+      "district": "三重區",
+      "road": "仁愛街283巷",
+      "number": "28號",
+      "rebuilt": "三重區仁愛街283巷28號5樓"
+     }
+    }
+   ]
+  },
+  {
+   "id": "case119_20260908_004954_5ea26b47",
+   "note": "新莊中和街155巷24弄30號：報案人在覆誦時單獨補「弄」",
+   "orig_case_address": "新北市新莊區中和街155巷30號",
+   "orig_location_type": "address",
+   "utterances": [
+    {
+     "text": "新莊中和街。115巷七十四。",
+     "expect_district": "新莊區",
+     "expect_road": "新莊中和街115巷",
+     "expect_number": null,
+     "observed": {
+      "district": "新莊區",
+      "road": "新莊中和街115巷",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "新莊區中和街。155巷。",
+     "expect_district": "新莊區",
+     "expect_road": "中和街155巷",
+     "expect_number": null,
+     "observed": {
+      "district": "新莊區",
+      "road": "中和街155巷",
+      "number": null,
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "是。對，沒有。那三那個。二呃，155巷。24弄30號。",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": "30號",
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": "30號",
+      "rebuilt": null
+     }
+    },
+    {
+     "text": "是還有24弄",
+     "expect_district": null,
+     "expect_road": null,
+     "expect_number": null,
+     "observed": {
+      "district": null,
+      "road": null,
+      "number": null,
+      "rebuilt": null
+     }
+    }
+   ]
+  },
+  {
    "id": "case119_20260907_170134_38f5a733",
    "note": "樹林和平街23號1樓：案情與地址擠在同一句，一問一答就派遣",
    "orig_case_address": "新北市樹林區和平街23號1樓",

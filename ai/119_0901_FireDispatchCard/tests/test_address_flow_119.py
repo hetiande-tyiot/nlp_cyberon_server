@@ -3,13 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from location_validation_119 import AddrCheckResult
+from location_validation_119 import JurisdictionResult
 from sop_119_engine import DialogueIO, SopEngine119
-
-# 全部地址類別現在都走 MapaddrCheck /Verify（sop_119_engine.verify_address）。
-_VALID = AddrCheckResult(status=True, reason="valid", address="新北市板橋區")
-_NOT_FOUND = AddrCheckResult(status=False, reason="not_found", hint="查無此門牌")
-_API_ERROR = AddrCheckResult(status=None, error="timeout")
 from sop_utils_119 import (
     address_ask_should_include_floor,
     build_address_ask_questions,
@@ -131,7 +126,10 @@ class AddressFloorQuestionTests(unittest.TestCase):
     def test_should_include_floor_for_general_illness(self) -> None:
         self.assertTrue(address_ask_should_include_floor("我先生心臟不舒服"))
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "板橋分局"),
+    )
     def test_car_accident_first_address_question_omits_floor(self, _query) -> None:
         io = ScriptedIO(["板橋區府中路32號", "是"])
         engine = SopEngine119(io=io)
@@ -143,7 +141,10 @@ class AddressFloorQuestionTests(unittest.TestCase):
         self.assertEqual(io.questions[0], "請先告訴我地址？")
         self.assertNotIn("幾樓", io.questions[0])
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "板橋分局"),
+    )
     def test_general_case_first_address_question_includes_ji_lou(self, _query) -> None:
         io = ScriptedIO(["板橋區府中路32號", "是"])
         engine = SopEngine119(io=io)
@@ -156,7 +157,10 @@ class AddressFloorQuestionTests(unittest.TestCase):
 
 
 class AddressFlowTests(unittest.TestCase):
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "板橋分局"),
+    )
     def test_missing_district_is_merged_then_validated(self, _query) -> None:
         io = ScriptedIO(["府中路32號", "板橋區", "是"])
         engine = SopEngine119(io=io)
@@ -164,37 +168,46 @@ class AddressFlowTests(unittest.TestCase):
         run_address_flow(engine)
 
         self.assertEqual(engine.case.location_type, "address")
-        self.assertEqual(engine.case.address, "新北市板橋區府中路32號")
+        self.assertEqual(engine.case.address, "板橋區府中路32號")
         self.assertEqual(engine.case.address_district, "板橋區")
-        self.assertEqual(engine.case.address_validation_status, "valid")
+        self.assertEqual(engine.case.jurisdiction_office, "板橋分局")
         self.assertTrue(engine.case.address_confirmed)
         self.assertIn("請告訴我是那一區？", io.questions)
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "板橋分局"),
+    )
     def test_missing_road_is_reasked_and_merged(self, _query) -> None:
         io = ScriptedIO(["板橋區32號", "府中路", "是"])
         engine = SopEngine119(io=io)
 
         run_address_flow(engine)
 
-        self.assertEqual(engine.case.address, "新北市板橋區府中路32號")
+        self.assertEqual(engine.case.address, "板橋區府中路32號")
         self.assertEqual(engine.case.address_road, "府中路")
         self.assertIn("請問是什麼路", io.questions)
         self.assertTrue(engine.case.address_confirmed)
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "板橋分局"),
+    )
     def test_missing_number_is_reasked_and_merged(self, _query) -> None:
         io = ScriptedIO(["板橋區府中路", "32號", "是"])
         engine = SopEngine119(io=io)
 
         run_address_flow(engine)
 
-        self.assertEqual(engine.case.address, "新北市板橋區府中路32號")
+        self.assertEqual(engine.case.address, "板橋區府中路32號")
         self.assertEqual(engine.case.address_number, "32號")
         self.assertIn("請問是幾號", io.questions)
         self.assertTrue(engine.case.address_confirmed)
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "板橋分局"),
+    )
     def test_address_components_accumulate_across_turns(self, _query) -> None:
         io = ScriptedIO(["板橋區", "府中路", "32號", "是"])
         llm = IncrementalAddressExtractor()
@@ -202,7 +215,7 @@ class AddressFlowTests(unittest.TestCase):
 
         run_address_flow(engine)
 
-        self.assertEqual(engine.case.address, "新北市板橋區府中路32號")
+        self.assertEqual(engine.case.address, "板橋區府中路32號")
         self.assertEqual(engine.case.address_district, "板橋區")
         self.assertEqual(engine.case.address_road, "府中路")
         self.assertEqual(engine.case.address_number, "32號")
@@ -234,10 +247,10 @@ class AddressFlowTests(unittest.TestCase):
                 self.assertIn("地址搜尋失敗", engine.case.ImportantTag)
 
     @patch(
-        "sop_119_engine.verify_address",
+        "sop_119_engine.query_jurisdiction",
         side_effect=[
-            _NOT_FOUND,
-            AddrCheckResult(status=True, reason="valid", address="新北市中和區"),
+            JurisdictionResult(False),
+            JurisdictionResult(True, "中和分局"),
         ],
     )
     def test_full_reask_replaces_old_address_components(self, query) -> None:
@@ -256,8 +269,7 @@ class AddressFlowTests(unittest.TestCase):
         self.assertEqual(engine.case.address_road, "景平路")
         self.assertEqual(engine.case.address_number, "100號")
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
-    def test_intersection_reasks_for_second_road(self, _query) -> None:
+    def test_intersection_reasks_for_second_road(self) -> None:
         io = ScriptedIO(["板橋區仁化街路口", "文化路", "是"])
         engine = SopEngine119(io=io)
 
@@ -269,8 +281,7 @@ class AddressFlowTests(unittest.TestCase):
         self.assertEqual(engine.case.address, "板橋區仁化街與文化路路口")
         self.assertTrue(engine.case.address_confirmed)
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
-    def test_highway_reasks_for_name_direction_and_kilometer(self, _query) -> None:
+    def test_highway_reasks_for_name_direction_and_kilometer(self) -> None:
         io = ScriptedIO([
             "我在高速公路發生車禍了",
             "國道三號北向32.5公里處",
@@ -286,8 +297,8 @@ class AddressFlowTests(unittest.TestCase):
         self.assertEqual(engine.case.highway_kilometer, "32.5")
         self.assertEqual(engine.case.address, "國道三號 北向 32.5公里處")
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
-    def test_landmark_uses_addrcheck_api(self, _validate) -> None:
+    @patch("sop_119_engine.validate_landmark", return_value=True)
+    def test_landmark_uses_excel_validation(self, _validate) -> None:
         io = ScriptedIO(["板橋大觀市場旁邊", "是"])
         engine = SopEngine119(io=io)
 
@@ -296,8 +307,8 @@ class AddressFlowTests(unittest.TestCase):
         self.assertEqual(engine.case.location_type, "landmark")
         self.assertEqual(engine.case.address_validation_status, "valid")
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
-    def test_mrt_uses_addrcheck_api_as_landmark(self, _validate) -> None:
+    @patch("sop_119_engine.validate_mrt", return_value=True)
+    def test_mrt_uses_station_csv_validation(self, _validate) -> None:
         io = ScriptedIO(["捷運頂埔站出口1", "是"])
         engine = SopEngine119(io=io)
 
@@ -307,8 +318,11 @@ class AddressFlowTests(unittest.TestCase):
         self.assertEqual(engine.case.address_validation_status, "valid")
 
     @patch(
-        "sop_119_engine.verify_address",
-        side_effect=[_NOT_FOUND, _NOT_FOUND],
+        "sop_119_engine.query_jurisdiction",
+        side_effect=[
+            JurisdictionResult(False),
+            JurisdictionResult(False),
+        ],
     )
     def test_invalid_api_result_reasks_once_then_marks_and_continues(self, query) -> None:
         io = ScriptedIO([
@@ -329,8 +343,11 @@ class AddressFlowTests(unittest.TestCase):
         self.assertFalse(io.answers)
 
     @patch(
-        "sop_119_engine.verify_address",
-        side_effect=[_API_ERROR, _API_ERROR],
+        "sop_119_engine.query_jurisdiction",
+        side_effect=[
+            JurisdictionResult(None, error="timeout"),
+            JurisdictionResult(None, error="timeout"),
+        ],
     )
     def test_api_error_reasks_once_then_marks_and_continues(self, query) -> None:
         io = ScriptedIO([
@@ -347,7 +364,10 @@ class AddressFlowTests(unittest.TestCase):
         self.assertEqual(engine.case.ImportantCase, 1)
         self.assertIn("地址搜尋失敗", engine.case.ImportantTag)
 
-    @patch("sop_119_engine.verify_address", return_value=_VALID)
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "新店分局"),
+    )
     def test_confirmation_failure_marks_and_continues(self, _query) -> None:
         io = ScriptedIO([
             "新北市新店區中央路133巷1號",

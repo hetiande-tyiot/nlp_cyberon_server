@@ -107,6 +107,7 @@ from sop_utils_119 import (
     extract_address_road,
     extract_highway_components,
     extract_intersection_roads,
+    extract_alley_only,
     extract_lane_alley,
     extract_road_section,
     extract_street_address_components,
@@ -122,6 +123,7 @@ from sop_utils_119 import (
     parse_vital_slot,
     parse_yes_no,
     parse_yes_no_for_question,
+    road_has_alley,
     road_has_lane,
     road_has_section,
     strip_district_prefix_from_road,
@@ -1387,9 +1389,9 @@ class SopEngine119:
         # ── 第0輪：問第一個通用問題（三句開場白隨機擇一）──────────────────────
         self._set_stage("initial")
         first_q = random.choice([
-            "一一九您好，請問是火災還是救護",
-            "一一九您好，請問是需要消防車還是救護車",
-            "一一九您好，請問是要報火災還是有人身體不舒服",
+            "119 您好，請問是火災，還是救護",
+            "119 您好，請問是需要消防車，還是救護車",
+            "119 您好，請問是要報火災，還是有人身體不舒服",
         ])
         first_input = self._ask_and_extract(first_q)
 
@@ -2553,6 +2555,13 @@ class SopEngine119:
             lane = extract_lane_alley(text or "")
             if lane and lane not in road:
                 road = f"{road}{lane}"
+                changed = True
+        elif not road_has_alley(road):
+            # 路名已有巷、報案人單獨補「24弄」——弄一定接在巷後面。
+            # 漏掉的代價是派到另一個真實存在的門牌，API 不會有警訊。
+            alley = extract_alley_only(text or "")
+            if alley and alley not in road:
+                road = f"{road}{alley}"
                 changed = True
 
         if not changed:
