@@ -113,7 +113,8 @@ class PatientContextS6Tests(unittest.TestCase):
 
         self.assertEqual(engine.case.patient_gender, "男")
         self.assertEqual(engine.case.patient_age, "75歲")
-        self.assertIn("現場有幾個人受傷？", io.messages)
+        # 通用 handler（sub_category=None，非外傷）→ 中性人數問法（修2）
+        self.assertIn("現場有幾位需要救護？", io.messages)
         self.assertIn("請問他大約幾歲？", io.messages)
         self.assertNotIn("男生還是女生", " ".join(io.messages))
 

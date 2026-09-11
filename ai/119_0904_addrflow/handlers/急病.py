@@ -58,9 +58,14 @@ class JiBingHandler(SubCategoryHandler):
         """
         engine._ensure_known_fields_from_history()
 
-        # ── S0：現場發生什麼事（skip if incident_description 已填）────────────
+        # ── S0：現場發生什麼事 ───────────────────────────────────────────────
+        # Fix2：incident_description 已填但只是「身體不舒服」這類含糊描述時，仍問一次，
+        #       讓真正細類（燙傷/要生了/吞藥…）浮現、觸發 sub-reclassify 切出急病。
         engine._set_stage("急病_S0")
-        if not engine._is_field_filled("incident_description"):
+        if (
+            not engine._is_field_filled("incident_description")
+            or self._incident_is_vague(engine)
+        ):
             q0 = "請問現場發生什麼事？需要救護車嗎？"
             answer0 = engine._ask_and_extract(q0)
             self._check_and_respond_to_triggers(answer0, engine)
@@ -163,6 +168,9 @@ class JiBingHandler(SubCategoryHandler):
         elif scenario_id == 5:
             # 昏迷
             engine._say(_R2)
+            # C：昏迷成因常是服藥/中毒，報案人未必主動說 → 主動探問，帶出訊號後
+            #    由每輪 sub-reclassify 有機會切到吞食藥物。
+            self._probe_cause_ingestion(engine)
 
         elif scenario_id == 6:
             # 低血糖
@@ -214,6 +222,9 @@ class JiBingHandler(SubCategoryHandler):
                 self._extract_s2_vitals(answer7, _R7, engine)
             else:
                 engine._debug_print("skip_R7_abdomen_rise", engine.case.abdomen_rise)
+            # C：叫沒反應成因常是服藥/中毒 → 主動探問，帶出訊號後由每輪 sub-reclassify
+            #    有機會切到吞食藥物。
+            self._probe_cause_ingestion(engine)
 
     def _ask_trigger_question(
         self,

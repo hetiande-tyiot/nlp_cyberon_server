@@ -439,7 +439,7 @@ class SubCategoryHandler:
             result = engine._llm.extract_slots(
                 answer,
                 schema={"patient_count": "string|null"},
-                rules="- patient_count：現場受傷人數，保留原文數字或描述\n",
+                rules="- patient_count：現場傷病患（受傷或不適需救護者）人數，保留原文數字或描述\n",
                 question=question,
             )
             val = result.get("patient_count")
@@ -451,6 +451,18 @@ class SubCategoryHandler:
                 engine._debug_print("patient_count", engine.case.patient_count)
         except Exception as e:
             engine._debug_print("patient_count_error", e)
+
+    # 外傷類子類：人數題才用「幾個人受傷」；其餘（急病/吞食藥物/中毒…）用中性問法，
+    # 避免非外傷案報案人答「沒有人受傷」被記成 0 人，與患者性別/年齡矛盾（見 90642da6）。
+    _TRAUMA_SUBCATS: tuple[str, ...] = (
+        "一般受傷", "打架受傷", "車禍", "墜落傷", "燒燙傷",
+    )
+
+    def _patient_count_question(self, engine: "SopEngine119") -> str:
+        """依子類決定人數題問法：外傷問『幾個人受傷』，其餘問『幾位需要救護』。"""
+        if engine.case.sub_category in self._TRAUMA_SUBCATS:
+            return "現場有幾個人受傷？"
+        return "現場有幾位需要救護？"
 
     def _run_s6_gender_age(
         self,
@@ -468,7 +480,7 @@ class SubCategoryHandler:
         engine._sync_patient_context()
 
         if not engine._is_field_filled("patient_count"):
-            q_count = "現場有幾個人受傷？"
+            q_count = self._patient_count_question(engine)
             answer_count = engine._ask_and_extract(q_count)
             self._extract_patient_count(answer_count, q_count, engine)
             if on_answer is not None:
@@ -495,6 +507,126 @@ class SubCategoryHandler:
         self._extract_s6_patient(answer6, q6, engine)
         if on_answer is not None:
             on_answer(answer6)
+
+    # ── 病情含糊判定（Fix2）──────────────────────────────────────────────────
+
+    # 去掉這些通用/填充詞後若幾乎沒有「實質病徵」殘留，視為含糊。
+    _VAGUE_INCIDENT_TOKENS: tuple[str, ...] = (
+        "身體", "不舒服", "不適", "不太舒服", "有點", "有人", "有個", "一個", "一位",
+        "患者", "病人", "現在", "目前", "先生", "小姐", "女士",
+    )
+
+    def _incident_is_vague(self, engine: "SopEngine119") -> bool:
+        """
+        incident_description 是否只是「身體不舒服」這類含糊描述、缺具體病徵。
+
+        用於急病（救護 fallback 子類）：報案人開場只說「不舒服」時 BERT 高信心押急病，
+        真正細類（燙傷/要生了/吞藥…）沒被問出來（見 9/10 孕婦待產/吞食藥物/燒燙傷
+        皆→急病）。含糊則仍問一次「發生什麼事」，讓細類訊號浮現、觸發 sub-reclassify。
+        """
+        inc = (engine.case.incident_description or "").strip()
+        if not inc:
+            return True
+        rest = "".join(inc.split())
+        for tok in self._VAGUE_INCIDENT_TOKENS:
+            rest = rest.replace(tok, "")
+        # 濾掉標點與單獨語助詞後，實質內容 < 3 字 → 含糊
+        for p in "，,。、！!？?～~的了啊喔嗯呃欸":
+            rest = rest.replace(p, "")
+        return len(rest) < 3
+
+    # ── 上吊等自傷：流程中需破門 → 改判緊急救援（加派消防車）────────────────────
+
+    def _maybe_escalate_break_in(self, engine: "SopEngine119", text: str) -> bool:
+        """
+        流程中發現需消防破門（如上吊者反鎖在家）→ 改判緊急救援、加派消防車。回傳是否改判。
+
+        判斷用「關鍵字召回 + LLM 精準確認」，避免純關鍵字誤判：
+          1. 否定感知關鍵字當便宜預篩——沒有未否定的破門訊號就直接跳過（不呼叫 LLM）。
+          2. 有候選才交 LLM 判上下文：明確是假設/過去式/其實進得去 → LLM 否決、不升級。
+        安全優先：唯有 LLM 明確判 false 才擋；確認/不確定/無 LLM 皆升級
+        （漏判「人反鎖在裡面沒人破門」比誤判「多派一台消防車」危險）。
+        """
+        from sop_119_engine import BREAK_IN_KW
+        from sop_utils_119 import _has_unnegated_token
+
+        if engine.case.main_category == "緊急救援":
+            return False
+        # 1) 便宜預篩：沒有未被否定的破門關鍵字 → 不升級、不叫 LLM
+        if not _has_unnegated_token(text or "", BREAK_IN_KW):
+            return False
+        # 2) 有候選 → LLM 判上下文，僅明確否定才擋
+        if engine._llm is not None:
+            try:
+                from llm_extractor_119 import _coerce_bool
+                out = engine._llm.extract_slots(
+                    text,
+                    schema={"need_break_in": "true|false|null"},
+                    rules=(
+                        "判斷【文本】是否表示『現在需要消防破門才能接觸到傷病患』。\n"
+                        "- 當事人把自己反鎖在房間/屋內、門打不開、進不去、需要破門 → true\n"
+                        "- 門開著/進得去/已經進去了/已破門進去/只是假設或擔心/過去發生"
+                        "現已解決 → false\n"
+                        "- 未提及或不確定 → null"
+                    ),
+                )
+                if _coerce_bool(out.get("need_break_in")) is False:
+                    engine._debug_print("break_in_llm_reject", text)
+                    return False
+            except Exception as e:
+                engine._debug_print("break_in_llm_error", e)
+        return engine._escalate_main_to_emergency(reason="上吊反鎖需破門")
+
+    # ── 意識異常情境：主動探問服藥/中毒（C）────────────────────────────────────
+
+    def _probe_cause_ingestion(self, engine: "SopEngine119", *, on_answer=None) -> None:
+        """
+        意識異常（迷糊/叫沒反應）情境下，主動探問是否吃錯藥/服藥過量/中毒。
+
+        報案人常不會主動吐出「藥」字，急病與吞食藥物的表徵（半意識/無反應）又高度
+        重疊，BERT 分不清、也不會切類。此探問補一句不依賴關鍵詞的成因問題，讓答案帶出
+        服藥訊號後：
+          - 若目前在急病等子類 → 每輪 sub-reclassify 有機會切到吞食藥物；
+          - 若已在吞食藥物 → 交由呼叫端 on_answer 觸發 t1/t2 追問藥物種類。
+
+        整通電話只探問一次（engine._cause_ingestion_probed 記錄）；已知服藥內容則跳過。
+        注意：engine._ask_and_extract 可能因切類拋出 SubCategorySwitched，由 _run_救護
+        的重入迴圈接手，屬預期行為。
+        """
+        if engine._is_field_filled("ingested_substance"):
+            return
+        if getattr(engine, "_cause_ingestion_probed", False):
+            return
+        engine._cause_ingestion_probed = True
+
+        q = "知道是什麼原因嗎？有沒有可能吃錯藥、吃太多藥、或是中毒？"
+        before_cause = engine.case.collapse_cause
+        try:
+            answer = engine._ask_and_extract(q)
+        finally:
+            # 切類時 _ask_and_extract 會拋 SubCategorySwitched，reset 必須在 finally
+            # 才跑得到（collapse_cause 已在拋出前被填，見 90642da6）。
+            self._reset_probe_question_echo(engine, q, before_cause)
+        if on_answer is not None:
+            on_answer(answer)
+
+    def _reset_probe_question_echo(
+        self, engine: "SopEngine119", question: str, before_value
+    ) -> None:
+        """
+        C 探問問句列了「吃錯藥/吃太多藥/中毒」示範詞，抽取器可能把問句示範當成答案
+        灌進 collapse_cause（見 90642da6：值＝問句片段而非報案人回答）。
+        若探問後的新值只是問句的回聲，還原為探問前的值；真答案已進 ingested_substance。
+        """
+        cur = engine.case.collapse_cause
+        if not cur or cur == before_value:
+            return
+        q_compact = "".join((question or "").split())
+        if "".join(cur.split()) in q_compact:
+            with engine._case_lock:
+                engine.case.collapse_cause = before_value
+            engine._notify_case_update()
+            engine._debug_print("probe_collapse_cause_echo_reset", cur)
 
     # ── 共用實作 ──────────────────────────────────────────────────────────────
 

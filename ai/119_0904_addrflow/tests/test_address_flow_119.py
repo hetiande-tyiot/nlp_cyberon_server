@@ -126,6 +126,22 @@ class AddressFloorQuestionTests(unittest.TestCase):
     def test_should_include_floor_for_general_illness(self) -> None:
         self.assertTrue(address_ask_should_include_floor("我先生心臟不舒服"))
 
+    def test_should_skip_floor_for_outdoor_landmark(self) -> None:
+        # 夜市/市場/攤販/廣場/公園等露天地標 → 不問樓層（見 a2766f5f）
+        for txt in ("我在南亞夜市這邊", "夜市攤販失火了", "市場旁邊起火",
+                    "路邊攤起火", "公園裡有人上吊", "廣場那邊冒煙"):
+            with self.subTest(txt=txt):
+                self.assertFalse(address_ask_should_include_floor(txt))
+
+    def test_still_ask_floor_for_ordinary_building_address(self) -> None:
+        self.assertTrue(address_ask_should_include_floor("板橋區文化路一段100號"))
+
+    def test_street_name_guard_still_asks_floor(self) -> None:
+        # 公園路/市場路/廣場街 是常見路名 → 屬正常門牌地址，仍要問樓層（路名防呆）
+        for txt in ("公園路100號3樓", "市場路5號", "中正區廣場街12號", "市場街8號"):
+            with self.subTest(txt=txt):
+                self.assertTrue(address_ask_should_include_floor(txt))
+
     @patch(
         "sop_119_engine.query_jurisdiction",
         return_value=JurisdictionResult(True, "板橋分局"),
@@ -136,6 +152,22 @@ class AddressFloorQuestionTests(unittest.TestCase):
         engine.case.transcript = [
             {"role": "assistant", "text": "119 您好，請問是火災還是救護"},
             {"role": "caller", "text": "救護車！這裡發生車禍"},
+        ]
+        run_address_flow(engine)
+        self.assertEqual(io.questions[0], "請先告訴我地址？")
+        self.assertNotIn("幾樓", io.questions[0])
+
+    @patch(
+        "sop_119_engine.query_jurisdiction",
+        return_value=JurisdictionResult(True, "板橋分局"),
+    )
+    def test_night_market_first_address_question_omits_floor(self, _query) -> None:
+        # 開場即提夜市 → 首次地址問句不帶「幾樓」（夜市是露天地標）
+        io = ScriptedIO(["南亞夜市這邊", "是"])
+        engine = SopEngine119(io=io)
+        engine.case.transcript = [
+            {"role": "assistant", "text": "119 您好，請問是火災還是救護"},
+            {"role": "caller", "text": "火災！南亞夜市這邊有攤販失火"},
         ]
         run_address_flow(engine)
         self.assertEqual(io.questions[0], "請先告訴我地址？")

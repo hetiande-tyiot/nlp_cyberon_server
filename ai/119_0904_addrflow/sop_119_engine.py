@@ -49,7 +49,7 @@ import sys
 import threading
 import traceback
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from address_mapper_119 import get_location_mapper
 from case_info_119 import CaseInfo119
@@ -87,6 +87,7 @@ from location_validation_119 import (
     query_jurisdiction,
     verify_address_detail,
     verify_address_status,
+    normalize_landmark_alias,
 )
 from sop_utils_119 import (
     address_ask_should_include_floor,
@@ -227,6 +228,68 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
 }
 
 
+# ─── 救護細類判定：信心度追問與選取閾值 ────────────────────────────────────────
+# 於 _run_救護() 細類定案時使用。實測期間可依誤分狀況調整。
+#   CONF   : top-1 置信度低於此值 → 追問（模型本身沒把握）
+#   MARGIN : top1−top2 機率差低於此值 → 追問（前兩名咬得很近、兩類難分）
+#   LATER_PREFER_DELTA : 多輪候選挑選時，晚輪信心未低於最佳超過此值就採晚輪
+#                        （晚輪文字較完整、資訊較多，避免資訊少的早輪誤勝）
+#   MAX_REASK : 最多追問次數
+SUB_CONF_THRESHOLD: float = 0.7
+SUB_MARGIN_THRESHOLD: float = 0.15
+SUB_LATER_PREFER_DELTA: float = 0.1
+MAX_SUB_REASK: int = 2
+
+# ─── 火警細類：margin 閘門 ─────────────────────────────────────────────────────
+# 火警不走「追問發生什麼事」，而是每輪自動重跑分類。除了既有的
+# FIRE_BERT_CONF_THRESHOLD(=0.5) 置信度門檻，再加 top1−top2 margin 門檻：
+# 前兩名咬得太近（兩類難分）時不填入/不切換，等文字更清楚的下一輪再說。
+FIRE_SUB_MARGIN_THRESHOLD: float = 0.15
+
+# ─── 主分類（火警/救護/…）：信心與 margin 追問 ────────────────────────────────
+# 主類別模稜兩可（信心低或前兩名接近）→ 追問釐清，避免一開始就走錯整條 SOP。
+MAIN_CONF_THRESHOLD: float = 0.7
+MAIN_MARGIN_THRESHOLD: float = 0.15
+MAX_MAIN_REASK: int = 1
+
+# ─── 其他案類：E1 安全網 / E2 轉出前釐清 ──────────────────────────────────────
+# BERT 會把明確救護案（吞藥自殺、鬥毆傷…）誤送「其他案類」而靜默轉人工、不跑 SOP。
+#   E1：命中「明確救護」高貼合關鍵詞 → 直接改派救護（治安模糊的打架除外）。
+#   E2：其他案類轉出前追問一次，依『答案』（不重跑主 BERT）改派救護/火警/緊急救援。
+# E1 不強制轉救護、改交 E2 追問的「治安模糊」子類：
+AMBIGUOUS_RESCUE_SUBCATS: Tuple[str, ...] = ("打架受傷",)
+# 明確自傷類：taxonomy 屬救護，但 BERT 常把「有人上吊」等誤送緊急救援（見 9/10 上吊×2）。
+# 分類階段：自傷類一律先走救護（上吊即使需破門，也是先進救護上吊流程，之後才於流程中
+# 轉緊急救援——那是下游 mid-flow 轉換，不在此分類判斷）。
+SELF_HARM_RESCUE_SUBCATS: Tuple[str, ...] = ("上吊", "割腕", "燒炭", "吞食藥物")
+# 墜落傷判定規則（受理員實務，用戶告知）：墜落預設走救護「墜落傷」；唯當事人被卡住/
+# 夾住/在一般人到不了處才「於分類階段」即算緊急救援。命中時 E1 不把墜落搶回救護。
+FALL_TRAP_KW: Tuple[str, ...] = (
+    "受困", "困住", "卡住", "卡在", "夾住", "夾在", "被壓", "壓住", "壓在",
+    "搆不到", "構不到", "搆不著", "拉不上來", "上不來", "下不去", "動彈不得",
+    "山谷", "懸崖", "峭壁", "深井", "水溝", "邊坡", "到不了", "無法到達",
+)
+# 需破門/進不去的訊號：上吊等自傷案「流程中」發現需消防破門（如當事人反鎖在家）→
+# 改判緊急救援、加派消防車（用戶告知的實務規則）。用否定感知避免「沒有反鎖/進得去」。
+BREAK_IN_KW: Tuple[str, ...] = (
+    "破門", "要破門", "需要破門", "撞門", "門反鎖", "反鎖", "門鎖住", "鎖住",
+    "門打不開", "打不開", "進不去", "進不了", "門開不了", "打不開門", "鎖在裡面",
+    "鎖在家", "鎖在屋", "反鎖在",
+)
+# E2 追問答案的路由關鍵詞（火警/緊急救援用強詞，避免『沒有火』之類反被誤命中）：
+OTHER_CLARIFY_INJURY_KW: Tuple[str, ...] = (
+    "受傷", "有傷", "流血", "出血", "被打", "打傷", "被砍", "被刺", "刺傷",
+    "昏", "暈", "倒地", "沒反應", "沒有反應", "沒呼吸", "沒有呼吸",
+    "不舒服", "不適", "很痛", "中毒", "救護車", "叫救護", "沒意識", "沒有意識",
+)
+OTHER_CLARIFY_FIRE_KW: Tuple[str, ...] = (
+    "著火", "起火", "火災", "火警", "冒煙", "濃煙", "爆炸", "燒起來",
+)
+OTHER_CLARIFY_EMERGENCY_KW: Tuple[str, ...] = (
+    "受困", "困住", "電梯", "跳樓", "墜樓", "被壓", "壓住", "瓦斯外洩", "瓦斯漏氣",
+)
+
+
 class TransferToHumanError(Exception):
     """觸發時立即中止 handler 並轉接真人接線員。"""
 
@@ -296,6 +359,8 @@ class SopEngine119:
         self._extracted_caller_count = 0
         self._bridged     = False
         self._sub_reclassify_enabled = False
+        # C：意識異常情境下的「是否服藥/中毒」探問整通只問一次
+        self._cause_ingestion_probed = False
         # 地址流程跑完即上鎖，之後不再讓地標/捷運/路口關鍵字覆寫已成立的地點
         self._address_locked = False
         # 有沒有真的對報案人說過「車已派出」。轉真人的話術要看這個，
@@ -304,6 +369,8 @@ class SopEngine119:
         self._dispatch_announced = False
         self._dropped_details_asked = False
         self._probed_result = None
+        # B：同一通內已被報案人否決過的模糊地標（matched/resolved），不再重複提案。
+        self._denied_landmarks: set = set()
         # 行政區若是臺語音近「猜」出來的，記 (原片段, 猜測值)，
         # 必須讓報案人覆誦確認；未確認前不得當成已知地址交給派遣或真人。
         self._district_guess: Optional[tuple] = None
@@ -736,7 +803,19 @@ class SopEngine119:
                 # 地址流程結束後，已成立的地點不再被後續對話裡的地標／捷運／
                 # 路口字樣覆寫（曾發生「在哪裡產檢？」答「國泰醫院」蓋掉事發
                 # 門牌、救護車已派遣仍改到醫院名的情況）。
-                if self._address_locked and is_usable_address(self.case.address):
+                # 2026-09-11 實測：覆誦確認同一輪回「對，工廠燒起來了」，此時尚未
+                # _address_locked，卻因句含「工廠」被判 landmark，覆寫掉已組好的
+                # 「八里區忠八街63號」。完整門牌（路+號）已成立時，一律不讓其他
+                # 地址形式覆寫（完整地址優先）。
+                has_complete_street = has_complete_street_address(
+                    self.case.address_district,
+                    self.case.address_road,
+                    self.case.address_number,
+                )
+                if (
+                    (self._address_locked or has_complete_street)
+                    and is_usable_address(self.case.address)
+                ):
                     pass
                 else:
                     self.case.location_type = explicit_type
@@ -1333,7 +1412,42 @@ class SopEngine119:
 
         # ── 主分類 ────────────────────────────────────────────────────────────
         self._set_stage("main_classifying")
-        main_cat, main_conf = self._do_main_classify(first_input)
+        main_cat, main_conf, main_margin = self._do_main_classify(first_input)
+
+        # 主類別模稜兩可（信心 < 門檻 或 top1−top2 < 門檻）→ 追問釐清火災/救護。
+        # 開場只問「火災還是救護」，報案人可能一句話含糊帶過（例：「有東西燒起來
+        # 有人受傷」火警/救護難分）；此時多問一句，避免一開始就走錯整條 SOP。
+        _MAIN_REASK_Q = "不好意思，請問現場是發生火災，還是有人身體不適或受傷需要救護？"
+        _main_reask = 0
+        while (
+            _main_reask < MAX_MAIN_REASK
+            and (
+                main_conf is None or main_conf < MAIN_CONF_THRESHOLD
+                or main_margin is None or main_margin < MAIN_MARGIN_THRESHOLD
+            )
+        ):
+            self._ask_and_extract(_MAIN_REASK_Q)
+            _main_reask += 1
+            main_cat, main_conf, main_margin = self._do_main_classify(
+                self.case.full_caller_text()
+            )
+
+        # E1：BERT 把明確救護案（吞藥自殺、車禍、明確病徵…）誤送「其他案類」時，
+        #     以高貼合關鍵詞強制轉回救護；治安模糊的打架不在此列（交由 E2 追問）。
+        #     見 dc0f910e（吞很多安眠藥自殺→其他案類）。
+        #     緊急救援也納入：BERT 常把「有人上吊」誤送緊急救援、細類空白（見 9/10
+        #     上吊×2），此時只認明確自傷類才搶回救護。
+        if main_cat in ("其他案類", "緊急救援"):
+            kw_sub = self._rescue_override_subcategory(
+                self.case.full_caller_text(), from_main=main_cat
+            )
+            if kw_sub is not None:
+                self._debug_print(
+                    "main_keyword_override",
+                    {"from": main_cat, "to": "救護", "sub_hint": kw_sub},
+                )
+                main_cat, main_conf, main_margin = "救護", 1.0, 1.0
+
         with self._case_lock:
             self.case.main_category = main_cat
             self.case.main_conf     = main_conf
@@ -1357,6 +1471,10 @@ class SopEngine119:
         elif main_cat == "緊急救援":
             self._run_緊急救援()
         else:
+            # E2：其他案類轉出前先追問一次釐清，依『答案』改派救護/火警/緊急救援；
+            #     仍無訊號才照原樣轉人工。見 e4298d36（鬥毆/持械被靜默轉出、未問清）。
+            if main_cat == "其他案類" and self._clarify_other_category():
+                return
             # 其他類別：暫不支援，給出提示後結束
             self._say(f"已記錄您的{main_cat}報案，請稍候，即將轉接專人為您服務。")
             with self._case_lock:
@@ -1554,16 +1672,27 @@ class SopEngine119:
                 need_answer = self._ask_and_extract("請問還需要中心協助什麼？")
 
     def _do_main_classify(self, text: str):
-        """調用主分類器，返回 (main_category, confidence)。"""
+        """
+        調用主分類器，返回 (main_category, confidence, margin)。
+
+        margin = 主類別 top1−top2 機率差；無 all_probs 時為 None。
+        關鍵詞備援命中回傳 margin=1.0（確定），純預設回傳 0.0（不確定，將觸發追問）。
+        """
         if self._main_clf is not None:
             try:
                 result = self._main_clf.predict(text)
-                return result["main_category"], result["main_conf"]
+                main_probs = result.get("main_probs") or {}
+                if main_probs:
+                    ordered = sorted(main_probs.values(), reverse=True)
+                    margin = (ordered[0] - ordered[1]) if len(ordered) >= 2 else 1.0
+                else:
+                    margin = None
+                return result["main_category"], result["main_conf"], margin
             except Exception as e:
                 self._debug_print("main_clf_error", e)
         # 無分類器時回退：依關鍵詞粗略判斷（較短/較泛的「救」須放在緊急救援之後）
         if any(kw in text for kw in ("火", "火災", "著火", "燒")):
-            return "火警", 0.9
+            return "火警", 0.9, 1.0
         if any(
             kw in text
             for kw in (
@@ -1571,10 +1700,100 @@ class SopEngine119:
                 "跳樓", "車禍救助",
             )
         ):
-            return "緊急救援", 0.9
+            return "緊急救援", 0.9, 1.0
         if any(kw in text for kw in ("救護", "救人", "救", "急救", "昏倒", "受傷", "病")):
-            return "救護", 0.9
-        return "救護", 0.5  # 預設
+            return "救護", 0.9, 1.0
+        return "救護", 0.5, 0.0  # 預設（不確定）
+
+    def _rescue_override_subcategory(
+        self, text: str, *, from_main: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        E1：文本命中「明確救護」高貼合關鍵詞時回傳其子類名，否則 None。
+
+        治安模糊的子類（AMBIGUOUS_RESCUE_SUBCATS，如打架受傷）不在此直接轉救護，
+        改交 E2 追問釐清後再定。
+
+        from_main="緊急救援" 時額外收斂：只在明確自傷類（SELF_HARM_RESCUE_SUBCATS）
+        或墜落傷才搶回救護，避免誤搶正牌緊急救援案。
+        自傷類（含上吊）分類階段一律走救護；上吊需破門而轉緊急救援是下游 mid-flow 轉換，
+        不在此判斷。唯墜落傷例外：受困/搆不到（FALL_TRAP_KW）於分類階段即屬緊急救援。
+        """
+        kw_cat, _, _ = match_rescue_subcategory(text)
+        if kw_cat is None or kw_cat in AMBIGUOUS_RESCUE_SUBCATS:
+            return None
+        compact = "".join((text or "").split())
+        # 墜落且受困/搆不到 → 分類階段即屬緊急救援，不搶回救護
+        if kw_cat == "墜落傷" and any(k in compact for k in FALL_TRAP_KW):
+            return None
+        if from_main == "緊急救援" and kw_cat not in SELF_HARM_RESCUE_SUBCATS and kw_cat != "墜落傷":
+            return None
+        return kw_cat
+
+    def _route_other_from_clarify(self, answer: str) -> Optional[str]:
+        """
+        E2：依追問答案 + 全對話文本判斷「其他案類」應改派的主類別。
+
+        不重跑主 BERT（吞藥那通重問+重跑仍固執誤判）。改以關鍵詞判讀：
+        救護 > 火警 > 緊急救援，皆無訊號則回 None（維持其他案類、轉人工）。
+        救護優先，避免「沒有火但有人受傷」被火警關鍵詞誤命中。
+
+        救護訊號用 _rescue_override_subcategory（排除治安模糊的打架受傷），加上明確
+        傷病關鍵詞——所以「純打架、追問後仍無傷」不會被原文的「打起來」自動歸救護，
+        唯有追問答案帶出受傷/被打傷才轉救護，符合「問清楚再決定」。
+        """
+        from sop_utils_119 import _has_unnegated_token
+
+        text = self.case.full_caller_text()
+        blob = f"{text}\n{answer or ''}"
+        # 否定感知：避免「沒有人受傷」因含「受傷」被誤判成救護、「沒有火」被誤判火警。
+        if (
+            self._rescue_override_subcategory(blob) is not None
+            or _has_unnegated_token(blob, OTHER_CLARIFY_INJURY_KW)
+        ):
+            return "救護"
+        if _has_unnegated_token(blob, OTHER_CLARIFY_FIRE_KW):
+            return "火警"
+        if _has_unnegated_token(blob, OTHER_CLARIFY_EMERGENCY_KW):
+            return "緊急救援"
+        return None
+
+    def _clarify_other_category(self) -> bool:
+        """
+        E2：其他案類靜默轉出前追問一次，依答案改派並跑完對應 SOP。
+
+        回傳 True 表示已改派（已進入救護/火警/緊急救援流程）；
+        False 表示仍屬其他案類，交回呼叫端照原樣轉人工。
+        """
+        self._set_stage("其他案類_clarify")
+        answer = self._ask_and_extract(
+            "請問現場有沒有人受傷、身體不適，或是有火、有人受困需要救護或消防？"
+        )
+        new_cat = self._route_other_from_clarify(answer)
+        if new_cat is None:
+            return False
+
+        with self._case_lock:
+            self.case.main_category = new_cat
+            self.case.main_conf     = 1.0
+        self._extract_all_fields_from_reply(answer, question=None)
+        if new_cat == "火警":
+            self._refresh_fire_subtype_from_bert()
+        self._emit({
+            "type": "classification",
+            "main": new_cat, "main_conf": 1.0,
+            "sub": None, "sub_conf": None,
+        })
+        self._notify_case_update()
+        self._set_stage("main_classified")
+
+        if new_cat == "救護":
+            self._run_救護()
+        elif new_cat == "火警":
+            self._run_火警()
+        elif new_cat == "緊急救援":
+            self._run_緊急救援()
+        return True
 
     def _do_sub_classify(self, text: str, main_cat: str):
         """
@@ -1582,8 +1801,10 @@ class SopEngine119:
 
         Returns
         -------
-        (sub_category, confidence, source)
+        (sub_category, confidence, source, margin)
             source: "keyword" | "classifier" | None
+            margin: top1−top2 機率差（分類器來源時），keyword 命中為 1.0，
+                    無結果為 None。用於偵測「兩類難分」的模稜兩可誤分。
         """
         if main_cat == "救護":
             kw_cat, kw_conf, kw = match_rescue_subcategory(text)
@@ -1592,16 +1813,22 @@ class SopEngine119:
                     "sub_keyword_hit",
                     {"sub_category": kw_cat, "keyword": kw, "conf": kw_conf},
                 )
-                return kw_cat, kw_conf, "keyword"
+                return kw_cat, kw_conf, "keyword", 1.0
 
         if self._sub_clf is not None:
             try:
                 result = self._sub_clf.predict(text, main_cat)
                 if result:
-                    return result.final_label, result.classifier_conf, "classifier"
+                    probs_map = getattr(result, "all_probs", None)
+                    if probs_map:
+                        ordered = sorted(probs_map.values(), reverse=True)
+                        margin = (ordered[0] - ordered[1]) if len(ordered) >= 2 else 1.0
+                    else:
+                        margin = None  # 無機率分布時 margin 未知，交由呼叫端判斷
+                    return result.final_label, result.classifier_conf, "classifier", margin
             except Exception as e:
                 self._debug_print("sub_clf_error", e)
-        return None, None, None
+        return None, None, None, None
 
     def _refresh_fire_subtype_from_bert(self) -> None:
         """拼接全部報案人文本，BERT 細類置信度 > 0.5 時填入垂片代碼。"""
@@ -1615,11 +1842,19 @@ class SopEngine119:
         text = (self.case.full_caller_text() or "").strip()
         if not text:
             return
-        sub_cat, sub_conf, sub_source = self._do_sub_classify(text, "火警")
-        if not sub_cat or sub_conf is None or sub_conf <= FIRE_BERT_CONF_THRESHOLD:
+        sub_cat, sub_conf, sub_source, sub_margin = self._do_sub_classify(text, "火警")
+        if (
+            not sub_cat
+            or sub_conf is None
+            or sub_conf <= FIRE_BERT_CONF_THRESHOLD
+            or (sub_source == "classifier"
+                and sub_margin is not None
+                and sub_margin < FIRE_SUB_MARGIN_THRESHOLD)
+        ):
             self._debug_print(
                 "fire_bert_skip",
-                {"sub": sub_cat, "conf": sub_conf, "source": sub_source},
+                {"sub": sub_cat, "conf": sub_conf, "margin": sub_margin,
+                 "source": sub_source},
             )
             return
         with self._case_lock:
@@ -1686,11 +1921,14 @@ class SopEngine119:
 
         new_label = max(all_probs, key=all_probs.get)
         p_new = float(all_probs[new_label])
+        # top1−top2 margin：火警靠此判斷是否「兩類難分」，難分則不填/不切
+        _ordered = sorted(all_probs.values(), reverse=True)
+        margin = (_ordered[0] - _ordered[1]) if len(_ordered) >= 2 else 1.0
         if not current:
-            if p_new <= FIRE_BERT_CONF_THRESHOLD:
+            if p_new <= FIRE_BERT_CONF_THRESHOLD or margin < FIRE_SUB_MARGIN_THRESHOLD:
                 self._debug_print(
                     "sub_reclassify_fire_below_threshold",
-                    {"new": new_label, "p_new": p_new},
+                    {"new": new_label, "p_new": p_new, "margin": margin},
                 )
                 return None
             predicted_tab = tab_for_subtype(new_label)
@@ -1756,10 +1994,10 @@ class SopEngine119:
             return None
 
         if main_cat == "火警":
-            if p_new <= FIRE_BERT_CONF_THRESHOLD:
+            if p_new <= FIRE_BERT_CONF_THRESHOLD or margin < FIRE_SUB_MARGIN_THRESHOLD:
                 self._debug_print(
                     "sub_reclassify_fire_below_threshold",
-                    {"new": new_label, "p_new": p_new},
+                    {"new": new_label, "p_new": p_new, "margin": margin},
                 )
                 return None
 
@@ -2777,10 +3015,22 @@ class SopEngine119:
                 session=getattr(self, "_session_tag", None),
             )
 
+        # B：同一通已被報案人否決過的模糊地標，不再重複提案（避免鬼打牆）。
+        if match.matched in self._denied_landmarks or (
+            match.resolved and match.resolved in self._denied_landmarks
+        ):
+            _sample(OUTCOME_DENIED)
+            self._clear_unconfirmed_landmark_components()
+            self._set_address_validation(
+                "invalid", reason="地標比對未確認（報案人已否決此地標）"
+            )
+            return False, "地標比對未確認", True
+
         answer = self._address_ask(build_landmark_confirm_question(match))
         if answer is None:
             # 預算用盡：不敢逕自採用猜測，標成疑義交給受理員。
             _sample(OUTCOME_UNCONFIRMED)
+            self._clear_unconfirmed_landmark_components()
             self._set_address_validation(
                 "invalid", reason=f"{invalid_reason}（地標為模糊比對，未經確認）"
             )
@@ -2788,6 +3038,12 @@ class SopEngine119:
         if parse_yes_no(answer) is False or is_uncertain_answer(answer):
             # 「不知道」不等於「對」——地址攸關派遣，模稜兩可不採用猜測。
             _sample(OUTCOME_DENIED)
+            # B：記住被否決的地標，後續重報不再提案同一個。
+            for v in (match.matched, match.resolved):
+                if v:
+                    self._denied_landmarks.add(v)
+            # C：清掉未確認模糊比對帶進來的門牌組件（純地標不該有路/號）。
+            self._clear_unconfirmed_landmark_components()
             self._set_address_validation(
                 "invalid", reason="報案人未能確認模糊比對到的地標"
             )
@@ -2805,6 +3061,17 @@ class SopEngine119:
         self._set_address_validation("valid")
         return True, "", False
 
+    def _clear_unconfirmed_landmark_components(self) -> None:
+        """清掉未確認地標模糊比對誤帶進來的門牌組件。
+
+        純地標查詢不會有報案人自己給的路名／門牌，road/number 只可能來自
+        addrCheck 硬配的地標 resolved 地址（南機場夜市→中華路二段301巷）。
+        未確認就不該留著污染派遣欄位；保留 district（報案人可能自己講過區）。
+        """
+        with self._case_lock:
+            self.case.address_road = None
+            self.case.address_number = None
+
     def _validate_location_once(
         self,
         *,
@@ -2819,6 +3086,14 @@ class SopEngine119:
         # 判型不受街路映射影響（看的是路/號/區的結構），所以先判型；
         # 門牌型態的街路映射延後到 addrCheck 查無才套用。
         self._normalize_location_fields()
+        # 地標同音誤認正規化（南亞夜市→南雅夜市），送 addrCheck 前先改寫，免得
+        # 無門檻的地標模糊比對硬配到別處（南機場夜市）。對映來自 landmarks.xlsx。
+        if self.case.address:
+            fixed = normalize_landmark_alias(self.case.address)
+            if fixed and fixed != self.case.address:
+                with self._case_lock:
+                    self.case.address = fixed
+                self._debug_print("landmark_alias_normalized", fixed)
         location_type = self._refresh_location_type()
         if not location_type:
             location_type = self._probe_location_type()
@@ -3146,13 +3421,15 @@ class SopEngine119:
         # 此時：收集所有輪報警人文本 → 關鍵詞直判 / 次分類器
         # ════════════════════════════════════════════════════════
         all_caller_text = self.case.full_caller_text()
-        sub_cat, sub_conf, sub_source = self._do_sub_classify(all_caller_text, "救護")
+        sub_cat, sub_conf, sub_source, sub_margin = self._do_sub_classify(all_caller_text, "救護")
 
-        # 關鍵詞未命中且分類器置信度低於 70% → 最多追問兩遍「請問發生了什麼事」
-        # 每次分類結果都保留，最終取置信度最高者再進入子類流程
-        # （關鍵詞命中 conf=1.0，不會進入此分支）
-        _SUB_CONF_THRESHOLD = 0.7
-        _MAX_SUB_REASK = 2
+        # 關鍵詞未命中，且分類器「信心不足」或「兩類難分」時 → 最多追問兩遍。
+        # 觸發重問的兩個條件（任一成立即追問）：
+        #   1. top-1 置信度 < SUB_CONF_THRESHOLD   → 模型本身沒把握
+        #   2. top1−top2 差距 < SUB_MARGIN_THRESHOLD → 前兩名咬得很近，模稜兩可
+        # 每次分類結果都保留，最終挑選時偏好較晚輪（見下方 C）。
+        # 閾值定義於模組層級（SUB_CONF_THRESHOLD 等），實測期間集中調整。
+        # （關鍵詞命中 conf=1.0、margin=1.0，不會進入此分支）
         # 重問時換句話問：觸發重問多半是 ASR 聽錯（例：「羊水」→「涼水」），
         # 一字不差地再問一次，報案人會以為系統沒聽到。
         _SUB_REASK_QUESTIONS = (
@@ -3163,15 +3440,28 @@ class SopEngine119:
         if sub_cat is not None:
             candidates.append((sub_cat, sub_conf if sub_conf is not None else 0.0, sub_source))
 
-        for _reask_i in range(_MAX_SUB_REASK):
+        for _reask_i in range(MAX_SUB_REASK):
             if sub_source == "keyword":
                 break
-            if sub_conf is not None and sub_conf >= _SUB_CONF_THRESHOLD:
+            conf_ok = sub_conf is not None and sub_conf >= SUB_CONF_THRESHOLD
+            margin_ok = sub_margin is not None and sub_margin >= SUB_MARGIN_THRESHOLD
+            # A：分類跑在「問發生什麼事」之前，此時可能只有地址/「我要救護車」而無任何
+            #    病情描述。BERT 在空症狀輸入下仍可能過度自信（例：급病→急病 4b830f85 案例，
+            #    sub_conf=0.855），讓 conf/margin 閘門失效而過早定類。故只要 incident_description
+            #    仍為空，不論 conf/margin 都先追問一次，確保分類建立在「有症狀文字」之上。
+            no_symptom_yet = not self._is_field_filled("incident_description")
+            if conf_ok and margin_ok and not no_symptom_yet:
                 break
 
-            self._ask_and_extract(_SUB_REASK_QUESTIONS[_reask_i])
+            # 首輪且尚無任何病情描述 → 用正常語氣初問（而非「請再說一次」的重問，
+            # 後者會讓還沒講過的報案人以為系統漏聽）；否則沿用換句話重問。
+            if no_symptom_yet and _reask_i == 0:
+                reask_question = "請問現場發生什麼狀況？需要救護車嗎？"
+            else:
+                reask_question = _SUB_REASK_QUESTIONS[_reask_i]
+            self._ask_and_extract(reask_question)
             all_caller_text = self.case.full_caller_text()
-            sub_cat, sub_conf, sub_source = self._do_sub_classify(
+            sub_cat, sub_conf, sub_source, sub_margin = self._do_sub_classify(
                 all_caller_text, "救護"
             )
             if sub_cat is not None:
@@ -3180,7 +3470,14 @@ class SopEngine119:
                 )
 
         if candidates:
-            sub_cat, sub_conf, sub_source = max(candidates, key=lambda x: x[1])
+            # C：候選依輪次由早到晚排列，越晚輪文字越完整、資訊越多。
+            # 逐一比較，只要晚輪信心未明顯低於目前最佳（差距在 delta 內）就採晚輪，
+            # 避免「資訊少的早輪」因信心稍高而壓過「已描述事件的晚輪」。
+            best = candidates[0]
+            for cand in candidates[1:]:
+                if cand[1] >= best[1] - SUB_LATER_PREFER_DELTA:
+                    best = cand
+            sub_cat, sub_conf, sub_source = best
             self._debug_print(
                 "sub_classify_best",
                 {
@@ -3416,6 +3713,33 @@ class SopEngine119:
         # 階段 4：報案人訊息 + 流程結束
         # ════════════════════════════════════════════════════════
         handler.collect_caller_info(self)
+
+    def _escalate_main_to_emergency(self, reason: str = "需破門") -> bool:
+        """
+        救護流程中發現需消防物理協助（如上吊者反鎖在家、需破門）→ 改判緊急救援、加派消防車。
+
+        地址與救護車已在救護流程處理，故不重跑緊急救援 SOP、不再問地址；僅：
+          - 改主類為緊急救援（case 記錄→派消防車）
+          - 停用救護子類自動重分類（避免改判後又被拉回救護子類）
+          - 告知報案人已加派消防車
+        回傳是否有實際改判（已是緊急救援則 False）。
+        """
+        if self.case.main_category == "緊急救援":
+            return False
+        with self._case_lock:
+            self.case.main_category = "緊急救援"
+            self.case.main_conf     = 1.0
+        self._sub_reclassify_enabled = False
+        self._debug_print("escalate_to_emergency", {"reason": reason,
+                                                     "sub": self.case.sub_category})
+        self._emit({
+            "type": "classification",
+            "main": "緊急救援", "main_conf": 1.0,
+            "sub": self.case.sub_category, "sub_conf": self.case.sub_conf,
+        })
+        self._notify_case_update()
+        self._say("這需要破門，我已為您加派消防車前往。")
+        return True
 
 
 # ─── CLI 快速測試入口 ─────────────────────────────────────────────────────────

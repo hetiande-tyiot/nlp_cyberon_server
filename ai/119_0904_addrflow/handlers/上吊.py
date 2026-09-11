@@ -77,6 +77,15 @@ class ShangDiaoHandler(SubCategoryHandler):
         else:
             engine._debug_print("skip_S3", engine.case.current_condition)
 
+        # ── S3b：現場能否進入（反鎖/需破門 → 改判緊急救援、加派消防車）──────────
+        # 上吊者反鎖在家等情形需消防破門，屬緊急救援（用戶告知的實務規則）。
+        engine._set_stage("上吊_S3b")
+        if engine.case.main_category != "緊急救援":
+            q3b = "現場救護人員進得去嗎？門有沒有反鎖、需要破門？"
+            answer3b = engine._ask_and_extract(q3b)
+            self._maybe_escalate_break_in(engine, answer3b)
+            self._check_and_respond_to_triggers(answer3b, engine)
+
         # ── S1：意識與呼吸（已填則跳過；僅意識已知則只問呼吸）──────────────
         engine._set_stage("上吊_S1")
         self._run_s1_consciousness_breathing(
@@ -169,6 +178,9 @@ class ShangDiaoHandler(SubCategoryHandler):
         偵測本輪文本中的觸發情境，對新觸發的情境發送對應回應。
         每個情境只觸發一次（由 case.triggered_scenarios 記錄）。
         """
+        # 報案人可能主動提及反鎖/進不去（如 S0「他反鎖在裡面上吊」）→ 改判緊急救援。
+        self._maybe_escalate_break_in(engine, caller_text)
+
         with engine._case_lock:
             already = list(engine.case.triggered_scenarios)
         new_triggers = self._check_triggers(caller_text, already, engine)

@@ -188,10 +188,15 @@ class RescueHandlerRestartTests(unittest.TestCase):
         class StopAfterChehuoS0(Exception):
             pass
 
-        io = ScriptedIO(["其實是兩台車對撞"])
+        # incident_description 預先填好：模擬 A 的初問已在重問迴圈完成（重問迴圈的
+        # sub-reclassify 尚未啟用），車禍訊號改在後續生命征象問答才吐露，藉此驗證
+        # handler 執行中切類會重入新 handler（C 探問揭露服藥時走的正是這條路）。
+        io = ScriptedIO(["他昏過去了，其實是兩台車對撞"])
         clf = FakeSubClf(_probs(車禍=0.86, 急病=0.10))
         engine = SopEngine119(io=io, sub_classifiers=clf, llm_extractor=RemapLLM())
         engine.case.main_category = "救護"
+        # 具體病情（非含糊）→ 急病 S0 跳過（Fix2 不觸發），切類改在 S1 生命征象問答發生。
+        engine.case.incident_description = "有人突然倒下昏迷"
 
         def stop_on_chehuo(self, eng):
             eng._set_stage("車禍_S0")
@@ -204,7 +209,7 @@ class RescueHandlerRestartTests(unittest.TestCase):
             patch.object(
                 engine,
                 "_do_sub_classify",
-                return_value=("急病", 0.8, "classifier"),
+                return_value=("急病", 0.9, "classifier", 0.5),
             ),
             patch.object(CheHuoHandler, "run_subtype_flow", stop_on_chehuo),
             self.assertRaises(StopAfterChehuoS0),
@@ -212,8 +217,8 @@ class RescueHandlerRestartTests(unittest.TestCase):
             engine._run_救護()
 
         self.assertEqual(engine.case.sub_category, "車禍")
-        self.assertTrue(any("現場發生什麼事" in m for m in io.messages))
-        self.assertTrue(any("請問發生什麼事呢？" in m for m in io.messages))
+        # incident_description 已填 → 급病 S0 不再問，切類後由重入的車禍 handler 接手。
+        self.assertTrue(any("清醒" in m for m in io.messages))
         self.assertGreaterEqual(len(clf.calls), 1)
 
 

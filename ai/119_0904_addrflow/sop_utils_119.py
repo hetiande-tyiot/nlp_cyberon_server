@@ -540,11 +540,34 @@ def _rescue_subcategory_keywords(*subcategories: str) -> Tuple[str, ...]:
     return tuple(out)
 
 
-# 車禍、路倒等戶外場景：地址首問不追問樓層
+# 車禍、路倒等戶外場景：地址問句不追問樓層（這些詞不會是路名，直接比對）
 OUTDOOR_ADDRESS_NO_FLOOR_KEYWORDS: Tuple[str, ...] = (
     _rescue_subcategory_keywords("車禍", "路倒")
     + ("倒臥路邊", "倒卧路边")
 )
+
+# 露天場所地標：夜市攤販等雖歸建物類（如集合住宅），但地點是露天的，問「幾樓」不合理。
+# 報案人講到這些詞即不追問樓層（見 a2766f5f：南亞夜市攤販起火卻被問幾樓/從幾樓燒）。
+OUTDOOR_LANDMARK_NO_FLOOR_KEYWORDS: Tuple[str, ...] = (
+    "夜市", "菜市場", "市場", "市集", "攤販", "路邊攤", "攤位",
+    "廣場", "公園", "園遊會", "夜市攤",
+)
+
+# 路名防呆：公園路／市場路／廣場路… 是常見路名，屬正常門牌地址、仍要問樓層。
+# 露天地標詞後面若緊接這些路名尾綴，就不當成露天地標。
+_STREET_SUFFIXES: Tuple[str, ...] = ("路", "街", "巷", "段", "大道", "道", "弄")
+
+
+def _mentions_outdoor_landmark(s: str) -> bool:
+    """文本是否提到露天地標（且不是路名的一部分，如公園路/市場路）。"""
+    for kw in OUTDOOR_LANDMARK_NO_FLOOR_KEYWORDS:
+        idx = s.find(kw)
+        while idx != -1:
+            rest = s[idx + len(kw):]
+            if not rest.startswith(_STREET_SUFFIXES):
+                return True
+            idx = s.find(kw, idx + 1)
+    return False
 
 
 def address_ask_should_include_floor(text: str) -> bool:
@@ -552,7 +575,11 @@ def address_ask_should_include_floor(text: str) -> bool:
     s = (text or "").strip()
     if not s:
         return True
-    return not any(kw in s for kw in OUTDOOR_ADDRESS_NO_FLOOR_KEYWORDS)
+    if any(kw in s for kw in OUTDOOR_ADDRESS_NO_FLOOR_KEYWORDS):
+        return False
+    if _mentions_outdoor_landmark(s):
+        return False
+    return True
 
 
 def build_address_ask_questions(
@@ -1291,14 +1318,24 @@ def _is_landmark_only(addr: str) -> bool:
     """無可派遣門牌、偏機關/建物地標。"""
     if not addr or is_street_address(addr):
         return False
-    return any(
+    if any(
         k in addr
         for k in (
             "派出所", "分局", "警局", "學校", "車站", "捷運",
             "公園", "市場", "廟", "宮", "大樓", "大廈", "社區", "里辦",
             "機關", "公司", "工廠", "醫院", "診所",
         )
-    )
+    ):
+        return True
+    # 2026-09-11：補學校簡稱（五華國小/板橋國中/台灣大學…）。原本清單只有
+    # 「學校」，具名學校未被認出，被「含區→address」接手降級成缺路缺號門牌。
+    # 但這些字也可能是路名（大學路/國中路），故關鍵字後不可緊接路型字。
+    if re.search(
+        r"(?:國小|國中|高中|高職|大學|幼兒園|幼稚園|托兒所)(?![路街道段巷弄])",
+        addr,
+    ):
+        return True
+    return False
 
 
 def _needs_prefix(district: str, new_text: str) -> bool:

@@ -236,6 +236,11 @@ class TunShiYaoWuHandler(SubCategoryHandler):
                 engine=engine,
                 is_vital=True,
             )
+            # C：半意識/迷糊但尚未確認服藥內容時，主動探問成因；答案回帶 t1/t2 以追問藥物種類。
+            self._probe_cause_ingestion(
+                engine,
+                on_answer=lambda a: self._check_and_respond_to_triggers(a, engine),
+            )
 
         elif scenario_id == 4:
             # 情境 4（腹部起伏描述）

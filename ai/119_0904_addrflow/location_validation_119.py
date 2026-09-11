@@ -214,6 +214,52 @@ def load_landmark_names(path: str = str(DEFAULT_LANDMARK_XLSX)) -> tuple[str, ..
 
 
 @lru_cache(maxsize=4)
+def load_landmark_alias_map(
+    path: str = str(DEFAULT_LANDMARK_XLSX),
+) -> dict:
+    """讀地標「別名→正名」對映，供 STT 同音誤認正規化（南亞夜市→南雅夜市）。
+
+    資料來源同 load_landmark_names（landmarks.xlsx：地標名稱 / 別名 / 地址）。
+    addrCheck 地標比對無相似度門檻，會把同音誤認硬配到別處；查詢前先用這張表
+    把口語名改寫成正名，再送 addrCheck。
+    """
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise RuntimeError("讀取 landmarks.xlsx 需要安裝 openpyxl") from exc
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    sheet = workbook.active
+    rows = sheet.iter_rows(values_only=True)
+    next(rows, ())  # 跳過表頭
+    mapping: dict = {}
+    for row in rows:
+        primary = str(row[0] or "").strip() if len(row) > 0 else ""
+        aliases = str(row[1] or "").strip() if len(row) > 1 else ""
+        if not primary:
+            continue
+        for alias in _split_aliases(aliases):
+            key = re.sub(r"\s+", "", alias)
+            if key:
+                mapping[key] = primary
+    workbook.close()
+    return mapping
+
+
+def normalize_landmark_alias(
+    name: Optional[str], path: str = str(DEFAULT_LANDMARK_XLSX)
+) -> Optional[str]:
+    """已知同音誤認的地標名改寫成正名；無對映或讀表失敗時原樣回傳。"""
+    if not name:
+        return name
+    try:
+        mapping = load_landmark_alias_map(path)
+    except Exception:
+        return name
+    return mapping.get(re.sub(r"\s+", "", str(name)), name)
+
+
+@lru_cache(maxsize=4)
 def load_mrt_location_names(path: str = str(DEFAULT_MRT_CSV)) -> tuple[str, ...]:
     """读取 cp950 CSV 第二列，并补充不含出口编号的站名。"""
     names: list[str] = []
