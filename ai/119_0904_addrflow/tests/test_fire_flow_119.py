@@ -33,7 +33,15 @@ class FakeFireBert:
         self.calls.append((text, main_category))
         if not self.label:
             return None
-        return SimpleNamespace(final_label=self.label, classifier_conf=self.conf)
+        # 模擬真實 PredictionResult：含 all_probs，讓 margin 閘門有分布可算。
+        # 預測標籤取 conf，其餘機率平均分給兩個佔位類別（確保預測標籤為 top-1）。
+        rest = max(0.0, 1.0 - self.conf) / 2
+        all_probs = {self.label: self.conf, "_o1": rest, "_o2": rest}
+        return SimpleNamespace(
+            final_label=self.label,
+            classifier_conf=self.conf,
+            all_probs=all_probs,
+        )
 
 
 class FireExtractor:

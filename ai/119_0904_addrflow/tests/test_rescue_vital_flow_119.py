@@ -174,7 +174,7 @@ class RescueVitalFlowTests(unittest.TestCase):
             patch.object(
                 engine,
                 "_do_sub_classify",
-                return_value=("未登錄子類", 1.0, "keyword"),
+                return_value=("未登錄子類", 1.0, "keyword", 1.0),
             ),
             patch.object(
                 SubCategoryHandler,
@@ -201,7 +201,7 @@ class RescueVitalFlowTests(unittest.TestCase):
             patch.object(
                 engine,
                 "_do_sub_classify",
-                return_value=("未登錄子類", 1.0, "keyword"),
+                return_value=("未登錄子類", 1.0, "keyword", 1.0),
             ),
             patch.object(
                 SubCategoryHandler,
@@ -227,7 +227,7 @@ class RescueVitalFlowTests(unittest.TestCase):
             patch.object(
                 engine,
                 "_do_sub_classify",
-                return_value=("未登錄子類", 1.0, "keyword"),
+                return_value=("未登錄子類", 1.0, "keyword", 1.0),
             ),
             self.assertRaises(TransferToHumanError),
         ):

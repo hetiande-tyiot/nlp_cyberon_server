@@ -96,8 +96,8 @@ class HierarchicalClassifier:
         self._id2label[key]   = id2label
         return True
 
-    def _infer(self, key: str, text: str) -> tuple[str, float]:
-        """对单条文本做推理，返回 (predicted_label, confidence)。"""
+    def _infer(self, key: str, text: str) -> tuple[str, float, dict[str, float]]:
+        """对单条文本做推理，返回 (predicted_label, confidence, all_probs)。"""
         tokenizer = self._tokenizers[key]
         model     = self._models[key]
         id2label  = self._id2label[key]
@@ -116,7 +116,8 @@ class HierarchicalClassifier:
 
         probs   = torch.softmax(logits, dim=-1).cpu().numpy()[0]
         pred_id = int(np.argmax(probs))
-        return id2label[pred_id], float(probs[pred_id])
+        all_probs = {id2label[i]: float(probs[i]) for i in range(len(probs))}
+        return id2label[pred_id], float(probs[pred_id]), all_probs
 
     def _infer_batch(self, key: str, texts: list[str]) -> list[tuple[str, float]]:
         """对多条文本做批量推理，返回 [(label, conf), ...]。"""
@@ -162,14 +163,14 @@ class HierarchicalClassifier:
                 f"主类别模型不存在: {self._model_dir('main')}\n"
                 "请先运行: python train_hierarchical.py --task main"
             )
-        main_cat, main_conf = self._infer("main", text)
+        main_cat, main_conf, main_probs = self._infer("main", text)
 
         # Step 2: 子类别
         if main_cat in FIXED_SUB_CATEGORY:
             sub_cat  = FIXED_SUB_CATEGORY[main_cat]
             sub_conf = 1.0
         elif self._load(main_cat):
-            sub_cat, sub_conf = self._infer(main_cat, text)
+            sub_cat, sub_conf, _sub_probs = self._infer(main_cat, text)
         else:
             sub_cat  = None
             sub_conf = None
@@ -180,6 +181,7 @@ class HierarchicalClassifier:
             "stt_text":      text,
             "main_category": main_cat,
             "main_conf":     round(main_conf, 6),
+            "main_probs":    {k: round(v, 6) for k, v in main_probs.items()},
             "sub_category":  sub_cat,
             "sub_conf":      round(sub_conf, 6) if sub_conf is not None else None,
             "category":      category,
