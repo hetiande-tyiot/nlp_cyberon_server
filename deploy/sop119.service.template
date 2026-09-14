@@ -1,0 +1,22 @@
+[Unit]
+Description=119 SOP LLM API (port 8200)
+After=network.target
+
+[Service]
+User=__USER__
+WorkingDirectory=__BASE__/ai/__VERSION__
+Environment=PYTHONUNBUFFERED=1
+Environment=GGUF_MODEL_PATH=__BASE__/models/TW-119-Model.gguf
+Environment=BERT_MODELS_BASE=__BASE__/ai/
+Environment=LOG_DIR=__BASE__/log_119
+Environment=BERT_DEVICE=cpu
+Environment=ADDRCHECK_API_URL=http://100.107.145.7:8088
+Environment=ADDRCHECK_API_TOKEN=__ADDRCHECK_TOKEN__
+Environment=ADDRCHECK_API_TIMEOUT=2.5
+ExecStart=__BASE__/llmenv/bin/uvicorn sop_api_server:app --host 0.0.0.0 --port 8200
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

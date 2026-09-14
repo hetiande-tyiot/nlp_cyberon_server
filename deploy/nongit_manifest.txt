@@ -1,0 +1,34 @@
+# 非 git 檔案清單（git clone 之後要另外傳的東西）
+# 格式： <tier><TAB><repo 相對路徑>        # 說明
+#   core = 119 主服務(sop119, port 8200)必要，少一個就起不來
+#   opt  = 選用（STT / TTS / 其他專案），只有要跑那些服務才需要
+# 目錄請以 / 結尾；push_nongit.sh 會整包 rsync（自動排除 __pycache__）。
+#
+# ── 沒列在這裡、但也不在 git 的東西（腳本另外處理，不是用傳的）：
+#   llmenv/        venv 必須在目標機重建（requirements-119.txt），不能複製
+#   log_119/       執行期產出，setup_new_machine.sh 建空目錄即可
+#   *.pyc / *.zip  快取與壓縮備份，不用傳
+#   ai/TW-119-BERT-sub_*_{bak,v2,v5,new_2}/  舊版/過渡模型快照，不用傳
+
+# ===== core：LLM 主模型 =====
+core	models/TW-119-Model.gguf	# 19.5G，sop119.service 的 GGUF_MODEL_PATH
+
+# ===== core：BERT 分類模型權重 =====
+# config/label_map/tokenizer 這些小檔已經在 git 裡，這裡只補權重
+core	ai/TW-119-BERT_main/model.safetensors	# 主分類（火警/救護/緊急救援/其他案類）
+core	ai/TW-119-BERT-sub_火警/model.safetensors	# 火警子分類
+core	ai/TW-119-BERT-sub_救護/pytorch_model.bin	# 救護子分類（注意：這個是 .bin 不是 safetensors）
+core	ai/TW-119-BERT-sub_緊急救援/model.safetensors	# 緊急救援子分類
+core	ai/TW-119-BERT-sub_其他案類/model.safetensors	# 其他案類子分類
+
+# ===== opt：STT（語音轉文字）=====
+opt	ai/STT-Whisper/model.bin	# 2.9G，faster-whisper 權重；server 程式本身在 git
+
+# ===== opt：TTS（語音合成）=====
+opt	ai/TTS-F5/cert.pem	# gRPC TLS 憑證（*.pem 被 gitignore 擋下）
+opt	ai/TTS-F5/key.pem	# gRPC TLS 私鑰
+opt	ai/TTS-F5/reference/	# 語者參考音檔（malevoice / Chaewon / Shuhua，*.wav 被擋）
+opt	ai/cyberon/TTS_gRPC/cyberon-server.crt	# 對接 cyberon TTS 用的憑證
+
+# ===== opt：其他 =====
+opt	models/TW-110-Model_V2.0.gguf	# 19.5G，110 專案用，跑 119 不需要
