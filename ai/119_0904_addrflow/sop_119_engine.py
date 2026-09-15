@@ -2727,6 +2727,11 @@ class SopEngine119:
             self._debug_print(
                 "hint_advice", {"kind": advice.kind, "hint": hint}
             )
+            # 未提及段別：不採用 addrCheck 的「最接近」猜測，改以門牌存在性定段（B 流程）。
+            if advice.kind == "section_ambiguous":
+                if self._resolve_section_ambiguous(advice.resolved):
+                    return True, "", False
+                break  # 探段不成 → 交 LLM 整合／引導式
             spoken_number = self.case.address_number
             with self._case_lock:
                 for field in self._HINT_CLEAR_FIELDS.get(advice.kind, ()):
@@ -2789,6 +2794,82 @@ class SopEngine119:
         "need_number": ("address_district", "address_road"),     # 路名已確認，缺號
         "need_section": ("address_district",),                   # 路對但缺段
     }
+
+    def _resolve_section_ambiguous(self, suggested: Optional[str]) -> bool:
+        """未提及段別：不盲信 addrCheck 的「最接近」，改以「哪個段真的有此門牌」判定。
+
+        B 流程（2026-09-15 用戶定，暫定；見 memory address-section-resolution-choice）：
+          1. 只查路名 → 取段清單（帶號查只回單一猜測、不列段）。
+          2. 逐段查「路+段+號」→ 收集實際存在的段。
+          3. 唯一 → 覆誦確認後採用；多段 → 問哪一段；零/取不到 → 回 False 交原流程。
+        每段一次 addrCheck；段數不多、地點正確性優先。
+        """
+        if not suggested:
+            return False
+        district = (
+            extract_address_district(suggested)
+            or self.case.address_district
+            or ""
+        )
+        comps = extract_street_address_components(suggested)
+        number = comps.get("address_number") or self.case.address_number
+        road = comps.get("address_road")
+        if not (road and number):
+            return False
+        road_base = re.sub(r"[一二三四五六七八九十]+段$", "", road)  # 去段
+        try:
+            _st, road_hint, _r = verify_address_detail(
+                f"{district}{road_base}", None
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._debug_print("section_road_probe_error", exc)
+            return False
+        adv = parse_address_hint(road_hint)
+        if adv.kind != "need_section" or not adv.sections:
+            return False
+        valid: list = []
+        for sec in adv.sections:
+            cand = f"{district}{road_base}{sec}{number}"
+            try:
+                st, _h, _rr = verify_address_detail(cand, None)
+            except Exception:  # noqa: BLE001
+                continue
+            if st is True:
+                valid.append((sec, cand))
+        self._debug_print("section_probe", {
+            "road": f"{district}{road_base}", "number": number,
+            "sections": adv.sections, "valid": [v[0] for v in valid],
+        })
+        if len(valid) == 1:
+            sec, cand = valid[0]
+            answer = self._address_ask(f"請問是{cand}嗎？")
+            if answer is not None and parse_yes_no(answer) is True:
+                self._adopt_section_address(cand)
+                return True
+            return False
+        if len(valid) >= 2:
+            opts = "、".join(sec for sec, _ in valid)
+            answer = self._address_ask(f"{road_base}有分{opts}，請問是哪一段？")
+            if not answer:
+                return False
+            picked = re.sub(r"\s+", "", answer)
+            for sec, cand in valid:
+                if sec in picked or sec.replace("段", "") in picked:
+                    self._adopt_section_address(cand)
+                    return True
+            return False
+        return False  # 0 段有此門牌：號可能錯，交回原流程
+
+    def _adopt_section_address(self, addr: str) -> None:
+        """採用經段別確認、addrCheck valid 的完整門牌。"""
+        with self._case_lock:
+            self.case.address = addr
+            self.case.location_type = "address"
+        self._fill_components_from_address()
+        self._set_address_validation("valid")
+        self._record_address_candidate(
+            addr, source="section_resolved", api_status="valid",
+        )
 
     def _consolidate_with_llm(self) -> bool:
         """讓 LLM 讀**整段對話**重新判讀地址；回傳是否採用了新地址。

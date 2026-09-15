@@ -33,6 +33,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 HINT_KINDS = (
     "nearby_numbers",
     "need_section",
+    "section_ambiguous",
     "need_number",
     "road_suggestions",
     "road_in_districts",
@@ -49,6 +50,10 @@ _SECTION_RE = re.compile(r"「([^」]+)」\s*分成\s*([^，。]+)")
 # reason=ambiguous：「「重陽路」的 一段、二段、四段 都有 1 號，是不同的地點…」
 # 同一門牌號在多個段都存在——不追問就會派錯段。
 _AMBIGUOUS_SECTION_RE = re.compile(r"「([^」]+)」\s*的\s*([^，。]+?)\s*都有")
+# reason=ambiguous 的另一種格式（帶門牌查詢時）：「…最接近的是 新北市板橋區南雅南路
+# 二段32號（報案人未提及段別），請向報案人確認。」——只給單一「最接近」猜測、不列段
+# 清單。不可盲信（不同段＝不同地點），交由引擎改以「哪個段真的有此門牌」判定（B 流程）。
+_NEAREST_SUGGEST_RE = re.compile(r"最接近的是\s*([^（），。！!？?、]+)")
 # 「已確認路名「新北市板橋區大華街」，請追問門牌號碼。」
 _CONFIRMED_ROAD_RE = re.compile(r"已確認路名「([^」]+)」")
 # 「查無「中央路三段二十六」，是否為 A、B？」
@@ -76,6 +81,7 @@ class AddressHintAdvice:
     road: Optional[str] = None          # need_number / need_section 的路名
     districts: Tuple[str, ...] = ()     # road_in_districts：同名路分佈的行政區
     unknown_text: Optional[str] = None  # 報案人講的、查不到的片段
+    resolved: Optional[str] = None      # section_ambiguous：API 給的「最接近」建議地址
 
     @property
     def is_parsed(self) -> bool:
@@ -175,6 +181,13 @@ def parse_address_hint(hint: Optional[str]) -> AddressHintAdvice:
     if match:
         return AddressHintAdvice(
             kind="road_unknown", unknown_text=match.group(1).strip()
+        )
+
+    # 「最接近的是 …二段32號（未提及段別）」：只給單一段猜測。交引擎以門牌存在性判段。
+    match = _NEAREST_SUGGEST_RE.search(text)
+    if match and "段" in match.group(1):
+        return AddressHintAdvice(
+            kind="section_ambiguous", resolved=match.group(1).strip()
         )
 
     return AddressHintAdvice()
