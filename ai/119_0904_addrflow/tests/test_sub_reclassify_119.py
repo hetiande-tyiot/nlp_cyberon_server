@@ -22,6 +22,7 @@ from fire_tab_map_119 import (
 from handlers import sop_slots_for
 from handlers.火警通用 import HuoJingGenericHandler
 from handlers.車禍 import CheHuoHandler
+from handlers.急病 import JiBingHandler
 from sop_119_engine import DialogueIO, SopEngine119, SubCategorySwitched
 
 
@@ -220,6 +221,61 @@ class RescueHandlerRestartTests(unittest.TestCase):
         # incident_description 已填 → 급病 S0 不再問，切類後由重入的車禍 handler 接手。
         self.assertTrue(any("清醒" in m for m in io.messages))
         self.assertGreaterEqual(len(clf.calls), 1)
+
+
+class NoSymptomReaskTests(unittest.TestCase):
+    """A 閘門：incident_description 只是「要救護車」這類請求（非病情）時，即使 BERT
+    高信心，也要在鎖定細類前先追問「發生什麼狀況」。驅動案例 4c012163。"""
+
+    def test_request_only_incident_triggers_reask_before_locking(self) -> None:
+        class StopAtHandler(Exception):
+            pass
+
+        # 兩次 no_symptom_yet 追問的回答（仍未給具體病情，維持請求式）。
+        io = ScriptedIO(["就是要救護車", "麻煩快點"])
+        clf = FakeSubClf(_probs(急病=0.98))  # 高信心、高 margin
+        engine = SopEngine119(io=io, sub_classifiers=clf, llm_extractor=RemapLLM())
+        engine.case.main_category = "救護"
+        engine.case.incident_description = "需要救護車"  # 純請求，非病情
+
+        def stop_here(self, eng):
+            raise StopAtHandler()
+
+        with (
+            patch.object(engine, "_run_address_flow"),
+            patch.object(JiBingHandler, "run_subtype_flow", stop_here),
+            self.assertRaises(StopAtHandler),
+        ):
+            engine._run_救護()
+
+        # 應至少追問一次「發生什麼狀況」，而非直接鎖定急病。
+        self.assertTrue(any("發生什麼狀況" in m for m in io.messages))
+        # 初判 + 追問後重判 → 分類器被呼叫多次。
+        self.assertGreaterEqual(len(clf.calls), 2)
+
+    def test_real_symptom_incident_does_not_reask(self) -> None:
+        """對照組：已有具體病情（非請求）時，高信心即可定案、不應多問。"""
+        class StopAtHandler(Exception):
+            pass
+
+        io = ScriptedIO([])
+        clf = FakeSubClf(_probs(急病=0.98))
+        engine = SopEngine119(io=io, sub_classifiers=clf, llm_extractor=RemapLLM())
+        engine.case.main_category = "救護"
+        engine.case.incident_description = "阿公突然胸口悶喘不過氣"  # 具體病情
+
+        def stop_here(self, eng):
+            raise StopAtHandler()
+
+        with (
+            patch.object(engine, "_run_address_flow"),
+            patch.object(JiBingHandler, "run_subtype_flow", stop_here),
+            self.assertRaises(StopAtHandler),
+        ):
+            engine._run_救護()
+
+        self.assertFalse(any("發生什麼狀況" in m for m in io.messages))
+        self.assertEqual(engine.case.sub_category, "急病")
 
 
 class FireTabSwitchTests(unittest.TestCase):

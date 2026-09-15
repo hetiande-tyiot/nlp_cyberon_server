@@ -65,9 +65,11 @@ class SubCategoryHandler:
         """
         S1：依序確認意識與呼吸。
         - 已填欄位直接使用，不重複詢問
-        - 意識為 False 才確認呼吸；任一項為 True 即停止後續生命征象問題
-        - 無法確認時立即 OHCA，不臆測為 False
-        - 呼吸為 False 時，有 S2 的子類繼續確認腹部起伏，否則立即 OHCA
+        - 任一項為 True（活著）即停止後續生命征象問題
+        - 意識非 True（含判不出 None）不在此步 OHCA，一律往下問呼吸——呼吸/腹部起伏
+          才是 OHCA 的真正判別（見 08636364：意識答殘句「患者。」被判 None，舊版第
+          一步就轉人工，過度反應）
+        - 最後一步（無 S2 者＝呼吸；有 S2 者＝腹部起伏）仍非 True → OHCA
         """
         questions = (
             ("consciousness", q_consciousness),
@@ -92,12 +94,13 @@ class SubCategoryHandler:
             if vital_val is True:
                 engine._debug_print("S1_vital_confirmed", slot)
                 return
-            if vital_val is None:
-                engine._check_ohca_and_transfer(vital_val, slot)
-            if slot == "breathing":
-                if has_abdomen_followup:
-                    return
-                engine._check_ohca_and_transfer(vital_val, slot)
+            # 意識非 True（False 或判不出 None）→ 不在此步 OHCA，往下問呼吸。
+            if slot == "consciousness":
+                continue
+            # slot == "breathing"
+            if has_abdomen_followup:
+                return  # 交給 S2 腹部起伏判定（False/None 都給第三步機會）
+            engine._check_ohca_and_transfer(vital_val, slot)
 
     def _run_s2_response_or_abdomen(
         self,
@@ -510,30 +513,14 @@ class SubCategoryHandler:
 
     # ── 病情含糊判定（Fix2）──────────────────────────────────────────────────
 
-    # 去掉這些通用/填充詞後若幾乎沒有「實質病徵」殘留，視為含糊。
-    _VAGUE_INCIDENT_TOKENS: tuple[str, ...] = (
-        "身體", "不舒服", "不適", "不太舒服", "有點", "有人", "有個", "一個", "一位",
-        "患者", "病人", "現在", "目前", "先生", "小姐", "女士",
-    )
-
     def _incident_is_vague(self, engine: "SopEngine119") -> bool:
         """
-        incident_description 是否只是「身體不舒服」這類含糊描述、缺具體病徵。
-
-        用於急病（救護 fallback 子類）：報案人開場只說「不舒服」時 BERT 高信心押急病，
-        真正細類（燙傷/要生了/吞藥…）沒被問出來（見 9/10 孕婦待產/吞食藥物/燒燙傷
-        皆→急病）。含糊則仍問一次「發生什麼事」，讓細類訊號浮現、觸發 sub-reclassify。
+        incident_description 是否只是「身體不舒服」這類含糊描述、或純「要救護車」的
+        請求，缺具體病徵。判斷邏輯集中在 sop_utils_119.incident_is_vague（與
+        `_run_救護` 分類閘門共用同一套「請求非病情」詞表）。
         """
-        inc = (engine.case.incident_description or "").strip()
-        if not inc:
-            return True
-        rest = "".join(inc.split())
-        for tok in self._VAGUE_INCIDENT_TOKENS:
-            rest = rest.replace(tok, "")
-        # 濾掉標點與單獨語助詞後，實質內容 < 3 字 → 含糊
-        for p in "，,。、！!？?～~的了啊喔嗯呃欸":
-            rest = rest.replace(p, "")
-        return len(rest) < 3
+        from sop_utils_119 import incident_is_vague
+        return incident_is_vague(engine.case.incident_description)
 
     # ── 上吊等自傷：流程中需破門 → 改判緊急救援（加派消防車）────────────────────
 

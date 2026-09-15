@@ -478,6 +478,38 @@ def parse_patient_count(value: Optional[str]) -> Optional[int]:
     return None
 
 
+# 去掉這些通用/填充詞後若幾乎沒有「實質病徵」殘留，視為含糊。
+# 含「請求類」詞：報案人只說「要救護車」等，是請求而非病情描述——
+# 這類值不得當成有效 incident_description，否則會讓分類閘門誤判為「已有病情」而過早定細類。
+_VAGUE_INCIDENT_TOKENS: tuple[str, ...] = (
+    "身體", "不舒服", "不適", "不太舒服", "有點", "有人", "有個", "一個", "一位",
+    "患者", "病人", "現在", "目前", "先生", "小姐", "女士",
+    # 請求類（非病情）
+    "需要", "救護車", "救護", "要救", "叫救", "派救", "求救", "報案", "幫忙叫",
+)
+
+
+def incident_is_vague(incident_description: Optional[str]) -> bool:
+    """
+    incident_description 是否只是「身體不舒服」這類含糊描述、或純粹「要救護車」的
+    請求，缺具體病徵。
+
+    用於分類閘門（`_run_救護` no_symptom_yet）與急病 S0：報案人開場只說「不舒服」或
+    「我要救護車」時，BERT 仍可能高信心押急病，真正細類（燙傷/要生了/吞藥…）沒被問
+    出來。含糊/純請求則仍問一次「發生什麼事」，讓細類訊號浮現、觸發 sub-reclassify。
+    """
+    inc = (incident_description or "").strip()
+    if not inc:
+        return True
+    rest = "".join(inc.split())
+    for tok in _VAGUE_INCIDENT_TOKENS:
+        rest = rest.replace(tok, "")
+    # 濾掉標點與單獨語助詞後，實質內容 < 3 字 → 含糊
+    for p in "，,。、！!？?～~的了啊喔嗯呃欸":
+        rest = rest.replace(p, "")
+    return len(rest) < 3
+
+
 def extract_patient_info_hint(text: str) -> dict:
     """
     規則備援（僅在 LLM 不可用時使用）：從報警人原話抽取患者性別/年齡/事件/現況。

@@ -112,6 +112,7 @@ from sop_utils_119 import (
     extract_road_section,
     extract_street_address_components,
     has_complete_street_address,
+    incident_is_vague,
     is_street_address,
     is_usable_address,
     extract_patient_info_hint,
@@ -3456,9 +3457,14 @@ class SopEngine119:
             margin_ok = sub_margin is not None and sub_margin >= SUB_MARGIN_THRESHOLD
             # A：分類跑在「問發生什麼事」之前，此時可能只有地址/「我要救護車」而無任何
             #    病情描述。BERT 在空症狀輸入下仍可能過度自信（例：급病→急病 4b830f85 案例，
-            #    sub_conf=0.855），讓 conf/margin 閘門失效而過早定類。故只要 incident_description
-            #    仍為空，不論 conf/margin 都先追問一次，確保分類建立在「有症狀文字」之上。
-            no_symptom_yet = not self._is_field_filled("incident_description")
+            #    sub_conf=0.855；4c012163「我要救護車」→急病 0.98），讓 conf/margin 閘門失效
+            #    而過早定類。故 incident_description 仍為空、或只是「要救護車」這類請求而非
+            #    病情（incident_is_vague）時，不論 conf/margin 都先追問，確保分類建立在
+            #    「有症狀文字」之上。
+            no_symptom_yet = (
+                not self._is_field_filled("incident_description")
+                or incident_is_vague(self.case.incident_description)
+            )
             if conf_ok and margin_ok and not no_symptom_yet:
                 break
 
