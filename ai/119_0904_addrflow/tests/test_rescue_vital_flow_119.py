@@ -66,8 +66,25 @@ class RescueVitalFlowTests(unittest.TestCase):
         self.assertNotIn(ABDOMEN_QUESTION, io.messages)
         self.assertFalse(engine.case.is_ohca)
 
-    def test_subtype_stops_when_consciousness_cannot_be_confirmed(self) -> None:
-        io = ScriptedIO(["不知道"])
+    def test_unconfirmed_consciousness_proceeds_to_breathing(self) -> None:
+        # 意識判不出(None)不再第一步就 OHCA，往下問呼吸；呼吸確認活著 → 不轉人工。
+        io = ScriptedIO(["不知道", "有呼吸"])
+        engine = SopEngine119(io=io)
+        handler = SubCategoryHandler()
+
+        handler._run_s1_consciousness_breathing(
+            engine,
+            q_consciousness=CONSCIOUSNESS_QUESTION,
+            q_breathing=BREATHING_QUESTION,
+        )
+
+        self.assertIn(BREATHING_QUESTION, io.messages)
+        self.assertIs(engine.case.breathing, True)
+        self.assertFalse(engine.case.is_ohca)
+
+    def test_unconfirmed_both_vitals_transfers_at_last_step(self) -> None:
+        # 意識判不出 → 問呼吸；呼吸也判不出，且無 S2 → 最後一步仍非 True → OHCA。
+        io = ScriptedIO(["不知道", "不知道"])
         engine = SopEngine119(io=io)
         handler = SubCategoryHandler()
 
@@ -78,8 +95,8 @@ class RescueVitalFlowTests(unittest.TestCase):
                 q_breathing=BREATHING_QUESTION,
             )
 
+        self.assertIn(BREATHING_QUESTION, io.messages)
         self.assertTrue(engine.case.is_ohca)
-        self.assertNotIn(BREATHING_QUESTION, io.messages)
 
     def test_subtype_asks_breathing_after_no_consciousness_then_stops_on_yes(
         self,
