@@ -89,6 +89,7 @@ from location_validation_119 import (
     verify_address_status,
     normalize_landmark_alias,
 )
+import timing_119
 from sop_utils_119 import (
     address_ask_should_include_floor,
     build_address_ask_questions,
@@ -115,6 +116,7 @@ from sop_utils_119 import (
     incident_is_vague,
     is_street_address,
     is_usable_address,
+    validate_phone_number,
     extract_patient_info_hint,
     extract_pregnancy_info_hint,
     extract_vital_signs_hint,
@@ -534,6 +536,23 @@ class SopEngine119:
         with self._case_lock:
             self.case.flow_stage = stage
         self._emit({"type": "stage_update", "stage": stage})
+
+    def set_caller_contact(self, raw: Optional[str]) -> None:
+        """設定報案人聯繫方式，並記錄號碼格式檢查結果。
+
+        照實存下報案人講的內容（不竄改、不追問，依 2026-09-16 決定），
+        只另外標記 caller_contact_valid/reason 讓後台與受理員看得到。
+        """
+        digits, valid, reason = validate_phone_number(raw)
+        with self._case_lock:
+            self.case.caller_contact = raw or None
+            self.case.caller_contact_valid = valid
+            self.case.caller_contact_reason = reason
+        if valid is False:
+            # 只寫 log、不對報案人唸出來、不追問（2026-09-16 決定）。
+            # 引擎本身不知道 session id（前綴由 sop_api_server 的 QueuedIO119 掛），
+            # 所以這裡用固定標籤，別假裝有 sid。
+            print(f"[SOP119][caller_contact] ⚠️  {raw} — {reason}", flush=True)
 
     def _debug_print(self, label: str, content: Any) -> None:
         if self._debug:
@@ -978,6 +997,14 @@ class SopEngine119:
         """以本輪 LLM + 規則元件增量更新門牌地址。"""
         if self.case.location_type != "address":
             return
+        # 地址流程結束後不再改寫已成立的地點。另外兩條寫入路徑
+        # （_apply_extracted_fields 的 "address"、_apply_location_rules）
+        # 本來就有這道檢查，這條漏了——鎖只擋得住「整串 address 被換掉」，
+        # 擋不住「區/路/號元件被換掉後由 compose_street_address 重組」。
+        # 2026-09-16 實測 f91714ac：已派遣的「板橋區南雅南路二段32號5樓」
+        # 被後續閒聊句尾的 STT 雜訊「內壢區走路」改成「萬裡區走路32號5樓」。
+        if self._address_locked and is_usable_address(self.case.address):
+            return
 
         current_address = self.case.address or ""
         incoming: Dict[str, str] = {}
@@ -1057,6 +1084,11 @@ class SopEngine119:
         """專項地址抽取：規則備援 → LLM（不依賴當前問答類型）。"""
         if not (caller_text or "").strip():
             return False
+        # 地址已成立並上鎖後，抽到什麼都會被 _apply_extracted_fields 的鎖擋掉，
+        # 但這裡每輪仍要付 1-2 次 extract_address 的 LLM 成本（實測每次
+        # 300-550ms）。派遣後的閒聊佔一通電話大半的輪數，這是純空轉。
+        if self._address_locked and is_usable_address(self.case.address):
+            return True
 
         # 1) 規則備援（快速、對「地址在…」口語最穩）
         hinted = extract_address_hint(caller_text)
@@ -1683,7 +1715,8 @@ class SopEngine119:
         """
         if self._main_clf is not None:
             try:
-                result = self._main_clf.predict(text)
+                with timing_119.track("bert", "main_classify", in_size=len(text)):
+                    result = self._main_clf.predict(text)
                 main_probs = result.get("main_probs") or {}
                 if main_probs:
                     ordered = sorted(main_probs.values(), reverse=True)
@@ -1820,7 +1853,8 @@ class SopEngine119:
 
         if self._sub_clf is not None:
             try:
-                result = self._sub_clf.predict(text, main_cat)
+                with timing_119.track("bert", f"sub_classify:{main_cat}", in_size=len(text)):
+                    result = self._sub_clf.predict(text, main_cat)
                 if result:
                     probs_map = getattr(result, "all_probs", None)
                     if probs_map:
@@ -1911,7 +1945,8 @@ class SopEngine119:
             return None
 
         try:
-            result = self._sub_clf.predict(text, main_cat)
+            with timing_119.track("bert", f"sub_reclassify:{main_cat}", in_size=len(text)):
+                result = self._sub_clf.predict(text, main_cat)
         except Exception as e:
             self._debug_print("sub_reclassify_error", e)
             return None

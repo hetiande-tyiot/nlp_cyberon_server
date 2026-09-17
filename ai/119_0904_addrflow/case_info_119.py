@@ -135,6 +135,11 @@ class CaseInfo119:
     # ── 報案人訊息 ──────────────────────────────────────────────────────────
     caller_name:       Optional[str] = None  # 報案人姓名
     caller_contact:    Optional[str] = None  # 報案人聯繫方式（電話/手機）
+    # 號碼格式檢查結果：None=未提供（未知不算錯），True=合格，False=碼數/格式不對。
+    # STT 可能把尾碼聽成別的字（實測「444」→「是是是」），殘缺號碼會讓回撥失敗，
+    # 所以照實記錄原值、另外標記，不追問也不竄改。
+    caller_contact_valid:  Optional[bool] = None
+    caller_contact_reason: Optional[str] = None   # valid=False 時的原因說明
     caller_salutation: Optional[str] = None  # 報案人明確選擇的稱呼（先生/小姐）
     caller_address:    Optional[str] = None  # 報案人住址（急病等次類別專用）
 
@@ -239,6 +244,7 @@ class CaseInfo119:
             "address_validation_status", "address_suspect_error",
             "address_error_reason", "address_corrected_note",
             "is_ohca", "caller_name", "caller_contact", "caller_salutation",
+            "caller_contact_valid", "caller_contact_reason",
             "caller_address",
             "triggered_scenarios",
         }

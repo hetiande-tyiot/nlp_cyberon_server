@@ -336,8 +336,10 @@ class HuoJingGenericHandler(SubCategoryHandler):
         with engine._case_lock:
             if ci.get("caller_name"):
                 engine.case.caller_name = ci["caller_name"]
-            if ci.get("caller_contact"):
-                engine.case.caller_contact = ci["caller_contact"]
             if ci.get("caller_salutation") in ("先生", "小姐"):
                 engine.case.caller_salutation = ci["caller_salutation"]
+        # set_caller_contact 自己會拿 _case_lock（普通 Lock、不可重入），
+        # 必須在 with 區塊外呼叫，否則死鎖。
+        if ci.get("caller_contact"):
+            engine.set_caller_contact(ci["caller_contact"])
         engine._notify_case_update()

@@ -1353,3 +1353,60 @@ class InternalFillerRunTests(unittest.TestCase):
         for name in ("中山北路二段", "中正路一段", "大觀路1段", "民生路二段"):
             with self.subTest(name=name):
                 self.assertEqual(extract_address_road(name), name)
+
+
+class DispatchedAddressComponentLockTests(unittest.TestCase):
+    """派遣後的地址不得被「元件重組」路徑改寫。
+
+    2026-09-16 實測 f91714ac：地址已確認並派遣（板橋區南雅南路二段32號5樓），
+    報案人下一句句尾夾了 STT 雜訊「內壢區走路」，case 存下來變成
+    「新北市萬裡區走路32號5樓」——區、路被換掉，號與樓留著。
+
+    _address_locked 原本只擋 _apply_extracted_fields 的整串 address 與
+    _apply_location_rules，漏了 _update_street_address_from_input：它拿
+    區/路/號元件覆寫後再用 compose_street_address 重組，等於繞過鎖。
+    """
+
+    CONFIRMED = "新北市板橋區南雅南路二段32號5樓"
+    # 該通真實逐字稿（派遣後那一句）
+    NOISE = "欸，就我昨天。那個吃藥。然後今天早上可能血壓過高，身體不舒服。內壢區走路。"
+
+    def _engine(self, locked: bool) -> SopEngine119:
+        engine = SopEngine119(SilentIO())
+        engine.case.address = self.CONFIRMED
+        engine.case.location_type = "address"
+        engine.case.address_district = "板橋區"
+        engine.case.address_road = "南雅南路二段"
+        engine.case.address_number = "32號"
+        engine.case.address_confirmed = True
+        engine._address_locked = locked
+        return engine
+
+    def test_locked_address_survives_component_path(self) -> None:
+        engine = self._engine(locked=True)
+        engine._update_street_address_from_input(self.NOISE)
+        self.assertEqual(engine.case.address, self.CONFIRMED)
+        self.assertEqual(engine.case.address_district, "板橋區")
+        self.assertEqual(engine.case.address_road, "南雅南路二段")
+
+    def test_locked_blocks_any_component_overwrite(self) -> None:
+        """不只這一句——任何句子在上鎖後都不該動到已成立的門牌。"""
+        for text in (
+            "內壢區走路。",
+            "我在中山路啦。",
+            "不知道他躺在路邊。",
+        ):
+            with self.subTest(text=text):
+                engine = self._engine(locked=True)
+                engine._update_street_address_from_input(text)
+                self.assertEqual(engine.case.address, self.CONFIRMED)
+
+    def test_unlocked_still_updates_during_flow(self) -> None:
+        """流程進行中（未上鎖）仍須能增量補元件，否則五步流程就失效了。"""
+        engine = SopEngine119(SilentIO())
+        engine.case.location_type = "address"
+        engine.case.address = "板橋區"
+        engine._address_locked = False
+        engine._update_street_address_from_input("文化路一段100號")
+        self.assertIn("文化路一段", engine.case.address or "")
+        self.assertIn("100號", engine.case.address or "")
