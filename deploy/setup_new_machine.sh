@@ -4,7 +4,9 @@
 # 用法：
 #   bash deploy/setup_new_machine.sh --check          # 只檢查缺什麼，不動系統
 #   bash deploy/setup_new_machine.sh                  # 檢查 + 建 venv + 建 log 目錄
-#   bash deploy/setup_new_machine.sh --cuda-arch 120  # 順便編譯 GPU 版 llama-cpp-python（5090=120, 4090=89）
+#   bash deploy/setup_new_machine.sh --cuda-arch auto # 順便編譯 GPU 版 llama-cpp-python
+#                                                     # auto = 照 nvidia-smi 讀顯卡（也可寫死 120 / 89）
+#                                                     # 沒有 CUDA toolkit 會問你要不要一起裝
 #   sudo bash deploy/setup_new_machine.sh --install-service   # 再裝 systemd 服務
 #
 # 不會做的事：不會自動 restart 線上服務（119 是緊急服務，換版/重啟前要先確認沒有通話中）。
@@ -17,6 +19,8 @@ SERVICE=/etc/systemd/system/sop119.service
 
 CHECK_ONLY=0
 CUDA_ARCH=""
+CUDA_VERSION="12.9"     # toolkit 版本；配 llama-cpp-python 0.3.23 已驗證可用
+ASSUME_YES=0
 INSTALL_SERVICE=0
 VERSION=""
 ADDRCHECK_TOKEN="${ADDRCHECK_API_TOKEN:-請自行填入}"
@@ -25,12 +29,57 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --check)            CHECK_ONLY=1; shift ;;
     --cuda-arch)        CUDA_ARCH="$2"; shift 2 ;;
+    --cuda-version)     CUDA_VERSION="$2"; shift 2 ;;
+    --yes|-y)           ASSUME_YES=1; shift ;;
     --install-service)  INSTALL_SERVICE=1; shift ;;
     --version)          VERSION="$2"; shift 2 ;;
-    -h|--help)          sed -n '2,12p' "$0"; exit 0 ;;
+    -h|--help)          awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
     *)                  echo "未知選項：$1" >&2; exit 2 ;;
   esac
 done
+
+
+# ── 小工具 ──────────────────────────────────────────────────────────────────
+# 從 nvidia-smi 讀 compute capability（12.0 → 120），失敗回空字串
+detect_cuda_arch() {
+  command -v nvidia-smi >/dev/null || return 0
+  nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+    | head -1 | tr -d ' .' | grep -E '^[0-9]+$' || true
+}
+
+find_nvcc() {
+  command -v nvcc 2>/dev/null && return 0
+  ls /usr/local/cuda*/bin/nvcc 2>/dev/null | sort -V | tail -1
+}
+
+# 裝 CUDA toolkit（只裝 toolkit，不碰顯卡驅動）
+install_cuda_toolkit() {
+  local ver="$1" pkg="cuda-toolkit-${1//./-}"
+  command -v apt-get >/dev/null || { echo "  ！這台不是 Debian/Ubuntu，請自行安裝 CUDA toolkit $ver" >&2; return 1; }
+  local id rel repo
+  id="$(. /etc/os-release && echo "$ID")"
+  rel="$(. /etc/os-release && echo "$VERSION_ID")"
+  repo="${id}${rel//./}"                    # ubuntu + 24.04 → ubuntu2404
+  [[ "$id" == "ubuntu" || "$id" == "debian" ]] || { echo "  ！不認得的發行版 $id，請自行安裝 CUDA toolkit" >&2; return 1; }
+
+  echo "  準備安裝 $pkg（NVIDIA 官方 apt 來源 $repo）"
+  echo "  下載約 4 GB、佔用約 9 GB 磁碟；只裝 toolkit，不會動到現有顯卡驅動。"
+  if [[ $ASSUME_YES -eq 0 ]]; then
+    read -r -p "  要現在安裝嗎？[y/N] " ans
+    [[ "$ans" =~ ^[Yy] ]] || { echo "  跳過。"; return 1; }
+  fi
+
+  local keyring="/tmp/cuda-keyring_1.1-1_all.deb"
+  local url="https://developer.download.nvidia.com/compute/cuda/repos/${repo}/x86_64/cuda-keyring_1.1-1_all.deb"
+  echo "  下載 keyring：$url"
+  wget -q -O "$keyring" "$url" || { echo "  ！keyring 下載失敗，$repo 可能沒有對應來源" >&2; return 1; }
+  sudo dpkg -i "$keyring"
+  sudo apt-get update
+  # build-essential/cmake/ninja/python3-dev 是編譯 llama.cpp 要的
+  sudo apt-get install -y "$pkg" build-essential cmake ninja-build python3-dev \
+    || { echo "  ！$pkg 安裝失敗。可用 apt-cache search cuda-toolkit 看有哪些版本" >&2; return 1; }
+  rm -f "$keyring"
+}
 
 # 沒指定就用 ai/ 底下最新的 119_* 版本目錄
 if [[ -z "$VERSION" ]]; then
@@ -93,17 +142,41 @@ echo
 
 # ── 4. llama-cpp-python：一定要照顯卡自己編，pip 直裝會拿到 CPU 版
 echo "== 4. llama-cpp-python (GPU) =="
+DETECTED_ARCH="$(detect_cuda_arch)"
+[[ "$CUDA_ARCH" == "auto" ]] && CUDA_ARCH="$DETECTED_ARCH"
+[[ -n "$DETECTED_ARCH" ]] && echo "  顯卡 compute capability → arch $DETECTED_ARCH"
+
 if [[ -x "$BASE/llmenv/bin/python" ]] && "$BASE/llmenv/bin/python" -c 'import llama_cpp' 2>/dev/null; then
   echo "  [有] $("$BASE/llmenv/bin/python" -c 'import llama_cpp; print(llama_cpp.__version__)')"
+  if "$BASE/llmenv/bin/python" -c 'from llama_cpp import llama_cpp; exit(0 if llama_cpp.llama_supports_gpu_offload() else 1)' 2>/dev/null; then
+    echo "  [有] GPU offload：開啟"
+  else
+    echo "  ！警告：裝的是 CPU 版（GPU offload 關閉），gguf 會慢到不能用"
+    echo "    重編： $BASE/llmenv/bin/pip uninstall -y llama-cpp-python"
+    echo "           bash deploy/setup_new_machine.sh --cuda-arch ${DETECTED_ARCH:-120}"
+  fi
 elif [[ -n "$CUDA_ARCH" && $CHECK_ONLY -eq 0 ]]; then
-  NVCC="$(command -v nvcc || ls /usr/local/cuda*/bin/nvcc 2>/dev/null | sort | tail -1)"
-  [[ -n "$NVCC" ]] || { echo "  ！找不到 nvcc，先裝 CUDA toolkit" >&2; exit 1; }
+  NVCC="$(find_nvcc)"
+  if [[ -z "$NVCC" ]]; then
+    echo "  找不到 nvcc（有驅動不代表有 CUDA toolkit，編譯需要 toolkit）"
+    install_cuda_toolkit "$CUDA_VERSION" || { echo "  ！沒有 CUDA toolkit，無法編譯" >&2; exit 1; }
+    NVCC="$(find_nvcc)"
+    [[ -n "$NVCC" ]] || { echo "  ！裝完仍找不到 nvcc" >&2; exit 1; }
+  fi
   echo "  用 $NVCC 編譯 CUDA arch=$CUDA_ARCH（十幾分鐘）…"
   CMAKE_ARGS="-DGGML_CUDA=on -DCMAKE_CUDA_COMPILER=$NVCC -DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCH" \
     "$BASE/llmenv/bin/pip" install llama-cpp-python==0.3.23 --no-cache-dir
+  # 編完立刻驗證：CPU 版也會 import 成功，只有這支 API 分得出來
+  if "$BASE/llmenv/bin/python" -c 'from llama_cpp import llama_cpp; exit(0 if llama_cpp.llama_supports_gpu_offload() else 1)'; then
+    echo "  ✓ 編譯完成，GPU offload 開啟"
+  else
+    echo "  ！編出來是 CPU 版（GPU offload 關閉）。檢查 nvcc 與顯卡 arch 是否相符" >&2
+    exit 1
+  fi
 else
-  echo "  [缺] 未安裝。要裝請加 --cuda-arch（RTX 5090=120、RTX 4090=89），例如："
-  echo "       bash deploy/setup_new_machine.sh --cuda-arch 120"
+  echo "  [缺] 未安裝。要裝："
+  echo "       bash deploy/setup_new_machine.sh --cuda-arch ${DETECTED_ARCH:-auto}"
+  echo "       （沒有 CUDA toolkit 會先問你要不要一起裝）"
 fi
 echo
 
@@ -133,6 +206,18 @@ if [[ $INSTALL_SERVICE -eq 1 ]]; then
 else
   if [[ -f "$SERVICE" ]]; then
     echo "  [有] $SERVICE"
+    # 機器上可能留著舊的 unit，指向別的目錄或舊版本，光看「有」會誤判
+    UNIT_WD="$(grep -oP '(?<=^WorkingDirectory=).*' "$SERVICE" | tail -1 || true)"
+    UNIT_EXEC="$(grep -oP '(?<=^ExecStart=)\S+' "$SERVICE" | tail -1 || true)"
+    if [[ "$UNIT_WD" != "$BASE/ai/"* ]]; then
+      echo "  ！unit 指向別的地方： $UNIT_WD"
+      echo "    這份安裝在 $BASE，兩者不一致。要改指這裡："
+      echo "    sudo ADDRCHECK_API_TOKEN='<token>' bash deploy/setup_new_machine.sh --install-service"
+    else
+      echo "      版本目錄： ${UNIT_WD##*/}$( [[ "${UNIT_WD##*/}" == "$VERSION" ]] && echo "" || echo "   ← 與偵測到的最新版 $VERSION 不同" )"
+      [[ "$UNIT_EXEC" == "$BASE/llmenv/"* ]] || echo "  ！ExecStart 用的不是這份的 llmenv： $UNIT_EXEC"
+      grep -q 'ADDRCHECK_API_TOKEN=請自行填入' "$SERVICE" && echo "  ！ADDRCHECK_API_TOKEN 還沒填"
+    fi
   else
     echo "  [缺] 未安裝。要裝： sudo bash deploy/setup_new_machine.sh --install-service"
   fi

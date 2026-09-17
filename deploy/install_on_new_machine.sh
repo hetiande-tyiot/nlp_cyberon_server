@@ -21,22 +21,27 @@
 #    bash install_on_new_machine.sh --from-dir /media/usb/nlp # 模型改從 USB 複製
 #    bash install_on_new_machine.sh --skip-files             # 模型晚點再處理，先把環境弄好
 #    bash install_on_new_machine.sh --all                    # 連 STT/TTS/110 模型一起（約 44G）
-#    bash install_on_new_machine.sh --cuda-arch 120 --install-service   # 一路做到服務裝好
+#    bash install_on_new_machine.sh --cuda-arch auto --install-service  # 一路做到服務裝好
 #
-#  顯卡對應 --cuda-arch： RTX 5090 = 120、RTX 4090 = 89
+#  --cuda-arch auto 會照 nvidia-smi 讀顯卡（RTX 5090 / PRO 6000 = 120、RTX 4090 = 89）。
+#  沒裝 CUDA toolkit 的機器會問你要不要一起裝（約 4G 下載），加 --yes 就不問。
 # ============================================================================
 set -euo pipefail
 
 # ── 預設值（要改這裡就好）
 REPO_URL="https://github.com/hetiande-tyiot/nlp_cyberon_server.git"
 BRANCH="master"
-DEST="$HOME/nlp_cyberon_server"
-SRC_SSH="cyberon2@100.127.225.115"        # 來源機 cyberon2（Tailscale IP；同區網可改 192.168.5.132）
+DEST="$HOME/project/nlp_cyberon_server"
+SRC_SSH="cyberon2@192.168.5.132"          # 來源機 cyberon2（區網 IP）
+SRC_SSH_ALT="cyberon2@100.127.225.115"    # 備援：Tailscale IP（不同網段/遠端時用）
+SRC_SSH_GIVEN=0
 SRC_REPO="/home/cyberon2/nlp_cyberon_server"
 FROM_DIR=""                                # 改從本機目錄/USB 取模型時用
 TIERS="core"
 SKIP_FILES=0
 CUDA_ARCH=""
+CUDA_VERSION=""
+ASSUME_YES=0
 INSTALL_SERVICE=0
 ADDRCHECK_TOKEN="${ADDRCHECK_API_TOKEN:-}"
 MAX_RETRY=100
@@ -46,14 +51,16 @@ while [[ $# -gt 0 ]]; do
     --repo)             REPO_URL="$2"; shift 2 ;;
     --branch)           BRANCH="$2"; shift 2 ;;
     --dest)             DEST="$2"; shift 2 ;;
-    --from-ssh)         SRC_SSH="$2"; shift 2 ;;
+    --from-ssh)         SRC_SSH="$2"; SRC_SSH_GIVEN=1; shift 2 ;;
     --src-repo)         SRC_REPO="$2"; shift 2 ;;
     --from-dir)         FROM_DIR="$2"; shift 2 ;;
     --all)              TIERS="core opt"; shift ;;
     --skip-files)       SKIP_FILES=1; shift ;;
     --cuda-arch)        CUDA_ARCH="$2"; shift 2 ;;
+    --cuda-version)     CUDA_VERSION="$2"; shift 2 ;;
+    --yes|-y)           ASSUME_YES=1; shift ;;
     --install-service)  INSTALL_SERVICE=1; shift ;;
-    -h|--help)          sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)          awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
     *)                  echo "未知選項：$1（用 --help 看說明）" >&2; exit 2 ;;
   esac
 done
@@ -72,22 +79,40 @@ die()  { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ── 1. 環境檢查 ─────────────────────────────────────────────────────────────
 say "1/6 檢查工具"
-for cmd in git python3; do
-  command -v "$cmd" >/dev/null || die "缺少 $cmd，請先安裝： sudo apt install -y $cmd"
-  ok "$cmd  $($cmd --version 2>&1 | head -1)"
-done
+command -v python3 >/dev/null || die "缺少 python3"
+PY="$( [[ -x /usr/bin/python3 ]] && echo /usr/bin/python3 || command -v python3 )"
+
+# 缺的套件一次列出來一起裝，不要一個一個撞
+NEED_PKGS=()
+command -v git   >/dev/null || NEED_PKGS+=(git)
+command -v rsync >/dev/null || NEED_PKGS+=(rsync)
+# 注意：import venv 成功不代表能建 venv，Ubuntu 把 ensurepip 拆在 python3-venv 裡
+"$PY" -c 'import ensurepip' 2>/dev/null || NEED_PKGS+=(python3-venv)
+
+if [[ ${#NEED_PKGS[@]} -gt 0 ]]; then
+  warn "缺少： ${NEED_PKGS[*]}"
+  if command -v apt-get >/dev/null; then
+    if [[ $ASSUME_YES -eq 0 ]]; then
+      read -r -p "  要現在用 apt 裝起來嗎？[Y/n] " ans
+      [[ -z "$ans" || "$ans" =~ ^[Yy] ]] || die "請先安裝： sudo apt install -y ${NEED_PKGS[*]}"
+    fi
+    sudo apt-get install -y "${NEED_PKGS[@]}" || die "安裝失敗，請手動： sudo apt install -y ${NEED_PKGS[*]}"
+  else
+    die "請先安裝： ${NEED_PKGS[*]}"
+  fi
+fi
+
+ok "git      $(git --version 2>&1)"
+ok "python3  $("$PY" -V 2>&1)"
 if command -v rsync >/dev/null; then
-  ok "rsync $(rsync --version | head -1 | awk '{print $3}')（可續傳）"
+  ok "rsync    $(rsync --version | head -1 | awk '{print $3}')（可續傳）"
   HAVE_RSYNC=1
 else
   warn "沒有 rsync，會改用 scp（不能續傳，20G 斷線要整包重來）"
-  warn "建議先裝： sudo apt install -y rsync"
   HAVE_RSYNC=0
 fi
-PY="$( [[ -x /usr/bin/python3 ]] && echo /usr/bin/python3 || command -v python3 )"
 PYVER="$("$PY" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 [[ "$PYVER" == "3.12" ]] || warn "來源機是 Python 3.12，這台是 $PYVER；套件版本可能要微調"
-"$PY" -c 'import venv' 2>/dev/null || die "缺少 venv： sudo apt install -y python3-venv"
 
 # ── 2. clone 程式碼 ─────────────────────────────────────────────────────────
 say "2/6 取得程式碼"
@@ -141,6 +166,14 @@ else
     echo "  來源：${SRC_SSH}:${SRC_REPO}"
     echo "  測試 SSH 連線…"
     echo "  （走密碼登入的話這裡會問一次，之後不再問；免密碼請先 ssh-copy-id $SRC_SSH）"
+    if ! ssh "${SSH_OPTS[@]}" "$SRC_SSH" "test -d '$SRC_REPO'"; then
+      # 區網 IP 不通就換 Tailscale（反之亦然），省得自己判斷在哪個網段
+      if [[ $SRC_SSH_GIVEN -eq 0 && -n "$SRC_SSH_ALT" ]]; then
+        warn "$SRC_SSH 連不上，改試備援位址 $SRC_SSH_ALT"
+        SRC_SSH="$SRC_SSH_ALT"; SRC_SSH_ALT=""
+        ssh "${SSH_OPTS[@]}" "$SRC_SSH" "test -d '$SRC_REPO'" || true
+      fi
+    fi
     if ! ssh "${SSH_OPTS[@]}" "$SRC_SSH" "test -d '$SRC_REPO'"; then
       echo
       warn "連不上 ${SRC_SSH}（或對方沒有 $SRC_REPO）。兩種解法："
@@ -217,6 +250,8 @@ SETUP="$DEST/deploy/setup_new_machine.sh"
 say "4/6 建立 venv 與 log 目錄"
 SETUP_ARGS=()
 [[ -n "$CUDA_ARCH" ]] && SETUP_ARGS+=(--cuda-arch "$CUDA_ARCH")
+[[ -n "$CUDA_VERSION" ]] && SETUP_ARGS+=(--cuda-version "$CUDA_VERSION")
+[[ $ASSUME_YES -eq 1 ]] && SETUP_ARGS+=(--yes)
 bash "$SETUP" "${SETUP_ARGS[@]}"
 
 say "5/6 llama-cpp-python"
