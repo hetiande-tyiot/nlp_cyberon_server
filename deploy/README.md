@@ -24,7 +24,7 @@ venv 1.9G、gguf 19.5G、BERT 權重各 391M，這些不能也不該進 git。
 ```bash
 # 在新電腦上
 scp cyberon2@100.127.225.115:~/nlp_cyberon_server/deploy/install_on_new_machine.sh .
-bash install_on_new_machine.sh --cuda-arch 120 --install-service
+bash install_on_new_machine.sh --cuda-arch auto --install-service
 ```
 
 模型預設從 cyberon2 用 rsync 拉（需要新電腦能 SSH 進 cyberon2，連不上時腳本會告訴你怎麼辦）。
@@ -36,7 +36,9 @@ bash install_on_new_machine.sh --cuda-arch 120 --install-service
 | `--from-dir /media/usb/nlp` | 模型改從隨身碟／外接硬碟複製，不走網路 |
 | `--skip-files` | 先把環境弄好，模型晚點再補（或改由來源機推送） |
 | `--all` | 連 STT／TTS／110 的模型一起（約 44G，預設只抓 119 要的 21G） |
-| `--cuda-arch 120` | 照顯卡編 GPU 版 llama-cpp-python（5090=120、4090=89） |
+| `--cuda-arch auto` | 照顯卡編 GPU 版 llama-cpp-python；`auto` 讀 nvidia-smi，也可寫死（5090／PRO 6000=120、4090=89） |
+| `--cuda-version 12.9` | 要自動安裝的 CUDA toolkit 版本（預設 12.9） |
+| `--yes` | 安裝 CUDA toolkit 前不再詢問 |
 | `--install-service` | 裝 systemd 服務（會要 sudo 密碼） |
 | `--dest /path` | 專案裝到別的位置（預設 `~/nlp_cyberon_server`） |
 
@@ -60,10 +62,22 @@ cd ~/nlp_cyberon_server
 bash deploy/install_on_new_machine.sh --skip-files --cuda-arch 120 --install-service
 ```
 
+## 關於 CUDA
+
+編 GPU 版 `llama-cpp-python` 需要 **CUDA toolkit（nvcc）**，只有顯卡驅動是不夠的 —— 新機器常常只裝了驅動。
+腳本偵測到沒有 nvcc 時，會問你要不要從 NVIDIA 官方 apt 來源裝 `cuda-toolkit-12-9`
+（約 4 GB 下載、9 GB 磁碟），只裝 toolkit，**不會動到現有顯卡驅動**。`--yes` 可跳過詢問。
+
+選 12.9 而不是更新的 13.x，是因為 llama-cpp-python 0.3.23 內含的 llama.cpp 配 12.9 已驗證可用。
+`--cuda-version` 可以改。
+
+編完腳本會自動驗證 `llama_supports_gpu_offload()` —— CPU 版一樣 import 得起來，只有這支 API 分得出差別，
+不驗證的話會等到服務跑起來才發現 gguf 在 CPU 上爬。
+
 ## 裝完的確認
 
 ```bash
-bash deploy/setup_new_machine.sh --check          # 逐項列出有／缺
+bash deploy/setup_new_machine.sh --check          # 逐項列出有／缺，含 GPU offload 與 unit 路徑是否對得上
 sudo systemctl start sop119.service
 curl -s http://127.0.0.1:8200/health              # 三個 loaded 都 true 才算成功
 journalctl -u sop119.service -f                   # 起不來看這裡
