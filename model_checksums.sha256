@@ -1,0 +1,6 @@
+a8138f183e3993f12cdc23afd2babb8cdb084e64088ce4a256d49101d47b949c  models/TW-119-Model.gguf
+f33b82217d00cfb9a40ed54ca161793a7c7275fe352d89fc2e2f1a54ae8b6bc6  ai/TW-119-BERT_main/model.safetensors
+4e27e0b12e99b42da00d2a88eb1f2619c922ee29226a99a44533f4d992fb631b  ai/TW-119-BERT-sub_火警/model.safetensors
+8065dacd4e235014616853adaf39b0cc2c3a8df13614c67f35fd890e94ddec63  ai/TW-119-BERT-sub_救護/pytorch_model.bin
+d2a02a017baf56a86b84e07beb9658269caeb222edecdcf1045491707fbf0965  ai/TW-119-BERT-sub_緊急救援/model.safetensors
+97d5a584d87f0bd08ee5655a892c4ddf0146799a3c8dda569f7639d7e9c57124  ai/TW-119-BERT-sub_其他案類/model.safetensors

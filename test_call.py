@@ -17,7 +17,7 @@ MESSAGES = [
 
 # 目標主機：預設本機，可用第一個參數覆蓋（如 192.168.5.131）
 HOST = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
-PORT = 8100
+PORT = 8200
 BASE = f"http://{HOST}:{PORT}"
 
 
