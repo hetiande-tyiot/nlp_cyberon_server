@@ -129,16 +129,43 @@ echo "== 3. venv (llmenv) =="
 # 用系統 python 建 venv，避免在已啟用的 venv 裡再包一層
 PY="$( [[ -x /usr/bin/python3 ]] && echo /usr/bin/python3 || command -v python3 || true )"
 echo "  system python： ${PY:-沒有！} $( [[ -n "$PY" ]] && "$PY" -V 2>&1 )"
-if [[ -x "$BASE/llmenv/bin/python" ]]; then
-  echo "  [有] llmenv （$("$BASE/llmenv/bin/python" -V 2>&1)）"
+
+VENV_PY="$BASE/llmenv/bin/python"
+VENV_PIP="$BASE/llmenv/bin/pip"
+
+if [[ -x "$VENV_PY" && -x "$VENV_PIP" ]]; then
+  echo "  [有] llmenv （$("$VENV_PY" -V 2>&1)）"
+elif [[ -e "$BASE/llmenv" ]]; then
+  # 缺 python3-venv 時 venv 會建到一半：有 python、沒有 pip。只檢查 python 會誤判成「已就緒」
+  echo "  ！llmenv 不完整（有 python 但沒有 pip，通常是建立當下缺 python3-venv）"
+  if [[ $CHECK_ONLY -eq 1 ]]; then
+    echo "    本腳本會砍掉重建（不加 --check 執行即可）"
+  else
+    echo "    砍掉重建…"
+    rm -rf "$BASE/llmenv"
+    "$PY" -m venv "$BASE/llmenv"
+  fi
 elif [[ $CHECK_ONLY -eq 1 ]]; then
   echo "  [缺] llmenv（會由本腳本建立）"
 else
-  echo "  建立 llmenv 並安裝 requirements-119.txt（幾分鐘）…"
+  echo "  建立 llmenv…"
   "$PY" -m venv "$BASE/llmenv"
-  "$BASE/llmenv/bin/pip" install -U pip
-  "$BASE/llmenv/bin/pip" install -r "$BASE/requirements-119.txt"
-  echo "  llmenv 完成"
+fi
+
+# 套件：venv 好了才檢查。前一輪可能建到一半就中斷，所以每次都確認關鍵套件在不在
+if [[ -x "$VENV_PIP" ]]; then
+  if "$VENV_PY" -c 'import fastapi, uvicorn, transformers, torch' 2>/dev/null; then
+    echo "  [有] 相依套件（fastapi / uvicorn / transformers / torch）"
+  elif [[ $CHECK_ONLY -eq 1 ]]; then
+    echo "  [缺] 相依套件（會由本腳本安裝 requirements-119.txt）"
+  else
+    echo "  安裝 requirements-119.txt（幾分鐘）…"
+    "$VENV_PIP" install -U pip
+    "$VENV_PIP" install -r "$BASE/requirements-119.txt"
+    "$VENV_PY" -c 'import fastapi, uvicorn, transformers, torch' \
+      || { echo "  ！套件裝完仍 import 失敗" >&2; exit 1; }
+    echo "  llmenv 完成"
+  fi
 fi
 echo
 
