@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import time
 import os
 import re
 from dataclasses import dataclass
@@ -12,6 +13,8 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+import timing_119
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -127,11 +130,17 @@ def verify_address_detail(
         headers=headers,
         method="POST",
     )
+    _t0 = time.perf_counter()
     try:
         with urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
+        # 逾時/連不上的耗時照樣記——外部 API 慢是常見的延遲來源
+        timing_119.emit("addrcheck", api_type or "address",
+                        (time.perf_counter() - _t0) * 1000.0, extra="error=1")
         return None, str(exc), None
+    timing_119.emit("addrcheck", api_type or "address",
+                    (time.perf_counter() - _t0) * 1000.0)
     if not isinstance(payload, dict):
         return None, "回應格式非物件", None
     return (

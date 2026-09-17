@@ -43,9 +43,15 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from typing import Any, Dict, List, Optional
 
+import sys as _sys
+
+import timing_119
 from important_tags_119 import IMPORTANT_TAGS, normalize_important_tags
 from sop_utils_119 import (
     clean_address_fragment,
@@ -476,6 +482,41 @@ def _clean_str(val: Any) -> Optional[str]:
 
 # ─── 核心類 ───────────────────────────────────────────────────────────────────
 
+_LLAMA_SERVER_ALIASES = {"llama-server", "llama_server", "llamaserver", "server"}
+
+# 每輪的 schema group 彼此獨立（同一句話、不同欄位集），可同時打 llama-server。
+# 池大小要 ≥ 單輪最多的 group 數（救護 5 組 + patient retry），留點餘裕給併發通話；
+# 真正的節流在 llama-server 的 slot，這裡放寬沒關係。
+_GROUP_POOL_SIZE = int(os.environ.get("LLM_GROUP_POOL_SIZE", "32"))
+# 預設關閉。2026-09-16 在 5090 + TW-119-Model 實測：同一輪 6 組
+#   依序 321/465/196/225/380/114ms → 合計 1701ms，牆鐘 1701ms
+#   並行 634/787/956/762/1162/1707ms → 合計 6008ms，牆鐘 1707ms
+# 每組都慢 3-5 倍，牆鐘一模一樣——GPU 在 batch=1 就已飽和，組間並行
+# 換不到任何時間，只是把等待從「排隊」搬到「一起變慢」。
+# 換更快的卡或更小的模型時可設 LLM_GROUP_PARALLEL=1 重測。
+_GROUP_PARALLEL = os.environ.get("LLM_GROUP_PARALLEL", "0") != "0"
+_group_pool: Optional[ThreadPoolExecutor] = None
+_group_pool_lock = Lock()
+
+
+# worker 執行緒的呼叫堆疊起點是 pool 的 run_one，_caller_op 往上走看不到
+# extract_general_fields，op 會退化成內部函式名。派工前在父執行緒算好語意名，
+# 由 worker 用 thread-local 覆寫。
+_op_override = threading.local()
+
+
+def _get_group_pool() -> ThreadPoolExecutor:
+    global _group_pool
+    if _group_pool is None:
+        with _group_pool_lock:
+            if _group_pool is None:
+                _group_pool = ThreadPoolExecutor(
+                    max_workers=_GROUP_POOL_SIZE,
+                    thread_name_prefix="llmgroup",
+                )
+    return _group_pool
+
+
 class LLMExtractor119:
     """
     119 報案受理 LLM 抽取器。
@@ -503,7 +544,57 @@ class LLMExtractor119:
         n_gpu_layers: int = -1,
         temperature: float = 0.1,
         verbose: bool = False,
+        *,
+        backend: Optional[str] = None,
+        server_url: Optional[str] = None,
+        server_model: Optional[str] = None,
+        server_timeout: Optional[float] = None,
+        server_max_connections: Optional[int] = None,
     ):
+        self._temperature = temperature
+        backend = (backend or os.environ.get("LLM_BACKEND", "gguf")).strip().lower()
+        self.backend = "llama-server" if backend in _LLAMA_SERVER_ALIASES else "gguf"
+
+        if self.backend == "llama-server":
+            # ── 後端 B：llama-server 多 slot（真並發，不上 gen lock）────────
+            try:
+                import httpx
+            except ImportError as e:
+                raise RuntimeError(
+                    "LLM_BACKEND=llama-server 需要 httpx：pip install httpx"
+                ) from e
+
+            self._llm = None
+            self._lock = None  # 無 gen lock ＝ 並發由 llama-server slot 負責
+            self._server_url = (
+                server_url
+                or os.environ.get("LLAMA_SERVER_URL", "http://127.0.0.1:8081")
+            ).rstrip("/")
+            self._server_model = (
+                server_model or os.environ.get("LLAMA_SERVER_MODEL", "tw-119-model")
+            )
+            self._server_timeout = float(
+                server_timeout
+                if server_timeout is not None
+                else os.environ.get("LLAMA_SERVER_TIMEOUT", "180")
+            )
+            _max_conn = int(
+                server_max_connections
+                if server_max_connections is not None
+                else os.environ.get("LLAMA_SERVER_MAX_CONNECTIONS", "32")
+            )
+            # httpx.Client 本身 thread-safe；連線池要 ≥ 併發數，否則自己排隊
+            self._http = httpx.Client(
+                base_url=self._server_url,
+                timeout=httpx.Timeout(self._server_timeout, connect=10.0),
+                limits=httpx.Limits(
+                    max_connections=_max_conn,
+                    max_keepalive_connections=_max_conn,
+                ),
+            )
+            return
+
+        # ── 後端 A：in-process GGUF（原行為，單線序列化）──────────────────
         try:
             from llama_cpp import Llama
         except ImportError as e:
@@ -516,6 +607,7 @@ class LLMExtractor119:
         if not os.path.isfile(model_path):
             raise FileNotFoundError(f"GGUF 模型不存在: {model_path}")
 
+        self._http = None
         self._llm = Llama(
             model_path=model_path,
             chat_format="qwen",
@@ -524,7 +616,6 @@ class LLMExtractor119:
             verbose=verbose,
             flash_attn=True,
         )
-        self._temperature = temperature
         self._lock = Lock()
 
     # ── 底層生成 ──────────────────────────────────────────────────────────────
@@ -560,21 +651,142 @@ class LLMExtractor119:
             messages,
             assistant_prefix=assistant_prefix,
         )
+        # op = 語意層方法名（extract_address / classify_fire_route…）。
+        # 不能只取 _getframe(1)：多數抽取都經由 extract_slots 這層內部共用
+        # 函式呼叫 _complete，結果全部記成 extract_slots，分不出誰慢。
+        # 往上找到最外層仍屬本類別的 frame 才是真正想看的那個。
+        op = self._caller_op()
+        t0 = time.perf_counter()
         try:
-            with self._lock:
-                result = self._llm.create_completion(
-                    prompt=prompt,
-                    max_tokens=max_tokens,
-                    stop=stop,
-                    temperature=self._temperature,
-                    top_p=0.9,
-                    top_k=20,
-                    repeat_penalty=1.0,
-                )
-            raw = (result.get("choices") or [{}])[0].get("text", "").strip()
-            return _strip_think_and_fences(raw)
+            if self.backend == "llama-server":
+                raw = self._complete_via_server(prompt, max_tokens, stop)
+            else:
+                with self._lock:
+                    result = self._llm.create_completion(
+                        prompt=prompt,
+                        max_tokens=max_tokens,
+                        stop=stop,
+                        temperature=self._temperature,
+                        top_p=0.9,
+                        top_k=20,
+                        repeat_penalty=1.0,
+                    )
+                raw = (result.get("choices") or [{}])[0].get("text", "").strip()
+            out = _strip_think_and_fences(raw)
+            timing_119.emit("llm", op, (time.perf_counter() - t0) * 1000.0,
+                            in_size=len(prompt), out_size=len(out))
+            return out
         except Exception as e:
+            # 失敗也要記時間——逾時的那幾秒才是要查的
+            timing_119.emit("llm", op, (time.perf_counter() - t0) * 1000.0,
+                            in_size=len(prompt), extra="error=1")
             return f"[LLM_ERROR: {e}]"
+
+    def _extract_groups(
+        self,
+        schema_groups: list,
+        caller_text: str,
+        *,
+        question: Optional[str],
+        tail: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """跑完所有 schema group，回傳與 schema_groups 同順序的結果。
+
+        llama-server 後端沒有 gen lock，各組可真並發（實測一輪 6 組依序約
+        4.5s，並行後等於最慢那一組）。gguf 後端有 _gen_lock，並行只是換個
+        地方排隊還多付執行緒成本，所以維持依序。
+
+        單組失敗回 {}（沿用原本的靜默降級），不影響其他組。
+        """
+        def run_one(group) -> Dict[str, Any]:
+            schema, rules = group
+            try:
+                return self.extract_slots(
+                    caller_text, schema, rules,
+                    question=question,
+                    strict_tail=tail,
+                    max_tokens=512,
+                )
+            except Exception:  # noqa: BLE001
+                return {}
+
+        if (not _GROUP_PARALLEL
+                or self.backend != "llama-server"
+                or len(schema_groups) < 2):
+            return [run_one(g) for g in schema_groups]
+
+        # timing_119 的 sid 取自執行緒名稱；worker 不改名的話 TIMING 會記成
+        # sid=-，併發時就歸不了戶。把呼叫端的執行緒名借給 worker 用。
+        parent_name = threading.current_thread().name
+        parent_op = self._caller_op()      # 在父執行緒算，堆疊才正確
+
+        def run_named(group) -> Dict[str, Any]:
+            worker = threading.current_thread()
+            original_name = worker.name
+            original_op = getattr(_op_override, "value", None)
+            worker.name = parent_name
+            _op_override.value = parent_op
+            try:
+                return run_one(group)
+            finally:
+                worker.name = original_name
+                _op_override.value = original_op
+
+        # map 保序，逐一取結果；例外已在 run_one 內吞掉
+        return list(_get_group_pool().map(run_named, schema_groups))
+
+    def _caller_op(self, max_depth: int = 8) -> str:
+        """往上找呼叫堆疊中最外層、仍屬於本抽取器的方法名。"""
+        override = getattr(_op_override, "value", None)
+        if override:
+            return override
+        op = "_complete"
+        for depth in range(1, max_depth + 1):
+            try:
+                frame = _sys._getframe(depth)
+            except ValueError:
+                break
+            if frame.f_locals.get("self") is not self:
+                break          # 已經離開本類別，上一個就是最外層
+            name = frame.f_code.co_name
+            if not name.startswith("_"):
+                op = name
+        return op
+
+    def _complete_via_server(
+        self,
+        prompt: str,
+        max_tokens: int,
+        stop: list[str],
+    ) -> str:
+        """打 llama-server /completion（raw prompt，參數與 in-process 版 1:1）。
+
+        不上 gen lock：併發由 llama-server 的 --parallel slot 負責，
+        slot 滿了 llama-server 會自己排隊，不會回 503。
+        """
+        payload = {
+            "prompt": prompt,
+            "n_predict": max_tokens,
+            "stop": stop,
+            "temperature": self._temperature,
+            "top_p": 0.9,
+            "top_k": 20,
+            "repeat_penalty": 1.0,
+            "cache_prompt": True,
+            "stream": False,
+        }
+        resp = self._http.post("/completion", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return (data.get("content") or "").strip()
+
+    def close(self) -> None:
+        """釋放 HTTP 連線池（llama-server 後端用；gguf 後端為 no-op）。"""
+        if getattr(self, "_http", None) is not None:
+            try:
+                self._http.close()
+            except Exception:  # noqa: BLE001
+                pass
 
     # ── 通用 JSON 抽取 ────────────────────────────────────────────────────────
 
@@ -1237,18 +1449,11 @@ class LLMExtractor119:
             schema_groups.append((internal_report_schema, internal_report_rules))
 
         merged: Dict[str, Any] = {}
-        for schema, rules in schema_groups:
-            try:
-                out = self.extract_slots(
-                    caller_text, schema, rules,
-                    question=question,
-                    strict_tail=tail,
-                    max_tokens=512,
-                )
-            except Exception:
-                out = {}
+        for out in self._extract_groups(
+            schema_groups, caller_text, question=question, tail=tail,
+        ):
             if out:
-                merged.update(out)
+                merged.update(out)   # 合併順序仍依 schema_groups，後者覆蓋前者
 
         # 救護患者欄位缺漏 → 專項 LLM 再抽（小 schema，更穩）
         _need_patient_retry = (
