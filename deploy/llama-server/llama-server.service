@@ -1,0 +1,26 @@
+[Unit]
+Description=llama-server (8-slot) — sop119 併發後端
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
+[Service]
+Type=simple
+User=cyberon2
+Group=cyberon2
+Environment=LD_LIBRARY_PATH=/home/cyberon2/nlp_cyberon_server/llama-server-sm120/bin:/usr/local/cuda-12.9/lib64
+ExecStart=/home/cyberon2/nlp_cyberon_server/llama-server-sm120/bin/llama-server \
+  --model /home/cyberon2/nlp_cyberon_server/models/TW-119-Model.gguf \
+  --alias tw-119-model \
+  --host 127.0.0.1 --port 8081 \
+  --n-gpu-layers 99 --ctx-size 65536 --parallel 8 \
+  --cont-batching --flash-attn on --batch-size 2048 --ubatch-size 512 --slots
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-server
+
+[Install]
+WantedBy=multi-user.target

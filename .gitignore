@@ -67,3 +67,5 @@ Thumbs.db
 deploy_nlp_model.sh
 
 *.xlsx
+# llama-server binary（258MB，從 204 rsync 過來，不進 repo）
+llama-server-sm120/

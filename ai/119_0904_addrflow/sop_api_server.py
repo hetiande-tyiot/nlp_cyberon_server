@@ -116,6 +116,12 @@ GGUF_N_CTX = int(os.environ.get("GGUF_N_CTX", "4096"))
 GGUF_N_GPU_LAYERS = int(os.environ.get("GGUF_N_GPU_LAYERS", "-1"))
 GGUF_TEMPERATURE = float(os.environ.get("GGUF_TEMPERATURE", "0.1"))
 
+# LLM 後端：gguf = in-process 單線（預設，原行為）
+#           llama-server = 外部 llama-server 多 slot 真並發（見
+#           docs/localprogress/單線改llama-server並發-遷移runbook.md）
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "gguf").strip().lower()
+_USE_LLAMA_SERVER = LLM_BACKEND in ("llama-server", "llama_server", "llamaserver", "server")
+
 # 119 主/子 BERT 分類器
 ENABLE_MAIN_CLASSIFIER = os.environ.get("ENABLE_MAIN_CLASSIFIER", "1") == "1"
 ENABLE_SUB_CLASSIFIER = os.environ.get("ENABLE_SUB_CLASSIFIER", "1") == "1"
@@ -145,7 +151,20 @@ OBSERVE_IDLE_CLOSE_S = float(os.environ.get("OBSERVE_IDLE_CLOSE_S", "900"))
 
 # ── 預載 LLM extractor ───────────────────────────────────────────────────
 _shared_llm_extractor: Optional[Any] = None
-if os.path.isfile(GGUF_MODEL_PATH):
+if _USE_LLAMA_SERVER:
+    # 後端 B：外部 llama-server（本行程不載 GGUF，不佔 VRAM）
+    try:
+        from llm_extractor_119 import LLMExtractor119
+        _srv_url = os.environ.get("LLAMA_SERVER_URL", "http://127.0.0.1:8081")
+        print(f"⏳ 連接 llama-server {_srv_url} …", flush=True)
+        _shared_llm_extractor = LLMExtractor119(
+            backend="llama-server",
+            temperature=GGUF_TEMPERATURE,
+        )
+        print("✅ llama-server LLM extractor 就緒（無 gen lock，多 slot 並發）", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️  llama-server extractor 建立失敗：{exc}（純規則模式）", flush=True)
+elif os.path.isfile(GGUF_MODEL_PATH):
     try:
         from llm_extractor_119 import LLMExtractor119
         print(f"⏳ 載入 LLMExtractor119 from {GGUF_MODEL_PATH} …", flush=True)
@@ -243,10 +262,54 @@ class Session:
         self.summary_lock = threading.Lock()
         # 最後一次收到 /observe 的時間（time.monotonic()），0 表示從未收到
         self.last_observe_at: float = 0.0
+        # 最後一次被任何 endpoint 碰到的時間，供 reaper 判斷閒置（見 _session_reaper_loop）
+        self.last_activity: float = time.monotonic()
 
 
 _sessions: Dict[str, Session] = {}
 _sessions_lock = threading.Lock()
+
+# ── session 回收參數 ───────────────────────────────────────────────────────
+# 已 /hangup 的 session 再留這麼久（讓機器 A 來得及取 /result），然後回收
+SESSION_KEEP_AFTER_HANGUP_S = float(os.environ.get("SESSION_KEEP_AFTER_HANGUP_S", "300"))
+# 沒 /hangup 但完全沒動靜的 session，硬性上限（機器 A 掉線沒收工的防呆）
+SESSION_IDLE_TIMEOUT_S = float(os.environ.get("SESSION_IDLE_TIMEOUT_S", "3600"))
+# reaper 掃描間隔
+SESSION_REAP_INTERVAL_S = float(os.environ.get("SESSION_REAP_INTERVAL_S", "60"))
+
+# 每個 session 目前有幾個進行中的 HTTP 請求（受 _sessions_lock 保護）。
+# reaper 絕不回收 in-flight > 0 的 session——一輪 /input 可能跑很久（多次 LLM
+# 生成、併發時更久），單靠「最近有沒有動作」會在通話中途把 session 收掉。
+_inflight: Dict[str, int] = {}
+
+
+def _sess_id_of_request(path: str) -> Optional[str]:
+    """/session/<id> 或 /session/<id>/xxx → <id>；/session/new 與其他路徑 → None。"""
+    parts = path.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "session" and parts[1] != "new":
+        return parts[1]
+    return None
+
+
+@app.middleware("http")
+async def _track_inflight(request, call_next):
+    sid = _sess_id_of_request(request.url.path)
+    if sid is not None:
+        with _sessions_lock:
+            _inflight[sid] = _inflight.get(sid, 0) + 1
+    try:
+        return await call_next(request)
+    finally:
+        if sid is not None:
+            with _sessions_lock:
+                remaining = _inflight.get(sid, 1) - 1
+                if remaining <= 0:
+                    _inflight.pop(sid, None)
+                else:
+                    _inflight[sid] = remaining
+                sess = _sessions.get(sid)
+                if sess is not None:
+                    sess.last_activity = time.monotonic()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -266,11 +329,14 @@ class QueuedIO119(DialogueIO):
 
     def say(self, text: str) -> None:
         print(f"[SOP119 {self._sess.sess_id[:8]}] 受理員：{text}", flush=True)
+        self._sess.last_activity = time.monotonic()
         self._sess.output_q.put({"type": "chat", "role": "assistant", "text": text})
 
     def hear_text(self) -> str:
         self._sess._engine_ready.set()  # signal: engine ready for next caller text
+        self._sess.last_activity = time.monotonic()
         text = self._sess.input_q.get()
+        self._sess.last_activity = time.monotonic()
         self._sess._engine_ready.clear()
         if text != END_FLOW_SENTINEL:
             print(f"[SOP119 {self._sess.sess_id[:8]}] 報警人：{text}", flush=True)
@@ -278,6 +344,8 @@ class QueuedIO119(DialogueIO):
 
     def emit(self, event: Dict[str, Any]) -> None:
         """非對話事件（case_update / classification / stage_update / stopped / error）。"""
+        # 引擎只要有進度就算活動，避免長時間一輪被 reaper 誤收（見 _session_reaper_loop）
+        self._sess.last_activity = time.monotonic()
         self._sess.output_q.put(event)
 
 
@@ -616,6 +684,8 @@ def push_input(sess_id: str, payload: InputPayload):
     """餵一句報警人文字。回到下一個 hear_text 或 done 才 return。"""
     with _sessions_lock:
         sess = _sessions.get(sess_id)
+        if sess is not None:
+            sess.last_activity = time.monotonic()
     if sess is None:
         raise HTTPException(status_code=404, detail="session not found")
     if sess.done.is_set():
@@ -646,6 +716,8 @@ def observe_session(sess_id: str, payload: ObservePayload):
     """
     with _sessions_lock:
         sess = _sessions.get(sess_id)
+        if sess is not None:
+            sess.last_activity = time.monotonic()
     if sess is None:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -680,6 +752,8 @@ def hangup_session(sess_id: str):
     """強制結束：input_q.put(END_FLOW_SENTINEL) 讓引擎 _hear() 拋 FlowAbortedError。"""
     with _sessions_lock:
         sess = _sessions.get(sess_id)
+        if sess is not None:
+            sess.last_activity = time.monotonic()
     if sess is None:
         raise HTTPException(status_code=404, detail="session not found")
     sess.input_q.put(END_FLOW_SENTINEL)
@@ -701,6 +775,8 @@ def get_result(sess_id: str):
     """拿 CaseInfo119 完整案件 JSON。"""
     with _sessions_lock:
         sess = _sessions.get(sess_id)
+        if sess is not None:
+            sess.last_activity = time.monotonic()
     if sess is None:
         raise HTTPException(status_code=404, detail="session not found")
     if not sess.done.is_set():
@@ -717,6 +793,8 @@ def poll_output(sess_id: str):
     """輪詢未消化的 events（無等待）。"""
     with _sessions_lock:
         sess = _sessions.get(sess_id)
+        if sess is not None:
+            sess.last_activity = time.monotonic()
     if sess is None:
         raise HTTPException(status_code=404, detail="session not found")
     events = _drain_now(sess)
@@ -742,6 +820,8 @@ async def stream_case(sess_id: str):
     """
     with _sessions_lock:
         sess = _sessions.get(sess_id)
+        if sess is not None:
+            sess.last_activity = time.monotonic()
     if sess is None:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -791,11 +871,74 @@ def case_field_labels():
     return _CASE_FIELD_LABELS_119
 
 
+def _release_session(sess: Session, reason: str) -> None:
+    """把 session 從 _sessions 移除，並確保它的背景 thread 能收工。
+
+    engine thread 可能還阻塞在 input_q.get()，光刪 dict 會留下殭屍 thread，
+    所以要補一個 END_FLOW_SENTINEL 讓 _hear() 拋 FlowAbortedError 退出。
+    """
+    with _sessions_lock:
+        _sessions.pop(sess.sess_id, None)
+        _inflight.pop(sess.sess_id, None)
+    if not sess.done.is_set():
+        try:
+            sess.input_q.put(END_FLOW_SENTINEL)
+        except Exception:  # noqa: BLE001
+            pass
+    sess.closed.set()
+    sess.summary_dirty.set()   # 叫醒 summary worker 讓它看到 closed 後退出
+    print(f"[SOP119 {sess.sess_id[:8]}] 🧹 session 回收（{reason}）", flush=True)
+
+
+@app.delete("/session/{sess_id}")
+def close_session(sess_id: str):
+    """機器 A 取完 /result 後主動清掉 session（不呼叫也沒關係，reaper 會收）。"""
+    with _sessions_lock:
+        sess = _sessions.get(sess_id)
+    if sess is None:
+        # 已被回收或本來就不存在，視為成功（冪等）
+        return {"closed": True, "already_gone": True}
+    _release_session(sess, "DELETE /session")
+    return {"closed": True, "already_gone": False}
+
+
+def _session_reaper_loop() -> None:
+    """背景回收閒置 session，避免 _sessions 只增不減。
+
+    兩條規則：
+      1. 已 /hangup（closed）且閒置超過 SESSION_KEEP_AFTER_HANGUP_S → 收
+      2. 不管有沒有 hangup，閒置超過 SESSION_IDLE_TIMEOUT_S → 收（機器 A 掉線防呆）
+    """
+    while True:
+        time.sleep(SESSION_REAP_INTERVAL_S)
+        try:
+            now = time.monotonic()
+            with _sessions_lock:
+                snapshot = [
+                    sess for sess in _sessions.values()
+                    if _inflight.get(sess.sess_id, 0) == 0   # 有請求在跑就不動它
+                ]
+            for sess in snapshot:
+                idle = now - sess.last_activity
+                if sess.closed.is_set() and idle > SESSION_KEEP_AFTER_HANGUP_S:
+                    _release_session(sess, f"hangup 後閒置 {idle:.0f}s")
+                elif idle > SESSION_IDLE_TIMEOUT_S:
+                    _release_session(sess, f"閒置 {idle:.0f}s 逾時")
+        except Exception as exc:  # noqa: BLE001
+            print(f"⚠️  session reaper 出錯（已忽略）：{exc}", flush=True)
+
+
+threading.Thread(
+    target=_session_reaper_loop, daemon=True, name="sop119-session-reaper"
+).start()
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "sessions": len(_sessions),
+        "llm_backend": "llama-server" if _USE_LLAMA_SERVER else "gguf",
         "llm_loaded": _shared_llm_extractor is not None,
         "main_classifier_loaded": _shared_main_classifier is not None,
         "sub_classifier_loaded": _shared_sub_classifiers is not None,
