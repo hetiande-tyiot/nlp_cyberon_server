@@ -49,7 +49,8 @@ detect_cuda_arch() {
 
 find_nvcc() {
   command -v nvcc 2>/dev/null && return 0
-  ls /usr/local/cuda*/bin/nvcc 2>/dev/null | sort -V | tail -1
+  # 沒裝 toolkit 時 ls 會失敗；pipefail 會把失敗往外傳，沒有 || true 會讓整支腳本靜默結束
+  ls /usr/local/cuda*/bin/nvcc 2>/dev/null | sort -V | tail -1 || true
 }
 
 # 裝 CUDA toolkit（只裝 toolkit，不碰顯卡驅動）
@@ -83,7 +84,8 @@ install_cuda_toolkit() {
 
 # 沒指定就用 ai/ 底下最新的 119_* 版本目錄
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(ls -d "$BASE"/ai/119_* 2>/dev/null | grep -v '\.zip$' | sort | tail -1 | xargs -r basename)"
+  # 同上：沒有 ai/119_* 時 ls 會失敗，pipefail 會讓腳本靜默結束，所以補 || true
+  VERSION="$(ls -d "$BASE"/ai/119_* 2>/dev/null | grep -v '\.zip$' | sort | tail -1 | xargs -r basename || true)"
 fi
 
 echo "repo：   $BASE"
