@@ -620,6 +620,15 @@ class SopEngine119:
             "non_building_fire",
             "vehicle_wildfire_code",
             "minor_fire_code",
+            # 垂片 A 照 0929 xlsx 新增的文字欄位
+            "place_usage",
+            "spread_status",
+            "trapped_status",
+            "door_response",
+            "building_construction",
+            "odor",
+            "explosion_status",
+            "access_info",
         }
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
@@ -2053,10 +2062,11 @@ class SopEngine119:
                 snapshot.setdefault(key, val)
 
             ambiguous = (old_slots & set(new_slots)) - SHARED_SEMANTIC_SLOTS
-            if main_cat == "火警":
-                # 同垂片切子類只清身份編號；has_flame 等 SOP 碼保留。
-                ambiguous &= FIRE_IDENTITY_CODE_FIELDS
             exclusive_old = old_slots - set(new_slots)
+            if main_cat == "火警":
+                # 火警換垂片或換細類時，只清細類代碼；報案人已經回答過的內容全部保留、不重問。
+                ambiguous &= FIRE_IDENTITY_CODE_FIELDS
+                exclusive_old &= FIRE_IDENTITY_CODE_FIELDS
             for field in exclusive_old | ambiguous:
                 if hasattr(self.case, field):
                     setattr(self.case, field, None)
@@ -2077,8 +2087,12 @@ class SopEngine119:
 
         with self._case_lock:
             for field, val in remapped.items():
-                if field in new_slots and val is not None:
-                    setattr(self.case, field, val)
+                if field not in new_slots or val is None:
+                    continue
+                # 火警：LLM 搬過來的答案只補空白欄位，不蓋掉報案人已經回答過的內容。
+                if main_cat == "火警" and self.case.is_field_filled(field):
+                    continue
+                setattr(self.case, field, val)
             if main_cat == "火警":
                 apply_bert_subtype_to_case(
                     self.case, new_sub, new_conf, allow_tab_switch=True,

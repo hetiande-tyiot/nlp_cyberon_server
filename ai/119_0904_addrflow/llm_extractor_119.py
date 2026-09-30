@@ -55,6 +55,7 @@ from sop_utils_119 import (
 )
 from fire_tab_map_119 import (
     FIRE_CODE_FIELDS,
+    FIRE_FIXED_ANSWERS,
     infer_tab,
     normalize_extracted_fire_fields,
     normalize_fire_field,
@@ -1026,7 +1027,7 @@ class LLMExtractor119:
             "prenatal_clinic":       "string|null",
         }
         fire_schema = {
-            "fire_or_smoke":          "string|null",
+            "fire_or_smoke":          "有火|只有煙|無火無煙|不確定|null",
             "smoke_color":            "string|null",
             "burning_object":         "string|null",
             "fire_trend":             "string|null",
@@ -1053,16 +1054,15 @@ class LLMExtractor119:
             "affected_targets":       "string|null",
             "fire_incident_type":     "0|1|null",
             "building_type_code":     "00|10|11|12|20|21|22|23|24|25|26|27|28|29|null",
-            "has_flame":              "0|1|null",
-            "smoke_color_code":       "0|1|2|3|null",
-            "has_explosion":          "0|1|null",
-            "spread_risk":            "0|1|null",
-            "people_trapped_code":    "0|1|null",
-            "building_floors_code":   "0|1|2|3|4|null",
-            "fire_floor_code":        "0|1|2|3|4|5|null",
-            "building_structure":     "0|1|2|3|4|5|6|null",
-            "burn_area_code":         "0|1|2|3|4|5|null",
-            "access_water_info":      "0|1|2|3|null",
+            # 垂片 A（建築物火警）照 0929 xlsx 的欄位，存文字
+            "place_usage":            "string|null",
+            "spread_status":          "string|null",
+            "trapped_status":         "有人受困|無人受困|不確定|null",
+            "door_response":          "string|null",
+            "building_construction":  "string|null",
+            "odor":                   "string|null",
+            "explosion_status":       "string|null",
+            "access_info":            "string|null",
             "non_building_fire":      "0|1|null",
             "vehicle_wildfire_code":  "0|1|2|3|4|5|6|7|8|null",
             "minor_fire_code":        "0|1|2|3|4|null",
@@ -1147,34 +1147,51 @@ class LLMExtractor119:
             "20旅館百貨商場；21運輸中樞；22電影院；23學校醫院老人院；24毒災場所；"
             "25大型違章建築區與傳統市場(含工廠)；26石化廠；27古蹟文化財；"
             "28地下建築物；29高層建築物(10層以上)。\n"
-            "- has_flame：看到火苗/火焰=1；只有煙或無火焰=0。\n"
-            "- smoke_color_code：0無煙；1黑色煙；2白色煙；3其他色煙。\n"
-            "- has_explosion：聽到爆炸=1；明確沒有=0。\n"
-            "- spread_risk：已燒到旁邊或極可能延燒=1；延燒可能性低=0。\n"
-            "- people_trapped_code / people_trapped：有人沒出來或受困=1/true；"
-            "明確無人受困=0/false。\n"
-            "- building_floors_code：建物總樓層 0未知；1=1~3層；2=4~10層；"
-            "3=11~15層；4=16層以上。可填層數或代碼。\n"
-            "- fire_floor_code：起火樓層 0未知；1地下室；2=1~3層；3=4~10層；"
-            "4=11~15層；5=16層以上。\n"
-            "- building_structure：0其他；1木造屋；2鐵皮屋；3連造式鐵皮屋；"
-            "4磚造屋；5RC；6SRC。\n"
-            "- burn_area_code：0未知；1=0~50坪；2=50~100坪；3=100~300坪；"
-            "4=300~500坪；5=500坪以上。\n"
-            "- access_water_info：消防車能否進入、附近有無水源。"
-            "0一般情況；1小巷；2缺水；3小巷且缺水。\n"
+            "【建築物火警欄位（存文字）】下列「參考」只是常見說法，不是選擇題："
+            "回答符合某個參考說法就用那個說法；不符合但和這一欄有關，"
+            "就用報案人的話簡短記下。標★的欄位例外：只能從列出的說法選一個，"
+            "依報案人話裡的意思判斷，不是看有沒有出現那幾個字。\n"
+            "- fire_or_smoke 火煙狀況★：只能填 有火、只有煙、無火無煙、不確定。"
+            "有火＝看到火，有沒有煙都算（例如「火很大，煙也很多」）；"
+            "只有煙＝看到煙但沒看到火；無火無煙＝明確說沒看到火也沒看到煙"
+            "（例如只聞到味道、只聽到警報器）；不確定＝人不在現場、沒去看、"
+            "聽別人說的、說不知道。「不確定」不可填成「無火無煙」。\n"
+            "- smoke_color 濃煙顏色：參考 無煙、黑色煙、白色煙、其他色煙；"
+            "報案人說沒有煙時一定要填「無煙」。\n"
+            "- fire_floor 起火樓層：參考 未知、地下室起火、1~3層樓、4~10層樓、"
+            "11~15層樓、16層樓以上；報案人說幾樓就記幾樓（例如「3樓」）。\n"
+            "- spread_status 延燒可能：參考 延燒可能性低、極可能或已延燒；"
+            "報案人描述火勢大小也記在這裡。\n"
+            "- trapped_status 有無受困★：只能填 有人受困、無人受困、不確定。"
+            "有人受困＝還有人在裡面出不來、沒出來、有人呼救"
+            "（例如「三樓還有阿嬤出不來」）；無人受困＝人都出來了、裡面沒人；"
+            "不確定＝報案人說不知道或不清楚。\n"
+            "- door_response 起火戶應門：參考 有人在或已聯絡上、敲門無回應或聯絡不上。\n"
+            "- building_total_floors 建物樓層：參考 未知、1層樓、2~3層樓、4~10層樓、"
+            "11~15層樓、16層樓以上；報案人說幾層就記幾層（例如「5層樓」）。\n"
+            "- place_usage 場所用途：參考 住家、店家、工廠、辦公室、其他。\n"
+            "- caller_role 報案人身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、"
+            "里長、其他。\n"
+            "- building_construction 建物構造：參考 木造屋、鐵皮屋、連造式鐵皮屋、"
+            "磚造屋、RC、SRC、其他。\n"
+            "- hazardous_materials 危險物品：參考 無或未知、有（瓦斯桶、化學藥品等）；"
+            "有的話記下是什麼。\n"
+            "- odor 氣味：參考 無、燒焦味、塑膠味、瓦斯味、其他。\n"
+            "- explosion_status 有無爆炸：參考 無爆炸、有爆炸。\n"
+            "- access_info 其他資訊：消防車進不進得去、附近有沒有水源；"
+            "參考 一般情況、小巷、缺水、小巷且缺水。\n"
+            "- fire_extent 延燒面積：參考 未知、0~50坪、50~100坪、100~300坪、"
+            "300~500坪、500坪以上；報案人用其他方式形容範圍也照記。\n"
             "- non_building_fire：交通工具或山林草木=0；輕微火警=1。\n"
             "- vehicle_wildfire_code：0汽車；1機車；2隧道；3軌道型交通工具；"
             "4化學毒劑交通工具；5船舶；6航空器；7山林田野(平地)；8山林田野(山地)。\n"
             "- minor_fire_code：0垃圾；1電線桿(電纜)；2瓦斯漏氣；3警報器作響；"
             "4查看案件。\n"
-            "- fire_or_smoke / smoke_color / burning_object / fire_trend / "
-            "fire_extent：自由文本補充。\n"
+            "- burning_object / fire_trend：自由文本補充。\n"
             "- fire_category：若能判斷，住宅房子大樓=建築物；工廠廠房=工廠；"
             "汽機車=車輛；雜草垃圾山林=露天野外。\n"
-            "- caller_position/caller_role、trapped_count、"
-            "building_total_floors/fire_floor、factory_*、vehicle_*、"
-            "outdoor_*：報案人有提到才填。"
+            "- caller_position、people_trapped、trapped_count、fire_spread、"
+            "factory_*、vehicle_*、outdoor_*：報案人有提到才填。"
         )
         allowed_tags = "、".join(IMPORTANT_TAGS)
         universal_rules = (
@@ -1332,6 +1349,15 @@ class LLMExtractor119:
                     result[key] = count
             else:
                 cleaned = _clean_str(val)
+                # 火煙狀況、有無受困：LLM 必須從固定說法選一個。
+                # 寫錯格式（例如「有火有煙」「有火。」）就不記，
+                # 讓送給下游的值一定是清單上的說法或空白。
+                if (
+                    cleaned
+                    and key in FIRE_FIXED_ANSWERS
+                    and cleaned not in FIRE_FIXED_ANSWERS[key]
+                ):
+                    cleaned = None
                 if cleaned and key == "call_type" and cleaned not in {
                     "局內回報", "一般案件",
                 }:

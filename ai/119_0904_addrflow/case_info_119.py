@@ -74,7 +74,7 @@ class CaseInfo119:
     prenatal_clinic:       Optional[str] = None  # 產檢醫院/診所
 
     # ── 火警 SOP 要素 ────────────────────────────────────────────────────────
-    fire_or_smoke:       Optional[str] = None  # 看到火、煙或僅聞到氣味
+    fire_or_smoke:       Optional[str] = None  # 火煙狀況：只記 有火/只有煙/無火無煙/不確定
     smoke_color:         Optional[str] = None  # 黑煙/白煙/其他顏色
     burning_object:      Optional[str] = None  # 燒什麼（房子/車子/雜草…）
     fire_trend:          Optional[str] = None  # 變大/消退/穩定
@@ -98,6 +98,18 @@ class CaseInfo119:
     non_building_fire:     Optional[int] = None  # 0=交通工具及山林；1=輕微火警
     vehicle_wildfire_code: Optional[int] = None  # 0~6交通工具；7平地；8山地
     minor_fire_code:       Optional[int] = None  # 0垃圾；1電線桿；2瓦斯；3警報；4查看
+
+    # 垂片 A（建築物火警）照 0929 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
+    # 其他 A 的關鍵要素沿用既有文字欄位：sub_category（建築物類型）、fire_or_smoke（火煙狀況）、
+    # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、fire_extent。
+    place_usage:           Optional[str] = None  # 場所用途：住家/店家/工廠/辦公室…
+    spread_status:         Optional[str] = None  # 延燒可能：延燒可能性低/極可能或已延燒…
+    trapped_status:        Optional[str] = None  # 有無受困：只記 有人受困/無人受困/不確定；有人受困就轉人工
+    door_response:         Optional[str] = None  # 起火戶應門：有人在或已聯絡上/敲門無回應或聯絡不上…
+    building_construction: Optional[str] = None  # 建物構造：木造屋/鐵皮屋/磚造屋/RC…
+    odor:                  Optional[str] = None  # 氣味：燒焦味/塑膠味/瓦斯味…
+    explosion_status:      Optional[str] = None  # 有無爆炸（被動，報案人講到才記）
+    access_info:           Optional[str] = None  # 其他資訊：消防車進不進得去、有沒有水源（被動）
 
     # 建築物火災
     caller_position:      Optional[str] = None  # 報案人在建物內/外

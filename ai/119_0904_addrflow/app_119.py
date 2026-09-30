@@ -265,6 +265,15 @@ _CSS = """
 
 # ─── 流程階段定義（用於右欄進度顯示）────────────────────────────────────────
 
+from fire_tab_map_119 import MODE_PASSIVE, TAB_A_QUESTIONS
+
+# 垂片 A 會問到的題目（被動題 AI 不問，不列入進度）：(流程階段名稱, 畫面上顯示的文字)
+_FIRE_TAB_A_STAGE_LABELS: List[tuple[str, str]] = [
+    (item.stage, f"建物：{item.element}")
+    for item in TAB_A_QUESTIONS
+    if item.mode != MODE_PASSIVE
+]
+
 _STAGE_LABELS: List[tuple[str, str]] = [
     ("initial",                  "詢問火災/救護"),
     ("main_classified",          "主類別分類完成"),
@@ -299,17 +308,8 @@ _STAGE_LABELS: List[tuple[str, str]] = [
     ("火警_location",            "確認地址"),
     ("火警_location_confirm",    "地址確認中"),
     ("火警-案類分析",            "案類分析"),
-    ("火警_A_building_type",     "建物：建築物類型"),
-    ("火警_A_flame",             "建物：有無火焰"),
-    ("火警_A_smoke",             "建物：濃煙顏色"),
-    ("火警_A_explosion",         "建物：有無爆炸"),
-    ("火警_A_spread",            "建物：延燒可能"),
-    ("火警_A_trapped",           "建物：有無受困"),
-    ("火警_A_floors",            "建物：建物樓層"),
-    ("火警_A_fire_floor",        "建物：起火樓層"),
-    ("火警_A_structure",         "建物：建物構造"),
-    ("火警_A_area",              "建物：延燒面積"),
-    ("火警_A_access",            "建物：巷道與水源"),
+    # 垂片 A：直接取自 fire_tab_map_119 的題目表，xlsx 改題目時這裡會自動跟著變
+    *_FIRE_TAB_A_STAGE_LABELS,
     ("火警_B1_subtype",          "交通工具細類"),
     ("火警_B2_subtype",          "山林田野細類"),
     ("火警_C_subtype",           "輕微火警細類"),
@@ -363,10 +363,7 @@ _FIRE_PREFIX: List[str] = [
 ]
 _FIRE_BRANCH_STAGES: Dict[str, List[str]] = {
     "A": [
-        "火警_A_building_type", "火警_A_flame", "火警_A_smoke",
-        "火警_A_explosion", "火警_A_spread", "火警_A_trapped",
-        "火警_A_floors", "火警_A_fire_floor", "火警_A_structure",
-        "火警_A_area", "火警_A_access",
+        *(stage for stage, _ in _FIRE_TAB_A_STAGE_LABELS),
     ],
     "B1": ["火警_B1_subtype"],
     "B2": ["火警_B2_subtype"],
@@ -1148,14 +1145,12 @@ def main():
 
             from fire_tab_map_119 import FIELD_LABELS_ZH
 
+            # 火煙狀況、濃煙顏色、延燒面積已列在 FIELD_LABELS_ZH，不再重複顯示舊的那三行
             fire_fields = [
                 (label, case.get(key)) for key, label in FIELD_LABELS_ZH.items()
             ] + [
-                ("火/煙/氣味", case.get("fire_or_smoke")),
-                ("煙色",       case.get("smoke_color")),
                 ("燃燒物",     case.get("burning_object")),
                 ("火勢趨勢",   case.get("fire_trend")),
-                ("燃燒範圍",   case.get("fire_extent")),
             ]
             fire_tab = case.get("fire_tab")
             if fire_tab == "A":

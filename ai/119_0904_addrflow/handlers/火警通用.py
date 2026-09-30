@@ -15,12 +15,16 @@ from fire_tab_map_119 import (
     INCIDENT_Q,
     INCIDENT_REASK_Q,
     INCIDENT_STAGE,
+    MODE_CONDITIONAL,
+    MODE_PASSIVE,
     SAFETY_MESSAGE,
     TAB_A,
     TAB_B1,
     TAB_B2,
     TAB_C,
     TAB_QUESTIONS,
+    TRAPPED_TRANSFER_MESSAGE,
+    TRAPPED_YES,
     UNRESOLVED_TAB_TAG,
     infer_tab,
     resolve_fire_tab,
@@ -38,6 +42,8 @@ class HuoJingGenericHandler(SubCategoryHandler):
     def run_generic_flow(self, engine: "SopEngine119") -> None:
         """完成案類分析與垂片詢問，再播放統一安全提示。"""
         engine._ensure_known_fields_from_history()
+        # 報地址時就講出有人受困 → 不必問案類，直接轉人工
+        self._transfer_if_people_trapped(engine)
         self._resolve_tab(engine)
 
         engine._sub_reclassify_enabled = True
@@ -61,6 +67,20 @@ class HuoJingGenericHandler(SubCategoryHandler):
 
         engine._set_stage("火警_safety")
         engine._say(SAFETY_MESSAGE)
+
+    def _transfer_if_people_trapped(self, engine: "SopEngine119") -> None:
+        """
+        有無受困已記成「有人受困」→ 說一句話後立刻轉接專人。
+        火警流程中每次報案人回答之後、每一題問之前都會檢查，不等問到「有無受困」那一題。
+        已經轉接過（真人接手、系統只在旁聽）就不再處理。
+        """
+        if engine.case.trapped_status != TRAPPED_YES or engine._bridged:
+            return
+        from sop_119_engine import TransferToHumanError
+
+        engine._debug_print("fire_people_trapped_transfer", engine.case.trapped_status)
+        engine._say(TRAPPED_TRANSFER_MESSAGE)
+        raise TransferToHumanError("fire_people_trapped", result="human_transfer")
 
     def _flag_fire_issue(self, engine: "SopEngine119", tag: str) -> None:
         """記錄無法判斷／資訊缺失，繼續流程、不轉人工。"""
@@ -135,6 +155,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
             engine._set_stage(INCIDENT_STAGE)
             answer = engine._ask_and_extract(question)
             self._check_and_respond_to_triggers(answer, engine)
+            self._transfer_if_people_trapped(engine)
             tab = self._tab_already_known(engine) or self._classify_tab(
                 engine, question, answer,
             )
@@ -148,8 +169,24 @@ class HuoJingGenericHandler(SubCategoryHandler):
         return TAB_C
 
     def _ask_tab_questions(self, engine: "SopEngine119", tab: str) -> None:
-        for field, stage, question in TAB_QUESTIONS.get(tab, ()):
-            self._ask_missing(engine, stage, (field,), question)
+        """
+        照 xlsx 的順序逐題處理：
+        - 被動題：不問（報案人講到時，每一輪的欄位抽取會記下來）
+        - 條件題：前置條件確定成立才問；不確定就當作不成立，不問
+        - 主動題、條件成立的條件題：答案還不知道才問
+        條件在輪到那一題時才判斷，因為要用到前面剛問到的答案。
+        """
+        for item in TAB_QUESTIONS.get(tab, ()):
+            engine._ensure_known_fields_from_history()
+            self._transfer_if_people_trapped(engine)
+            if item.mode == MODE_PASSIVE:
+                continue
+            if item.mode == MODE_CONDITIONAL and not item.condition(engine.case):
+                engine._debug_print(
+                    f"skip_{item.stage}", {"前置條件不成立": item.condition_text},
+                )
+                continue
+            self._ask_missing(engine, item.stage, (item.field,), item.question)
 
     def _ask_missing(
         self,
@@ -170,6 +207,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
             return None
         answer = engine._ask_and_extract(question)
         self._check_and_respond_to_triggers(answer, engine)
+        self._transfer_if_people_trapped(engine)
         return answer
 
     def _check_and_respond_to_triggers(
@@ -217,6 +255,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
             question = "最後請提供回撥電話，並告訴我是先生還是小姐。"
         answer = engine._ask_and_extract(question)
         self._extract_caller_info(answer, question, engine)
+        self._transfer_if_people_trapped(engine)
 
         if original_contact:
             confirmed = parse_yes_no_for_question(question, answer)
@@ -224,6 +263,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
                 correction_q = "請重新提供正確的回撥電話。"
                 correction = engine._ask_and_extract(correction_q)
                 self._extract_caller_info(correction, correction_q, engine)
+                self._transfer_if_people_trapped(engine)
 
         for _attempt in range(2):
             if engine._is_field_filled("caller_contact"):
@@ -231,12 +271,14 @@ class HuoJingGenericHandler(SubCategoryHandler):
             phone_q = "請提供可以回撥的聯絡電話。"
             phone_answer = engine._ask_and_extract(phone_q)
             self._extract_caller_info(phone_answer, phone_q, engine)
+            self._transfer_if_people_trapped(engine)
         for _attempt in range(2):
             if engine._is_field_filled("caller_salutation"):
                 break
             salutation_q = "請問是先生還是小姐？"
             salutation_answer = engine._ask_and_extract(salutation_q)
             self._extract_caller_info(salutation_answer, salutation_q, engine)
+            self._transfer_if_people_trapped(engine)
 
         if not engine._is_field_filled("caller_contact"):
             self._flag_fire_issue(engine, "回撥電話無法確認")
