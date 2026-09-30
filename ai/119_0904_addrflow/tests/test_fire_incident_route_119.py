@@ -20,6 +20,7 @@ from fire_tab_map_119 import (
     SAFETY_MESSAGE,
     TAB_A,
     TAB_B1,
+    TAB_B1_QUESTIONS,
     TAB_B2,
     TAB_C,
     UNRESOLVED_TAB_TAG,
@@ -257,8 +258,9 @@ class ResolveTabFlowTests(unittest.TestCase):
 class GenericFlowEndToEndTests(unittest.TestCase):
     """run_generic_flow：案類分析接到垂片問題，最後播安全提示。"""
 
-    def test_subtype_known_from_incident_answer_goes_straight_to_safety(self) -> None:
-        # 「我的機車燒起來」→ B1 且細類已知 → B1 細類題跳過 → 安全提示
+    def test_subtype_known_from_incident_answer_skips_subtype_question(self) -> None:
+        # 「我的機車燒起來」→ B1 且細類已知 → 不問 B1 第一題「交通工具」，直接問下一題「車種」。
+        # 只準備一句回答：問到車種時回答用完就停，這裡只檢查問了哪兩句。
         answer = "我的機車燒起來"
         llm = FakeLLM(
             tab_answers={answer: TAB_B1},
@@ -267,10 +269,12 @@ class GenericFlowEndToEndTests(unittest.TestCase):
                                 "vehicle_wildfire_code": 1}},
         )
         engine, io = _make_engine([answer], llm)
-        HuoJingGenericHandler().run_generic_flow(engine)
+        with self.assertRaises(AssertionError):  # 回答用完
+            HuoJingGenericHandler().run_generic_flow(engine)
+        vehicle_q = {item.element: item.question for item in TAB_B1_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_B1)
-        self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
-        self.assertFalse(io.answers)
+        self.assertEqual(engine.case.sub_category, "機車")
+        self.assertEqual(io.messages, [INCIDENT_Q, vehicle_q["車種"]])
 
     def test_tab_known_but_subtype_unknown_asks_tab_question(self) -> None:
         # 「垃圾那邊」→ C 但細類未抽到 → 問 C 垂片細類題，再播安全提示

@@ -265,14 +265,19 @@ _CSS = """
 
 # ─── 流程階段定義（用於右欄進度顯示）────────────────────────────────────────
 
-from fire_tab_map_119 import MODE_PASSIVE, TAB_A_QUESTIONS
+from fire_tab_map_119 import MODE_PASSIVE, TAB_QUESTIONS
 
-# 垂片 A 會問到的題目（被動題 AI 不問，不列入進度）：(流程階段名稱, 畫面上顯示的文字)
-_FIRE_TAB_A_STAGE_LABELS: List[tuple[str, str]] = [
-    (item.stage, f"建物：{item.element}")
-    for item in TAB_A_QUESTIONS
-    if item.mode != MODE_PASSIVE
-]
+# 各垂片會問到的題目（被動題 AI 不問，不列入進度）：{垂片: [(流程階段名稱, 畫面上顯示的文字)]}
+# 直接取自 fire_tab_map_119 的題目表，xlsx 改題目時這裡會自動跟著變。
+_FIRE_TAB_DISPLAY_PREFIX = {"A": "建物", "B1": "交通", "B2": "山林", "C": "輕微"}
+_FIRE_TAB_STAGE_LABELS: Dict[str, List[tuple[str, str]]] = {
+    tab: [
+        (item.stage, f"{_FIRE_TAB_DISPLAY_PREFIX[tab]}：{item.element}")
+        for item in questions
+        if item.mode != MODE_PASSIVE
+    ]
+    for tab, questions in TAB_QUESTIONS.items()
+}
 
 _STAGE_LABELS: List[tuple[str, str]] = [
     ("initial",                  "詢問火災/救護"),
@@ -308,11 +313,8 @@ _STAGE_LABELS: List[tuple[str, str]] = [
     ("火警_location",            "確認地址"),
     ("火警_location_confirm",    "地址確認中"),
     ("火警-案類分析",            "案類分析"),
-    # 垂片 A：直接取自 fire_tab_map_119 的題目表，xlsx 改題目時這裡會自動跟著變
-    *_FIRE_TAB_A_STAGE_LABELS,
-    ("火警_B1_subtype",          "交通工具細類"),
-    ("火警_B2_subtype",          "山林田野細類"),
-    ("火警_C_subtype",           "輕微火警細類"),
+    # 四張垂片的題目：直接取自 fire_tab_map_119 的題目表
+    *(pair for labels in _FIRE_TAB_STAGE_LABELS.values() for pair in labels),
     ("火警_safety",              "安全提示"),
     ("火警_summary_confirm",     "案情摘要回填"),
     ("火警_caller_info",         "收集報案人訊息"),
@@ -362,12 +364,8 @@ _FIRE_PREFIX: List[str] = [
     "火警-案類分析",
 ]
 _FIRE_BRANCH_STAGES: Dict[str, List[str]] = {
-    "A": [
-        *(stage for stage, _ in _FIRE_TAB_A_STAGE_LABELS),
-    ],
-    "B1": ["火警_B1_subtype"],
-    "B2": ["火警_B2_subtype"],
-    "C": ["火警_C_subtype"],
+    tab: [stage for stage, _ in labels]
+    for tab, labels in _FIRE_TAB_STAGE_LABELS.items()
 }
 _FIRE_SUFFIX: List[str] = [
     "火警_safety", "火警_summary_confirm", "火警_caller_info",
@@ -1158,11 +1156,7 @@ def main():
                     ("是否受困", case.get("people_trapped")),
                     ("受困人數", case.get("trapped_count")),
                 ]
-            elif fire_tab == "B1":
-                fire_fields += [
-                    ("車種", case.get("vehicle_type")),
-                    ("車輛數", case.get("vehicle_count")),
-                ]
+            # B1 的車種、起火車輛數量已列在 FIELD_LABELS_ZH，不再另外顯示
             elif fire_tab in ("B2", "C"):
                 fire_fields += [
                     ("燃燒場域", case.get("outdoor_fire_type")),

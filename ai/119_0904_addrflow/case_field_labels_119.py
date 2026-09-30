@@ -143,6 +143,15 @@ LABELS: Dict[str, str] = {
     "odor": "氣味",
     "explosion_status": "有無爆炸",
     "access_info": "其他資訊（消防車能否進入、水源）",
+    # 火警垂片 B1（交通工具火警）照 0929 xlsx 新增的欄位（存文字）
+    "fire_origin_part": "起火部位",
+    "engine_off_status": "車輛是否已熄火",
+    "occupants_status": "乘客下車狀況",
+    "injury_status": "有無人員受傷",
+    "cargo": "載運物",
+    "extinguish_status": "滅火狀況",
+    "vehicle_motion": "車輛停放或行駛中",
+    "plate_number": "車牌號碼",
     # 元資訊
     "case_summary": "案情摘要",
     "flow_stage": "流程階段",

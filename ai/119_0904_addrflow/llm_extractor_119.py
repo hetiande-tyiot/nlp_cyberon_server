@@ -1063,6 +1063,15 @@ class LLMExtractor119:
             "odor":                   "string|null",
             "explosion_status":       "string|null",
             "access_info":            "string|null",
+            # 垂片 B1（交通工具火警）照 0929 xlsx 的欄位，存文字
+            "fire_origin_part":       "string|null",
+            "engine_off_status":      "string|null",
+            "occupants_status":       "人已全部下車|仍有人在車上|不確定|null",
+            "injury_status":          "string|null",
+            "cargo":                  "string|null",
+            "extinguish_status":      "string|null",
+            "vehicle_motion":         "string|null",
+            "plate_number":           "string|null",
             "non_building_fire":      "0|1|null",
             "vehicle_wildfire_code":  "0|1|2|3|4|5|6|7|8|null",
             "minor_fire_code":        "0|1|2|3|4|null",
@@ -1182,6 +1191,19 @@ class LLMExtractor119:
             "參考 一般情況、小巷、缺水、小巷且缺水。\n"
             "- fire_extent 延燒面積：參考 未知、0~50坪、50~100坪、100~300坪、"
             "300~500坪、500坪以上；報案人用其他方式形容範圍也照記。\n"
+            "【交通工具火警欄位（存文字）】規則同上：參考只是常見說法，標★的只能從列出的說法選。\n"
+            "- vehicle_type 車種：參考 自小客車、貨車、電動車、電動機車、其他；"
+            "只要是貨車（小貨車、大貨車、貨櫃車等）一律填「貨車」，其他照報案人說的記。\n"
+            "- fire_origin_part 起火部位：參考 車頭或引擎、車廂或車斗、車底、電瓶、其他。\n"
+            "- vehicle_count 起火車輛數量：照報案人說的記，例如一台、兩台。\n"
+            "- engine_off_status 車輛是否已熄火：參考 已熄火、未熄火。\n"
+            "- occupants_status 乘客下車狀況★：只能填 人已全部下車、仍有人在車上、不確定。"
+            "仍有人在車上＝車上還有人沒下來或出不來。\n"
+            "- injury_status 有無人員受傷：參考 無、有；有的話記下受傷情形。\n"
+            "- cargo 載運物：參考 無或未知、易燃物、化學品、鋰電池、其他。\n"
+            "- extinguish_status 滅火狀況：參考 無人、有人在場、已在自行滅火。\n"
+            "- vehicle_motion 車輛停放或行駛中：參考 停放路邊、行駛中起火、停車場內。\n"
+            "- plate_number 車牌號碼：照報案人說的記。\n"
             "- non_building_fire：交通工具或山林草木=0；輕微火警=1。\n"
             "- vehicle_wildfire_code：0汽車；1機車；2隧道；3軌道型交通工具；"
             "4化學毒劑交通工具；5船舶；6航空器；7山林田野(平地)；8山林田野(山地)。\n"
@@ -1191,7 +1213,8 @@ class LLMExtractor119:
             "- fire_category：若能判斷，住宅房子大樓=建築物；工廠廠房=工廠；"
             "汽機車=車輛；雜草垃圾山林=露天野外。\n"
             "- caller_position、people_trapped、trapped_count、fire_spread、"
-            "factory_*、vehicle_*、outdoor_*：報案人有提到才填。"
+            "factory_*、vehicle_occupants、vehicle_occupant_count、road_type、"
+            "outdoor_*：報案人有提到才填。"
         )
         allowed_tags = "、".join(IMPORTANT_TAGS)
         universal_rules = (

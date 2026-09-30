@@ -126,6 +126,12 @@ TRAPPED_YES = "有人受困"
 TRAPPED_NO = "無人受困"
 TRAPPED_UNSURE = "不確定"
 WAREHOUSE_OR_FACTORY = ("倉庫", "大型違章建築區與傳統市場(含工廠)")
+# B1 乘客下車狀況：「仍有人在車上」跟有人受困一樣，立刻轉人工
+OCCUPANTS_ALL_OUT = "人已全部下車"
+OCCUPANTS_STILL_INSIDE = "仍有人在車上"
+OCCUPANTS_UNSURE = "不確定"
+# B1 車種：只有「貨車」會被前置條件用到（載運物），其他車種照報案人說的記
+VEHICLE_KIND_TRUCK = "貨車"
 
 # 前置條件要用到、而且只能從固定說法裡選的欄位。
 # 由 LLM 理解報案人的話後，從這些說法裡選一個；選了清單以外的值就不記（當作這一輪沒抽到）。
@@ -134,6 +140,7 @@ FIRE_FIXED_ANSWERS: Dict[str, Tuple[str, ...]] = {
         FIRE_SMOKE_HAS_FIRE, FIRE_SMOKE_ONLY_SMOKE, FIRE_SMOKE_NONE, FIRE_SMOKE_UNSURE,
     ),
     "trapped_status": (TRAPPED_YES, TRAPPED_NO, TRAPPED_UNSURE),
+    "occupants_status": (OCCUPANTS_ALL_OUT, OCCUPANTS_STILL_INSIDE, OCCUPANTS_UNSURE),
 }
 
 
@@ -163,6 +170,19 @@ def _people_trapped(case: Any) -> bool:
 def _warehouse_or_factory(case: Any) -> bool:
     """建築物類型 = 倉庫、大型違章建築區與傳統市場(含工廠)。"""
     return getattr(case, "sub_category", None) in WAREHOUSE_OR_FACTORY
+
+
+def _subtype_is(*names: str) -> Callable[[Any], bool]:
+    """前置條件「細類 = 某幾種」，例如「交通工具＝汽車、機車」。細類還不知道就不成立。"""
+    return lambda case: getattr(case, "sub_category", None) in names
+
+
+def _hazmat_vehicle_or_truck(case: Any) -> bool:
+    """交通工具＝化學、毒劑交通工具，或 車種＝貨車（xlsx 前置條件的換行當作「或」）。"""
+    return (
+        getattr(case, "sub_category", None) == "化學、毒劑交通工具"
+        or getattr(case, "vehicle_type", None) == VEHICLE_KIND_TRUCK
+    )
 
 
 TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
@@ -208,11 +228,49 @@ TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("延燒面積", "fire_extent", MODE_PASSIVE, "建築物火警-延燒面積"),
 )
 
-# B1 / B2 / C 尚未照 xlsx 重寫，先維持原本「只問細類」一題。
 TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
-    FireQuestion("交通工具", "vehicle_wildfire_code", MODE_ACTIVE,
-                 "火警_B1_subtype", "那是汽車還是機車呢？還是其它交通工具呢？"),
+    FireQuestion("交通工具", "sub_category", MODE_ACTIVE,
+                 "交通工具火警-交通工具", "是什麼車在燒？汽車或機車嗎？"),
+    FireQuestion("車種", "vehicle_type", MODE_CONDITIONAL,
+                 "交通工具火警-車種", "是什麼車種呢？一般油車還是電動車？",
+                 _subtype_is("汽車", "機車"), "交通工具＝汽車、機車"),
+    FireQuestion("火煙狀況", "fire_or_smoke", MODE_ACTIVE,
+                 "交通工具火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
+    FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,
+                 "交通工具火警-濃煙顏色", "請問是黑煙還是白煙？",
+                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+    FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
+                 "交通工具火警-報案人身分", "請問您是車主或駕駛嗎？還是路人呢？"),
+    FireQuestion("是否延燒", "spread_status", MODE_ACTIVE,
+                 "交通工具火警-是否延燒", "火有沒有燒到旁邊的東西？"),
+    FireQuestion("起火部位", "fire_origin_part", MODE_CONDITIONAL,
+                 "交通工具火警-起火部位", "是車頭還是後車廂燒起來了呢？",
+                 _subtype_is("汽車"), "交通工具＝汽車"),
+    FireQuestion("起火車輛數量", "vehicle_count", MODE_CONDITIONAL,
+                 "交通工具火警-起火車輛數量", "現場幾台在燒？",
+                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+    FireQuestion("車輛是否已熄火", "engine_off_status", MODE_CONDITIONAL,
+                 "交通工具火警-車輛是否已熄火", "車子熄火了嗎？",
+                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+    # 答「仍有人在車上」會立刻轉人工（跟有人受困一樣）
+    FireQuestion("乘客下車狀況", "occupants_status", MODE_CONDITIONAL,
+                 "交通工具火警-乘客下車狀況", "車上的人都下來了嗎？",
+                 _subtype_is("汽車"), "交通工具＝汽車"),
+    FireQuestion("有無人員受傷", "injury_status", MODE_CONDITIONAL,
+                 "交通工具火警-有無人員受傷", "現場有沒有人受傷？",
+                 _subtype_is("機車", "汽車"), "交通工具＝機車、汽車"),
+    FireQuestion("載運物", "cargo", MODE_CONDITIONAL,
+                 "交通工具火警-載運物", "車上有易燃物品之類的嗎？",
+                 _hazmat_vehicle_or_truck, "交通工具＝化學、毒劑交通工具，或 車種=貨車"),
+    FireQuestion("滅火狀況", "extinguish_status", MODE_CONDITIONAL,
+                 "交通工具火警-滅火狀況", "現場有人在滅火嗎？",
+                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+    FireQuestion("車輛停放或行駛中", "vehicle_motion", MODE_PASSIVE,
+                 "交通工具火警-車輛停放或行駛中"),
+    FireQuestion("車牌號碼", "plate_number", MODE_PASSIVE, "交通工具火警-車牌號碼"),
 )
+
+# B2 / C 尚未照 xlsx 重寫，先維持原本「只問細類」一題。
 
 TAB_B2_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("山林火警", "vehicle_wildfire_code", MODE_ACTIVE,
@@ -334,7 +392,7 @@ def subtype_name_from_identity_codes(case: Any) -> Optional[str]:
 
 FIELD_LABELS_ZH: Dict[str, str] = {
     "fire_tab": "垂片",
-    "fire_incident_type": "火災類型",
+    "fire_incident_type": "建築物火警",  # 0＝是建築物火警、1＝不是
     "building_type_code": "建築物類型",
     "has_flame": "有無火焰",
     "smoke_color_code": "濃煙顏色",
@@ -350,7 +408,7 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "vehicle_wildfire_code": "交通工具山林火警",
     "minor_fire_code": "輕微火警",
     # 垂片 A 照 0929 xlsx 重寫後使用的欄位（存文字）
-    "sub_category": "建築物類型",
+    "sub_category": "火警類型",  # 各垂片的細類：透天厝、汽車、山林田野(平地)、垃圾…
     "place_usage": "場所用途",
     "fire_or_smoke": "火煙狀況",
     "smoke_color": "濃煙顏色",
@@ -366,6 +424,17 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "explosion_status": "有無爆炸",
     "access_info": "其他資訊",
     "fire_extent": "延燒面積",
+    # 垂片 B1（交通工具火警）
+    "vehicle_type": "車種",
+    "fire_origin_part": "起火部位",
+    "vehicle_count": "起火車輛數量",
+    "engine_off_status": "車輛是否已熄火",
+    "occupants_status": "乘客下車狀況",
+    "injury_status": "有無人員受傷",
+    "cargo": "載運物",
+    "extinguish_status": "滅火狀況",
+    "vehicle_motion": "車輛停放或行駛中",
+    "plate_number": "車牌號碼",
 }
 
 BUILDING_TYPE_ALIASES: Dict[str, str] = {

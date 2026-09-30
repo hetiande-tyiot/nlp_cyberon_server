@@ -629,6 +629,15 @@ class SopEngine119:
             "odor",
             "explosion_status",
             "access_info",
+            # 垂片 B1 照 0929 xlsx 新增的文字欄位
+            "fire_origin_part",
+            "engine_off_status",
+            "occupants_status",
+            "injury_status",
+            "cargo",
+            "extinguish_status",
+            "vehicle_motion",
+            "plate_number",
         }
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS

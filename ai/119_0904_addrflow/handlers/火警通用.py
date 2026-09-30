@@ -17,6 +17,7 @@ from fire_tab_map_119 import (
     INCIDENT_STAGE,
     MODE_CONDITIONAL,
     MODE_PASSIVE,
+    OCCUPANTS_STILL_INSIDE,
     SAFETY_MESSAGE,
     TAB_A,
     TAB_B1,
@@ -70,15 +71,25 @@ class HuoJingGenericHandler(SubCategoryHandler):
 
     def _transfer_if_people_trapped(self, engine: "SopEngine119") -> None:
         """
-        有無受困已記成「有人受困」→ 說一句話後立刻轉接專人。
-        火警流程中每次報案人回答之後、每一題問之前都會檢查，不等問到「有無受困」那一題。
+        有人出不來 → 說一句話後立刻轉接專人。以下任一情況都算：
+        - 有無受困記成「有人受困」（建築物、輕微火警）
+        - 乘客下車狀況記成「仍有人在車上」（交通工具火警）
+        火警流程中每次報案人回答之後、每一題問之前都會檢查，不等問到那一題。
         已經轉接過（真人接手、系統只在旁聽）就不再處理。
         """
-        if engine.case.trapped_status != TRAPPED_YES or engine._bridged:
+        case = engine.case
+        people_inside = (
+            case.trapped_status == TRAPPED_YES
+            or case.occupants_status == OCCUPANTS_STILL_INSIDE
+        )
+        if not people_inside or engine._bridged:
             return
         from sop_119_engine import TransferToHumanError
 
-        engine._debug_print("fire_people_trapped_transfer", engine.case.trapped_status)
+        engine._debug_print(
+            "fire_people_trapped_transfer",
+            {"有無受困": case.trapped_status, "乘客下車狀況": case.occupants_status},
+        )
         engine._say(TRAPPED_TRANSFER_MESSAGE)
         raise TransferToHumanError("fire_people_trapped", result="human_transfer")
 
