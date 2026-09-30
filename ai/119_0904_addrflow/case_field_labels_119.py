@@ -138,7 +138,7 @@ LABELS: Dict[str, str] = {
     "place_usage": "場所用途",
     "spread_status": "延燒可能",
     "trapped_status": "有無受困",
-    "door_response": "起火戶應門",
+    "door_response": "應門狀況（起火戶或負責人）",
     "building_construction": "建物構造",
     "odor": "氣味",
     "explosion_status": "有無爆炸",
@@ -152,6 +152,10 @@ LABELS: Dict[str, str] = {
     "extinguish_status": "滅火狀況",
     "vehicle_motion": "車輛停放或行駛中",
     "plate_number": "車牌號碼",
+    # 火警垂片 C（輕微火警）照 0929 xlsx 新增的欄位（存文字）
+    "alarm_status": "警報器狀態",
+    "source_located": "來源確認",
+    "target_object": "標的物",
     # 元資訊
     "case_summary": "案情摘要",
     "flow_stage": "流程階段",

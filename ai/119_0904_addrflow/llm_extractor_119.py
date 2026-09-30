@@ -1072,6 +1072,10 @@ class LLMExtractor119:
             "extinguish_status":      "string|null",
             "vehicle_motion":         "string|null",
             "plate_number":           "string|null",
+            # 垂片 C（輕微火警）照 0929 xlsx 的欄位，存文字
+            "alarm_status":           "string|null",
+            "source_located":         "string|null",
+            "target_object":          "string|null",
             "non_building_fire":      "0|1|null",
             "vehicle_wildfire_code":  "0|1|2|3|4|5|6|7|8|null",
             "minor_fire_code":        "0|1|2|3|4|null",
@@ -1175,7 +1179,8 @@ class LLMExtractor119:
             "有人受困＝還有人在裡面出不來、沒出來、有人呼救"
             "（例如「三樓還有阿嬤出不來」）；無人受困＝人都出來了、裡面沒人；"
             "不確定＝報案人說不知道或不清楚。\n"
-            "- door_response 起火戶應門：參考 有人在或已聯絡上、敲門無回應或聯絡不上。\n"
+            "- door_response 應門狀況（起火戶或負責人有沒有應門、聯絡上）：參考 "
+            "有人在或已聯絡上、敲門無回應或聯絡不上。\n"
             "- building_total_floors 建物樓層：參考 未知、1層樓、2~3層樓、4~10層樓、"
             "11~15層樓、16層樓以上；報案人說幾層就記幾層（例如「5層樓」）。\n"
             "- place_usage 場所用途：參考 住家、店家、工廠、辦公室、其他。\n"
@@ -1185,7 +1190,8 @@ class LLMExtractor119:
             "磚造屋、RC、SRC、其他。\n"
             "- hazardous_materials 危險物品：參考 無或未知、有（瓦斯桶、化學藥品等）；"
             "有的話記下是什麼。\n"
-            "- odor 氣味：參考 無、燒焦味、塑膠味、瓦斯味、其他。\n"
+            "- odor 氣味：參考 無、燒焦味、塑膠味、瓦斯味、其他；"
+            "報案人說沒聞到任何味道時一定要填「無」。\n"
             "- explosion_status 有無爆炸：參考 無爆炸、有爆炸。\n"
             "- access_info 其他資訊：消防車進不進得去、附近有沒有水源；"
             "參考 一般情況、小巷、缺水、小巷且缺水。\n"
@@ -1205,6 +1211,12 @@ class LLMExtractor119:
             "- extinguish_status 滅火狀況：參考 無人、有人在場、已在自行滅火。\n"
             "- vehicle_motion 車輛停放或行駛中：參考 停放路邊、行駛中起火、停車場內。\n"
             "- plate_number 車牌號碼：照報案人說的記。\n"
+            "【輕微火警欄位（存文字）】規則同上。\n"
+            "- alarm_status 警報器狀態：參考 已停止、仍在響、疑似誤報。\n"
+            "- source_located 來源確認：知不知道是哪一戶、哪一層傳出來的；"
+            "參考 已確認位置、聞得到但找不到來源；知道的話記下位置。\n"
+            "- target_object 標的物：哪裡在冒煙或起火；參考 電線桿或電纜、電表、"
+            "電箱或變電箱、人孔蓋或水溝蓋、招牌、其他。\n"
             "- non_building_fire：交通工具或山林草木=0；輕微火警=1。\n"
             "- vehicle_wildfire_code：0汽車；1機車；2隧道；3軌道型交通工具；"
             "4化學毒劑交通工具；5船舶；6航空器；7山林田野(平地)；8山林田野(山地)。\n"

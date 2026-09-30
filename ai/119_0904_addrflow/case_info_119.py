@@ -122,6 +122,12 @@ class CaseInfo119:
     vehicle_motion:        Optional[str] = None  # 車輛停放或行駛中（被動）
     plate_number:          Optional[str] = None  # 車牌號碼（被動）
 
+    # 垂片 C（輕微火警）照 0929 xlsx 新增的欄位，存文字。
+    # 氣味類型沿用 odor、無人應門沿用 door_response、燃燒範圍沿用 fire_extent（都跟 A 共用）。
+    alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
+    source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
+    target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
+
     # 建築物火災
     caller_position:      Optional[str] = None  # 報案人在建物內/外
     caller_role:          Optional[str] = None  # 住戶/鄰居/路過民眾

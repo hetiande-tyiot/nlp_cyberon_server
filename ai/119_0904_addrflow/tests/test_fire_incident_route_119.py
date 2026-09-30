@@ -23,6 +23,7 @@ from fire_tab_map_119 import (
     TAB_B1_QUESTIONS,
     TAB_B2,
     TAB_C,
+    TAB_C_QUESTIONS,
     UNRESOLVED_TAB_TAG,
     infer_tab,
 )
@@ -277,14 +278,15 @@ class GenericFlowEndToEndTests(unittest.TestCase):
         self.assertEqual(io.messages, [INCIDENT_Q, vehicle_q["車種"]])
 
     def test_tab_known_but_subtype_unknown_asks_tab_question(self) -> None:
-        # 「垃圾那邊」→ C 但細類未抽到 → 問 C 垂片細類題，再播安全提示
+        # 判斷是輕微火警（C），但細類還不知道 → 案類分析之後，接著問 C 的第一題「輕微火警」。
+        # 只準備一句回答：問到 C 第一題時回答用完就停，這裡只檢查問了哪兩句。
         llm = FakeLLM(tab_answers={"有東西在燒，好像是輕微的": TAB_C})
-        engine, io = _make_engine(["有東西在燒，好像是輕微的", "警報器在響"], llm)
-        HuoJingGenericHandler().run_generic_flow(engine)
+        engine, io = _make_engine(["有東西在燒，好像是輕微的"], llm)
+        with self.assertRaises(AssertionError):  # 回答用完
+            HuoJingGenericHandler().run_generic_flow(engine)
+        minor_q = {item.element: item.question for item in TAB_C_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_C)
-        self.assertEqual(_asked(io), [INCIDENT_Q])
-        self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
-        self.assertEqual(len(io.messages), 3)  # 案類分析、C 細類題、安全提示
+        self.assertEqual(io.messages, [INCIDENT_Q, minor_q["輕微火警"]])
 
 
 if __name__ == "__main__":

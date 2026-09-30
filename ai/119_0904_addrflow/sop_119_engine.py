@@ -638,6 +638,10 @@ class SopEngine119:
             "extinguish_status",
             "vehicle_motion",
             "plate_number",
+            # 垂片 C 照 0929 xlsx 新增的文字欄位
+            "alarm_status",
+            "source_located",
+            "target_object",
         }
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
