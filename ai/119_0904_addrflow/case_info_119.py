@@ -166,7 +166,7 @@ class CaseInfo119:
     #   → 一般受傷_injury_cause → 一般受傷_injury_detail → 一般受傷_tocc（一般受傷專用）
     #   → 路倒_medical_history → 路倒_collapse_cause → 路倒_tocc（路倒專用）
     #   → 救護_caller_info → completed | ohca_transfer
-    #   火警：火警_location → 火警_location_confirm → 火警_route_1 / 火警_route_2
+    #   火警：火警_location → 火警_location_confirm → 火警-案類分析
     #   → 火警_A_* | 火警_B1_* | 火警_B2_* | 火警_C_* → 火警_safety
     #   → 火警_summary_confirm → 火警_caller_info → completed
     #   緊急救援：緊急救援_location → 緊急救援_location_confirm

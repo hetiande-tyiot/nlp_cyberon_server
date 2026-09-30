@@ -1,9 +1,9 @@
 """
 handlers/火警通用.py
 ━━━━━━━━━━━━━━━━━━━━
-119 SOP — 火警 Q1/Q2 分流與垂片 A / B1 / B2 / C
+119 SOP — 火警案類分析與垂片 A / B1 / B2 / C
 
-  run_generic_flow — 建物判斷 → 非建物細分 → 對應垂片詢問 → 統一安全提示
+  run_generic_flow — 案類分析（一句分到垂片）→ 對應垂片詢問 → 統一安全提示
   collect_caller_info — 最後確認回撥電話與稱呼
 """
 
@@ -12,18 +12,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from fire_tab_map_119 import (
-    ROUTE_Q1,
-    ROUTE_Q2,
+    INCIDENT_Q,
+    INCIDENT_REASK_Q,
+    INCIDENT_STAGE,
     SAFETY_MESSAGE,
     TAB_A,
     TAB_B1,
     TAB_B2,
     TAB_C,
     TAB_QUESTIONS,
-    apply_route_q1,
-    apply_route_q2,
-    infer_route_q1,
-    infer_route_q2,
+    UNRESOLVED_TAB_TAG,
+    infer_tab,
     resolve_fire_tab,
 )
 from important_tags_119 import merge_important_tags
@@ -34,32 +33,12 @@ if TYPE_CHECKING:
 
 
 class HuoJingGenericHandler(SubCategoryHandler):
-    """火警大類 Handler：Q1/Q2 分流後走對應垂片。"""
+    """火警大類 Handler：案類分析分到垂片後，走對應垂片。"""
 
     def run_generic_flow(self, engine: "SopEngine119") -> None:
-        """完成分流與垂片詢問，再播放統一安全提示。"""
+        """完成案類分析與垂片詢問，再播放統一安全提示。"""
         engine._ensure_known_fields_from_history()
-
-        self._resolve_route_q1(engine)
-        tab = resolve_fire_tab(engine.case)
-        if tab is None and engine.case.fire_incident_type is None:
-            engine._debug_print("fire_tab_unresolved", "q1")
-            self._flag_fire_issue(engine, "Q1 兩輪仍無法判斷")
-        if tab != TAB_A:
-            self._resolve_route_q2(engine)
-            tab = resolve_fire_tab(engine.case)
-
-        if tab not in TAB_QUESTIONS:
-            engine._debug_print("fire_tab_unresolved", tab)
-            self._flag_fire_issue(engine, "火災類別無法確認")
-            with engine._case_lock:
-                apply_route_q2(engine.case, "minor")
-            engine._notify_case_update()
-            tab = resolve_fire_tab(engine.case)
-
-        with engine._case_lock:
-            engine.case.fire_tab = tab
-        engine._notify_case_update()
+        self._resolve_tab(engine)
 
         engine._sub_reclassify_enabled = True
         try:
@@ -93,72 +72,27 @@ class HuoJingGenericHandler(SubCategoryHandler):
         engine._debug_print("fire_issue_tag", tag)
         engine._notify_case_update()
 
-    def _last_caller_text(self, engine: "SopEngine119") -> str:
-        texts = engine.case.caller_texts()
-        return texts[-1] if texts else ""
-
-    def _classify_route(
+    def _classify_tab(
         self,
         engine: "SopEngine119",
-        which: str,
         question: str,
         answer: str,
     ) -> Optional[str]:
-        route = None
-        if engine._llm is not None and hasattr(engine._llm, "classify_fire_route"):
+        tab = None
+        if engine._llm is not None and hasattr(engine._llm, "classify_fire_tab"):
             try:
-                route = engine._llm.classify_fire_route(
-                    answer, question=question, which=which,
-                )
+                tab = engine._llm.classify_fire_tab(answer, question=question)
             except Exception as exc:
-                engine._debug_print("fire_route_llm_error", exc)
-        if route:
-            return route
-        if which == "q1":
-            return infer_route_q1(answer)
-        return infer_route_q2(answer)
+                engine._debug_print("fire_tab_llm_error", exc)
+        return tab or infer_tab(answer)
 
-    def _resolve_route_q1(self, engine: "SopEngine119") -> None:
-        engine._ensure_known_fields_from_history()
-        if engine.case.fire_incident_type == 0:
-            apply_route_q1(engine.case, "building")
-            engine._notify_case_update()
-            return
-        if engine.case.fire_incident_type == 1:
-            return
-
-        answer = None
-        for _attempt in range(2):
-            answer = self._ask_missing(
-                engine, "火警_route_1", ("fire_incident_type",), ROUTE_Q1,
-            )
-            if engine.case.fire_incident_type in (0, 1):
-                break
-            route = self._classify_route(
-                engine, "q1", ROUTE_Q1, answer or self._last_caller_text(engine),
-            )
-            if route:
-                with engine._case_lock:
-                    apply_route_q1(engine.case, route)
-                engine._notify_case_update()
-                break
-        else:
-            route = self._classify_route(
-                engine, "q1", ROUTE_Q1, answer or self._last_caller_text(engine),
-            )
-            if route:
-                with engine._case_lock:
-                    apply_route_q1(engine.case, route)
-                engine._notify_case_update()
-
-        if engine.case.fire_incident_type == 0:
-            with engine._case_lock:
-                apply_route_q1(engine.case, "building")
-            engine._notify_case_update()
-
-    def _q2_already_known(self, engine: "SopEngine119") -> Optional[str]:
+    def _tab_already_known(self, engine: "SopEngine119") -> Optional[str]:
+        """
+        報案人在前面（例如報地址時）已經講出是什麼在燒，系統也已經記下來了，
+        就直接用那個結果，不用再問。還不知道就回傳 None。
+        """
         tab = resolve_fire_tab(engine.case)
-        if tab in (TAB_B1, TAB_B2, TAB_C):
+        if tab in TAB_QUESTIONS:
             return tab
         if engine.case.non_building_fire == 1:
             return TAB_C
@@ -182,32 +116,36 @@ class HuoJingGenericHandler(SubCategoryHandler):
                 engine.case.non_building_fire = 0
         engine._notify_case_update()
 
-    def _resolve_route_q2(self, engine: "SopEngine119") -> None:
+    def _resolve_tab(self, engine: "SopEngine119") -> str:
+        """
+        案類分析：決定這通電話要走哪張垂片。
+        - 前面已經知道是什麼在燒 → 不問，直接用
+        - 不知道 → 問「請問發生什麼事？是什麼東西在燒？」
+        - 聽不出來 → 再問「不好意思，請您再說一次是什麼在燒？」
+        - 問兩次仍分不出是哪種火災 → 先當成輕微火警（垂片 C）處理，並在 ImportantTag
+          記下原因，讓下游知道這通電話的火災類型是系統預設的，不是報案人說的
+        """
         engine._ensure_known_fields_from_history()
-        known = self._q2_already_known(engine)
+        known = self._tab_already_known(engine)
         if known:
             self._lock_tab(engine, known)
-            return
+            return known
 
-        answer = None
-        for _attempt in range(2):
-            engine._set_stage("火警_route_2")
-            answer = engine._ask_and_extract(ROUTE_Q2)
+        for question in (INCIDENT_Q, INCIDENT_REASK_Q):
+            engine._set_stage(INCIDENT_STAGE)
+            answer = engine._ask_and_extract(question)
             self._check_and_respond_to_triggers(answer, engine)
-            known = self._q2_already_known(engine)
-            if known:
-                self._lock_tab(engine, known)
-                return
-            route = self._classify_route(engine, "q2", ROUTE_Q2, answer)
-            if route:
-                with engine._case_lock:
-                    apply_route_q2(engine.case, route)
-                engine._notify_case_update()
-                return
-        self._flag_fire_issue(engine, "Q2 兩輪仍無法判斷")
-        with engine._case_lock:
-            apply_route_q2(engine.case, "minor")
-        engine._notify_case_update()
+            tab = self._tab_already_known(engine) or self._classify_tab(
+                engine, question, answer,
+            )
+            if tab:
+                self._lock_tab(engine, tab)
+                return tab
+
+        engine._debug_print("fire_tab_unresolved", "fallback_C")
+        self._flag_fire_issue(engine, UNRESOLVED_TAB_TAG)
+        self._lock_tab(engine, TAB_C)
+        return TAB_C
 
     def _ask_tab_questions(self, engine: "SopEngine119", tab: str) -> None:
         for field, stage, question in TAB_QUESTIONS.get(tab, ()):

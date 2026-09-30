@@ -22,8 +22,8 @@ LLMExtractor119
       抽取患者性別/年齡/事件/現況（單輪問答上下文）。
   .extract_general_fields(caller_text) -> dict
       每輪通用欄位嘗試抽取（靜默降級）。
-  .classify_fire_route(caller_text, question, which) -> str | None
-      火警 Q1/Q2 分流（building/other 或 vehicle/vegetation/minor）。
+  .classify_fire_tab(caller_text, question) -> str | None
+      火警案類分析，直接分到垂片 A/B1/B2/C。
   .check_trigger_scenarios(caller_text, already_triggered) -> list[int]
       急病觸發情境 1–10。
   .check_fire_trigger_scenarios(caller_text, already_triggered) -> list[int]
@@ -55,8 +55,7 @@ from sop_utils_119 import (
 )
 from fire_tab_map_119 import (
     FIRE_CODE_FIELDS,
-    infer_route_q1,
-    infer_route_q2,
+    infer_tab,
     normalize_extracted_fire_fields,
     normalize_fire_field,
 )
@@ -1366,45 +1365,32 @@ class LLMExtractor119:
         result.update(normalize_extracted_fire_fields(result))
         return result
 
-    def classify_fire_route(
+    def classify_fire_tab(
         self,
         caller_text: str,
         question: Optional[str] = None,
-        *,
-        which: str = "q1",
     ) -> Optional[str]:
         """
-        判斷火警 Q1/Q2 分流。成功返回：
-          q1 → building | other
-          q2 → vehicle | vegetation | minor
-        失敗返回 None（呼叫端再用規則兜底）。
+        火警案類分析：依報警人描述，判斷是哪張垂片（A / B1 / B2 / C）。
+        LLM 判斷不出來（或出錯）時，改用關鍵詞判斷；兩種方法都判斷不出來就回傳 None。
         """
         text = (caller_text or "").strip()
         if not text:
             return None
 
-        if which == "q1":
-            schema = {"route": "building|other|null"}
-            rules = (
-                "判斷報警人是否在說「房子/房屋/建築物正在燃燒」。\n"
-                "- building：房屋、住宅、公寓、大樓、倉庫、工廠、店面等建築物在燒。\n"
-                "- other：明確不是房子，或在燒車子、草木、垃圾、電線等其他東西。\n"
-                "- 無法判斷 → null。只輸出 JSON。"
-            )
-            allowed = {"building", "other"}
-            fallback = infer_route_q1(text)
-        else:
-            schema = {"route": "vehicle|vegetation|minor|null"}
-            rules = (
-                "判斷非建築物火災的燃燒物。\n"
-                "- vehicle：汽車、機車、隧道、火車、船舶、航空器等交通工具。\n"
-                "- vegetation：山上、路邊草木、山林、田野。\n"
-                "- minor：以上都不是（垃圾、電線桿、瓦斯、警報、查看等）。\n"
-                "- 無法判斷 → null。只輸出 JSON。"
-            )
-            allowed = {"vehicle", "vegetation", "minor"}
-            fallback = infer_route_q2(text)
-
+        schema = {"tab": "A|B1|B2|C|null"}
+        rules = (
+            "判斷報警人描述的火災屬於哪一張垂片。\n"
+            "- A 建築物火警：透天厝、公寓大樓、倉庫、工廠、旅館、百貨商場、車站、"
+            "電影院、學校、醫院、老人院、古蹟、地下街、高樓等建築物在燒。\n"
+            "- B1 交通工具火警：汽車、機車、隧道內、火車捷運高鐵、化學槽車、"
+            "船舶、飛機在燒。\n"
+            "- B2 山林田野火警：山上、路邊空地、田野的雜草、樹木、墳墓、農作物在燒。\n"
+            "- C 輕微火警：垃圾、電線桿或電纜、瓦斯漏氣、警報器在響、"
+            "只聞到燒焦味需要查看。\n"
+            "- 報警人更正說法時（例如「不是房子，是車子」），以更正後的為準。\n"
+            "- 無法判斷 → null。只輸出 JSON。"
+        )
         try:
             out = self.extract_slots(
                 text, schema, rules,
@@ -1413,10 +1399,10 @@ class LLMExtractor119:
             )
         except Exception:
             out = {}
-        route = str(out.get("route") or "").strip().lower()
-        if route in allowed:
-            return route
-        return fallback
+        tab = str(out.get("tab") or "").strip().upper()
+        if tab in {"A", "B1", "B2", "C"}:
+            return tab
+        return infer_tab(text)
 
     # ── 觸發情境偵測（急病專用）──────────────────────────────────────────────
 

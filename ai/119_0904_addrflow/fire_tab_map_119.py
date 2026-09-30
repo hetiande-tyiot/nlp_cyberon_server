@@ -1,7 +1,8 @@
 """
 fire_tab_map_119.py
 ━━━━━━━━━━━━━━━━━━━━
-119 火警垂片：27 案類 ↔ 代碼、BERT 標籤映射、問句、Q1/Q2 規則兜底。
+119 火警垂片：27 案類 ↔ 代碼、BERT 標籤映射、問句；
+案類分析時，LLM 判斷不出來改用這裡的關鍵詞判斷。
 """
 
 from __future__ import annotations
@@ -13,8 +14,13 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 FIRE_BERT_CONF_THRESHOLD = 0.5
 
-ROUTE_Q1 = "請問是房子在燒嗎？還是其它東西燒起來？"
-ROUTE_Q2 = "是車子在燒，還是山上、路邊的草木在燒呢？"
+# 案類分析：一句話直接分到 A / B1 / B2 / C 垂片（取代舊 Q1/Q2 兩段分流）
+INCIDENT_STAGE = "火警-案類分析"
+INCIDENT_Q = "請問發生什麼事？是什麼東西在燒？"
+INCIDENT_REASK_Q = "不好意思，請您再說一次是什麼在燒？"
+# 問兩次仍分不出是哪種火災、先當成輕微火警處理時，寫進 ImportantTag 的說明文字。
+# 取代舊流程的「Q2 兩輪仍無法判斷」（意思相同，舊名稱裡的 Q2 已不存在）。
+UNRESOLVED_TAB_TAG = "火災類型無法判斷，預設輕微火警"
 SAFETY_MESSAGE = (
     "消防車已經在路上了，請在安全的地方等候，看到車再幫我們引導消防隊。"
 )
@@ -329,27 +335,35 @@ FIRE_CODE_FIELDS = frozenset(
     {"building_type_code"} | set(FIRE_CODE_INT_RANGES)
 )
 
-_Q1_BUILDING_KWS = (
-    "房子", "房屋", "屋子", "住宅", "透天", "公寓", "大樓", "大楼",
-    "建築", "建筑", "倉庫", "仓库", "工廠", "工厂", "廠房", "厂房",
-    "旅館", "旅馆", "百貨", "商場", "學校", "学校", "醫院", "医院",
-    "電影院", "电影院", "古蹟", "古迹", "地下街", "高層", "高层",
-    "店面", "住家",
-)
-_Q1_OTHER_KWS = (
-    "車子", "车子", "汽車", "汽车", "機車", "机车", "草木", "雜草", "杂草",
-    "山林", "垃圾", "電線桿", "电线杆", "瓦斯", "警報", "警报",
-    "其他東西", "其它東西", "其他东西", "其它东西",
-)
-_Q2_VEHICLE_KWS = (
-    "車", "车", "汽車", "汽车", "機車", "机车", "隧道", "火車", "高铁",
-    "軌道", "船舶", "船", "飛機", "飞机", "航空",
-)
-_Q2_VEG_KWS = ("山", "草", "林", "田", "樹", "树", "野外")
-_Q2_MINOR_KWS = (
-    "垃圾", "電線", "电缆", "電纜", "瓦斯", "警報", "警报",
-    "查看", "都不是", "都沒", "都没",
-)
+# 案類分析用的關鍵詞：報案人的回答只出現一種垂片的關鍵詞時，才決定是哪張垂片；
+# 同時出現兩種以上（例如「房子旁邊的垃圾」）就不自己猜，交給 LLM 判斷。
+# 不放單一個「車」字：「快叫消防車」「停車場」會被誤判成交通工具火警。
+_TAB_KEYWORDS: Dict[str, Tuple[str, ...]] = {
+    TAB_A: (
+        "房子", "房屋", "屋子", "住宅", "透天", "公寓", "大樓", "大楼",
+        "建築", "建筑", "倉庫", "仓库", "工廠", "工厂", "廠房", "厂房",
+        "旅館", "旅馆", "百貨", "商場", "學校", "学校", "醫院", "医院",
+        "電影院", "电影院", "古蹟", "古迹", "地下街", "高層", "高层",
+        "店面", "住家", "我家", "廚房", "厨房",
+    ),
+    TAB_B1: (
+        "車子", "车子", "汽車", "汽车", "機車", "机车", "摩托車", "轎車",
+        "貨車", "货车", "卡車", "公車", "小客車", "火車", "高鐵", "高铁",
+        "槽車", "船", "飛機", "飞机", "航空器", "隧道",
+    ),
+    TAB_B2: (
+        "山上", "山林", "山頭", "山坡", "山區", "雜草", "杂草", "草地",
+        "草叢", "草皮", "芒草", "樹林", "树林", "竹林", "田裡", "田野",
+        "農田", "空地", "荒地", "野外", "墳墓", "坟墓",
+    ),
+    TAB_C: (
+        "垃圾", "電線桿", "电线杆", "電線", "电线", "電纜", "电缆", "瓦斯",
+        "警報", "警报", "電箱", "變電箱", "電表", "水溝", "人孔",
+    ),
+}
+# 報案人說「不是房子，是車子」時，要先把「不是房子」這一段拿掉再比對關鍵詞，
+# 不然會同時比對到房子和車子。拿掉的範圍是從「不是／沒有」到下一個標點符號。
+_NEGATED_SPAN_RE = re.compile(r"(不是|沒有|没有)[^，,。．！!？?\s]*")
 
 
 def _strip_fire_prefix(label: str) -> str:
@@ -413,43 +427,19 @@ def tab_for_codes(
     return None
 
 
-def infer_route_q1(text: str) -> Optional[str]:
-    """報案人回答 Q1：building | other | None。"""
-    t = (text or "").strip()
+def infer_tab(text: str) -> Optional[str]:
+    """
+    用關鍵詞判斷報案人說的是哪張垂片，回傳 A、B1、B2 或 C。
+    找不到任何關鍵詞，或同時出現兩種以上垂片的關鍵詞時，回傳 None（判斷不出來）。
+    """
+    t = _NEGATED_SPAN_RE.sub("", (text or "").strip())
     if not t:
         return None
-    if any(k in t for k in ("不是房子", "不是房屋", "不是屋", "其他東西", "其它東西", "其他东西", "其它东西")):
-        return "other"
-    if t in ("不是", "沒有", "没有", "否", "不對", "不对"):
-        return "other"
-    if t in ("是", "對", "对", "有", "嗯", "對啊", "对啊"):
-        return "building"
-    has_b = any(k in t for k in _Q1_BUILDING_KWS)
-    has_o = any(k in t for k in _Q1_OTHER_KWS)
-    if has_b and not has_o:
-        return "building"
-    if has_o and not has_b:
-        return "other"
-    return None
-
-
-def infer_route_q2(text: str) -> Optional[str]:
-    """報案人回答 Q2：vehicle | vegetation | minor | None。"""
-    t = (text or "").strip()
-    if not t:
-        return None
-    if any(k in t for k in ("都不是", "都沒", "都没", "都不是車子", "都不是草木")):
-        return "minor"
-    has_v = any(k in t for k in _Q2_VEHICLE_KWS)
-    has_g = any(k in t for k in _Q2_VEG_KWS)
-    has_m = any(k in t for k in _Q2_MINOR_KWS)
-    if has_v and not has_g and not has_m:
-        return "vehicle"
-    if has_g and not has_v:
-        return "vegetation"
-    if has_m and not has_v and not has_g:
-        return "minor"
-    return None
+    hits = [
+        tab for tab, keywords in _TAB_KEYWORDS.items()
+        if any(k in t for k in keywords)
+    ]
+    return hits[0] if len(hits) == 1 else None
 
 
 def _as_int(val: Any) -> Optional[int]:
@@ -729,27 +719,6 @@ def apply_bert_subtype_to_case(
         return
 
     apply_subtype_identity_codes(case, label, update_tab=False)
-
-
-def apply_route_q1(case: Any, route: str) -> None:
-    if route == "building":
-        case.fire_incident_type = 0
-        case.fire_tab = TAB_A
-    elif route == "other":
-        case.fire_incident_type = 1
-
-
-def apply_route_q2(case: Any, route: str) -> None:
-    case.fire_incident_type = 1
-    if route == "vehicle":
-        case.non_building_fire = 0
-        case.fire_tab = TAB_B1
-    elif route == "vegetation":
-        case.non_building_fire = 0
-        case.fire_tab = TAB_B2
-    else:
-        case.non_building_fire = 1
-        case.fire_tab = TAB_C
 
 
 def resolve_fire_tab(case: Any) -> Optional[str]:

@@ -298,8 +298,7 @@ _STAGE_LABELS: List[tuple[str, str]] = [
     ("救護_caller_info",         "收集報案人訊息"),
     ("火警_location",            "確認地址"),
     ("火警_location_confirm",    "地址確認中"),
-    ("火警_route_1",             "判斷是否建物火災"),
-    ("火警_route_2",             "判斷燃燒物類型"),
+    ("火警-案類分析",            "案類分析"),
     ("火警_A_building_type",     "建物：建築物類型"),
     ("火警_A_flame",             "建物：有無火焰"),
     ("火警_A_smoke",             "建物：濃煙顏色"),
@@ -360,7 +359,7 @@ _FIRE_PREFIX: List[str] = [
     "location_highway_reask", "location_validating",
     "location_validation_reask",
     "火警_location_confirm",
-    "火警_route_1", "火警_route_2",
+    "火警-案類分析",
 ]
 _FIRE_BRANCH_STAGES: Dict[str, List[str]] = {
     "A": [
@@ -414,10 +413,11 @@ def _get_visible_stages(
     if main_cat is None:
         keys = [s for s, _ in _STAGE_LABELS]
     elif main_cat == "火警":
-        prefix = list(_FIRE_PREFIX)
-        if fire_tab == "A":
-            prefix = [k for k in prefix if k != "火警_route_2"]
-        keys = prefix + _FIRE_BRANCH_STAGES.get(fire_tab or "", []) + _FIRE_SUFFIX
+        keys = (
+            list(_FIRE_PREFIX)
+            + _FIRE_BRANCH_STAGES.get(fire_tab or "", [])
+            + _FIRE_SUFFIX
+        )
     elif main_cat == "緊急救援":
         keys = _EMERGENCY_STAGES
     elif main_cat == "局內回報":
