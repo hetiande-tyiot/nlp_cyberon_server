@@ -270,12 +270,27 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("車牌號碼", "plate_number", MODE_PASSIVE, "交通工具火警-車牌號碼"),
 )
 
-# B2 / C 尚未照 xlsx 重寫，先維持原本「只問細類」一題。
-
 TAB_B2_QUESTIONS: Tuple[FireQuestion, ...] = (
-    FireQuestion("山林火警", "vehicle_wildfire_code", MODE_ACTIVE,
-                 "火警_B2_subtype", "是燒在山上，還是路邊的平地呢？"),
+    FireQuestion("山林火警", "sub_category", MODE_ACTIVE,
+                 "山林田野火警-山林火警", "是山上還是路邊空地呢？"),
+    FireQuestion("燃燒物", "burning_object", MODE_ACTIVE,
+                 "山林田野火警-燃燒物", "是雜草、樹木，還是垃圾燒起來嗎？"),
+    FireQuestion("火煙狀況", "fire_or_smoke", MODE_ACTIVE,
+                 "山林田野火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
+    FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,
+                 "山林田野火警-濃煙顏色", "請問是黑煙還是白煙？",
+                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+    FireQuestion("燃燒面積", "fire_extent", MODE_ACTIVE,
+                 "山林田野火警-燃燒面積", "燒的範圍有一個籃球場那麼大嗎？"),
+    FireQuestion("是否延燒", "spread_status", MODE_ACTIVE,
+                 "山林田野火警-是否延燒", "火有沒有燒到旁邊的東西？"),
+    FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
+                 "山林田野火警-報案人身分", "請問您是住在附近，還是剛好經過？"),
+    FireQuestion("滅火狀況", "extinguish_status", MODE_PASSIVE, "山林田野火警-滅火狀況"),
+    FireQuestion("水源狀況", "nearby_water_source", MODE_PASSIVE, "山林田野火警-水源狀況"),
 )
+
+# C 尚未照 xlsx 重寫，先維持原本「只問細類」一題。
 
 TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("輕微火警", "minor_fire_code", MODE_ACTIVE,
@@ -423,7 +438,7 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "odor": "氣味",
     "explosion_status": "有無爆炸",
     "access_info": "其他資訊",
-    "fire_extent": "延燒面積",
+    "fire_extent": "燃燒範圍",  # A 延燒面積、B2 燃燒面積、C 燃燒範圍共用
     # 垂片 B1（交通工具火警）
     "vehicle_type": "車種",
     "fire_origin_part": "起火部位",
@@ -435,6 +450,9 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "extinguish_status": "滅火狀況",
     "vehicle_motion": "車輛停放或行駛中",
     "plate_number": "車牌號碼",
+    # 垂片 B2（山林田野火警）
+    "burning_object": "燃燒物",
+    "nearby_water_source": "水源狀況",
 }
 
 BUILDING_TYPE_ALIASES: Dict[str, str] = {

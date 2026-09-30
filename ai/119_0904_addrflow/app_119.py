@@ -1157,10 +1157,10 @@ def main():
                     ("受困人數", case.get("trapped_count")),
                 ]
             # B1 的車種、起火車輛數量已列在 FIELD_LABELS_ZH，不再另外顯示
+            # 水源狀況已列在 FIELD_LABELS_ZH，不再另外顯示「附近水源」
             elif fire_tab in ("B2", "C"):
                 fire_fields += [
                     ("燃燒場域", case.get("outdoor_fire_type")),
-                    ("附近水源", case.get("nearby_water_source")),
                 ]
             rows_html = ""
             for label, val in fire_fields:
