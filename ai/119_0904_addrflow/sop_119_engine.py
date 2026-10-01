@@ -287,6 +287,7 @@ OTHER_CLARIFY_INJURY_KW: Tuple[str, ...] = (
 )
 OTHER_CLARIFY_FIRE_KW: Tuple[str, ...] = (
     "著火", "起火", "火災", "火警", "冒煙", "濃煙", "爆炸", "燒起來",
+    "火燒車", "失火",
 )
 OTHER_CLARIFY_EMERGENCY_KW: Tuple[str, ...] = (
     "受困", "困住", "電梯", "跳樓", "墜樓", "被壓", "壓住", "瓦斯外洩", "瓦斯漏氣",
@@ -1802,17 +1803,28 @@ class SopEngine119:
         False 表示仍屬其他案類，交回呼叫端照原樣轉人工。
         """
         self._set_stage("其他案類_clarify")
-        answer = self._ask_and_extract(
-            "請問現場有沒有人受傷、身體不適，或是有火、有人受困需要救護或消防？"
-        )
-        new_cat = self._route_other_from_clarify(answer)
-        if new_cat is None:
-            return False
+        # 第一句話已經明確是火警（例如「這邊有火燒車」「機車燒起來」）→ 不用追問，直接進火警。
+        # 用的是同一個判斷（救護優先）：同時講到有人受傷時結果會是救護，照樣先追問。
+        if self._route_other_from_clarify("") == "火警":
+            self._debug_print("other_to_fire_without_asking", self.case.full_caller_text())
+            new_cat, answer = "火警", None
+        else:
+            answer = self._ask_and_extract(
+                "請問現場有沒有人受傷、身體不適，或是有火、有人受困需要救護或消防？"
+            )
+            new_cat = self._route_other_from_clarify(answer)
+            if new_cat is None:
+                return False
 
         with self._case_lock:
             self.case.main_category = new_cat
             self.case.main_conf     = 1.0
-        self._extract_all_fields_from_reply(answer, question=None)
+        if answer is not None:
+            self._extract_all_fields_from_reply(answer, question=None)
+        else:
+            # 第一句話當時是用「其他案類」的欄位抽的；改成火警後，用火警的欄位再抽一次
+            for question, text in self._iter_caller_qa_pairs():
+                self._extract_all_fields_from_reply(text, question=question)
         if new_cat == "火警":
             self._refresh_fire_subtype_from_bert()
         self._emit({
