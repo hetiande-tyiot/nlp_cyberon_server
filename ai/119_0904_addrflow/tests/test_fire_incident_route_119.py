@@ -262,9 +262,8 @@ class GenericFlowEndToEndTests(unittest.TestCase):
     """run_generic_flow：案類分析接到垂片問題，最後播安全提示。"""
 
     def test_subtype_known_from_incident_answer_skips_subtype_question(self) -> None:
-        # 「我的機車燒起來」→ B1 且次案類已知 → 不問 B1 第一題「交通工具」；
-        # 機車不問車種（xlsx：車種只在汽車時問），所以下一題是「火煙狀況」。
-        # 只準備一句回答：問到下一題時回答用完就停，這裡只檢查問了哪兩句。
+        # 「我的機車燒起來」→ B1 且次案類已知 → 不問 B1 第一題「交通工具」，直接問下一題「車種」。
+        # 只準備一句回答：問到車種時回答用完就停，這裡只檢查問了哪兩句。
         answer = "我的機車燒起來"
         llm = FakeLLM(
             tab_answers={answer: TAB_B1},
@@ -276,7 +275,7 @@ class GenericFlowEndToEndTests(unittest.TestCase):
         vehicle_q = {item.element: item.question for item in TAB_B1_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_B1)
         self.assertEqual(engine.case.sub_category, "機車")
-        self.assertEqual(io.messages, [INCIDENT_Q, vehicle_q["火煙狀況"]])
+        self.assertEqual(io.messages, [INCIDENT_Q, vehicle_q["車種"]])
 
     def test_tab_known_but_subtype_unknown_asks_tab_question(self) -> None:
         # 判斷是輕微火警（C），但細類還不知道 → 案類分析之後，接著問 C 的第一題「輕微火警」。
@@ -292,7 +291,6 @@ class GenericFlowEndToEndTests(unittest.TestCase):
 
     def test_subtype_and_tab_mismatch_switches_to_subtype_tab(self) -> None:
         # 次案類是機車、垂片卻是 A（兩邊對不上）→ 換到機車所屬的 B1，問 B1 的題目
-        # （機車不問車種，第一題是火煙狀況）
         engine, io = _make_engine([], FakeLLM())
         engine.case.fire_tab = TAB_A
         engine.case.sub_category = "機車"
@@ -301,7 +299,7 @@ class GenericFlowEndToEndTests(unittest.TestCase):
             HuoJingGenericHandler().run_generic_flow(engine)
         vehicle_q = {item.element: item.question for item in TAB_B1_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_B1)
-        self.assertEqual(io.messages, [vehicle_q["火煙狀況"]])
+        self.assertEqual(io.messages, [vehicle_q["車種"]])
 
 
 if __name__ == "__main__":
