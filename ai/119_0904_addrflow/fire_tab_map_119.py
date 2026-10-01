@@ -247,7 +247,7 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
                  "交通工具火警-交通工具", "是什麼車在燒？汽車或機車嗎？"),
     FireQuestion("車種", "vehicle_type", MODE_CONDITIONAL,
                  "交通工具火警-車種", "是什麼車種呢？一般油車還是電動車？",
-                 _subtype_is("汽車", "機車"), "交通工具＝汽車、機車"),
+                 _subtype_is("汽車"), "交通工具＝汽車"),
     FireQuestion("火煙狀況", "fire_or_smoke", MODE_ACTIVE,
                  "交通工具火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
     FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,

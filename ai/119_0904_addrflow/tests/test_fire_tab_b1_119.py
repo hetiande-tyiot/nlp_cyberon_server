@@ -147,14 +147,14 @@ class TabB1QuestionOrderTests(unittest.TestCase):
         self.assertIn("載運物", _asked(io))
 
     def test_motorcycle_skips_car_only_questions(self) -> None:
+        # 2026-10-01 xlsx：車種只在交通工具＝汽車時問，機車不問
         _, io = _run_vehicle_fire([
             _vehicle("機車燒起來", "機車"),
-            ("電動機車", {"vehicle_type": "電動機車"}),
             FIRE, BLACK, PASSERBY, NO_SPREAD,
             ONE_CAR, ENGINE_OFF, NO_INJURY, NOBODY_FIGHTING,
         ])
         self.assertEqual(_asked(io), [
-            "交通工具", "車種", "火煙狀況", "濃煙顏色", "報案人身分", "是否延燒",
+            "交通工具", "火煙狀況", "濃煙顏色", "報案人身分", "是否延燒",
             "起火車輛數量", "車輛是否已熄火", "有無人員受傷", "滅火狀況",
         ])
 
