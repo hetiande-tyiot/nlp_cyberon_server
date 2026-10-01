@@ -2,8 +2,8 @@
 sop_api_server.py — HTTP API wrapper around SopEngine119 (119 救護報案)
 
 部署（119_0904_addrflow）：
-    cd /home/cyberon2/nlp_cyberon_server/ai/119_0904_addrflow
-    /home/cyberon2/nlp_cyberon_server/llmenv/bin/uvicorn \
+    cd /home/taiyan/project/nlp_cyberon_server/ai/119_0904_addrflow
+    /home/taiyan/project/nlp_cyberon_server/llmenv/bin/uvicorn \
       sop_api_server:app --host 0.0.0.0 --port 8200
 
 API 介面（與 119_0625_code 版相同 endpoint 設計）：
@@ -110,7 +110,7 @@ from sop_119_engine import (
 # ── LLM extractor 使用 TW-119-Model GGUF（可用 GGUF_MODEL_PATH env 覆蓋）──
 GGUF_MODEL_PATH = os.environ.get(
     "GGUF_MODEL_PATH",
-    "/home/cyberon2/nlp_cyberon_server/models/TW-119-Model.gguf",
+    "/home/taiyan/project/nlp_cyberon_server/models/TW-119-Model.gguf",
 )
 GGUF_N_CTX = int(os.environ.get("GGUF_N_CTX", "4096"))
 GGUF_N_GPU_LAYERS = int(os.environ.get("GGUF_N_GPU_LAYERS", "-1"))
@@ -122,13 +122,13 @@ ENABLE_SUB_CLASSIFIER = os.environ.get("ENABLE_SUB_CLASSIFIER", "1") == "1"
 # 119 BERT 模型根目錄（vendor 預設 /root/autodl-tmp/models/，我們放在 ai/ 下）
 BERT_MODELS_BASE = os.environ.get(
     "BERT_MODELS_BASE",
-    "/home/cyberon2/nlp_cyberon_server/ai/",
+    "/home/taiyan/project/nlp_cyberon_server/ai/",
 )
 # BERT 跑 CPU 還是 GPU；預設 CPU 把 VRAM 留給 LLM GGUF（跟 110 慣例一致）
 BERT_DEVICE = os.environ.get("BERT_DEVICE", "cpu")
 
 # 案件結構化 JSON log 寫出位置
-LOG_DIR = os.environ.get("LOG_DIR", "/home/cyberon2/nlp_cyberon_server/log_119")
+LOG_DIR = os.environ.get("LOG_DIR", "/home/taiyan/project/nlp_cyberon_server/log_119")
 
 # ── /observe（轉真人後繼續更新摘要）調校參數 ─────────────────────────────
 # 摘要輸入最多取最後幾輪對話（n_ctx 4096，長通話逐字稿塞不下）

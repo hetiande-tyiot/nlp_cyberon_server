@@ -56,7 +56,7 @@ API 完全正常、回應快、判斷正確，還附上可直接拿來問的建�
 
 ```bash
 ls -l /proc/$(systemctl show sop119.service -p MainPID --value)/cwd
-→ /home/cyberon2/nlp_cyberon_server/ai/119_0903_addr_fixbug
+→ /home/taiyan/project/nlp_cyberon_server/ai/119_0903_addr_fixbug
 ```
 
 **線上早已切到 0903，我改在 0901**，白改兩天。

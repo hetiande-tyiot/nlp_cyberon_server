@@ -33,7 +33,7 @@ from sop_utils_119 import (  # noqa: E402
     extract_street_address_components,
 )
 
-LOG_DIR = "/home/cyberon2/nlp_cyberon_server/log_119"
+LOG_DIR = "/home/taiyan/project/nlp_cyberon_server/log_119"
 FIXTURE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "tests", "data", "real_calls_119.json",
@@ -93,7 +93,7 @@ def main():
     from llm_extractor_119 import LLMExtractor119
 
     model = os.getenv("GGUF_MODEL_PATH",
-                      "/home/cyberon2/nlp_cyberon_server/models/TW-119-Model.gguf")
+                      "/home/taiyan/project/nlp_cyberon_server/models/TW-119-Model.gguf")
     n_gpu = 0 if os.getenv("LLM_DEVICE", "").lower() == "cpu" else int(
         os.getenv("N_GPU_LAYERS", "-1"))
     print(f"載入模型（n_gpu_layers={n_gpu}）…", flush=True)

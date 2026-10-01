@@ -32,7 +32,7 @@ from sop_utils_119 import (  # noqa: E402
     extract_street_address_components,
 )
 
-LOG_DIR = "/home/cyberon2/nlp_cyberon_server/log_119"
+LOG_DIR = "/home/taiyan/project/nlp_cyberon_server/log_119"
 OUT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "tests", "data", "real_calls_119.json",
