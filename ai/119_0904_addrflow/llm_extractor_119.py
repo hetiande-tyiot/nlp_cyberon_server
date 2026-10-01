@@ -552,7 +552,8 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     "smoke_color": (
         "string|null",
         "- smoke_color 濃煙顏色：參考 無煙、黑色煙、白色煙、其他色煙；"
-        "報案人說沒有煙時一定要填「無煙」。",
+        "「無煙」只有在報案人明確說沒有煙時才填；"
+        "報案人說有煙或在冒煙、但沒說顏色 → null。",
     ),
     "spread_status": (
         "string|null",
@@ -623,7 +624,8 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     "vehicle_type": (
         "string|null",
         "- vehicle_type 車種：參考 自小客車、貨車、電動車、電動機車、其他；"
-        "只要是貨車（小貨車、大貨車、貨櫃車等）一律填「貨車」，其他照報案人說的記。",
+        "只要是貨車（小貨車、大貨車、貨櫃車等）一律填「貨車」，其他照報案人說的記。"
+        "只說「汽車」「機車」「車子」是交通工具，不是車種 → null。",
     ),
     "fire_origin_part": (
         "string|null",

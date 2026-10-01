@@ -95,5 +95,45 @@ class NonFireStillClarifiesTests(unittest.TestCase):
         run_fire.assert_called_once()
 
 
+class UnsureMainClf:
+    """主案類模型判成火警但沒把握（信心 0.84、跟第二名差距小），原本會觸發「是火災還是救護」追問。"""
+
+    def predict(self, text: str):
+        return {
+            "main_category": "火警",
+            "main_conf": 0.84,
+            "main_probs": {"火警": 0.84, "其他案類": 0.75},
+        }
+
+
+MAIN_REASK_Q = "不好意思，請問現場是發生火災，還是有人身體不適或受傷需要救護？"
+
+
+def _run_unsure(answers: list[str]):
+    io = ScriptedIO(answers)
+    engine = SopEngine119(io=io, main_classifier=UnsureMainClf(),
+                          sub_classifiers=None, llm_extractor=None)
+    with patch.object(engine, "_run_火警") as run_fire, \
+            patch.object(engine, "_run_救護") as run_rescue:
+        engine._run_main_flow()
+    return engine, io, run_fire, run_rescue
+
+
+class UnsureMainCategoryTests(unittest.TestCase):
+    """主案類模型沒把握時：第一句話明確是火警就不追問；其他照舊追問。"""
+
+    def test_clear_fire_opening_skips_main_reask(self) -> None:
+        for opening in ("這邊火燒車", "有機車燒起來", "那邊失火了"):
+            with self.subTest(opening=opening):
+                engine, io, run_fire, run_rescue = _run_unsure([opening])
+                self.assertEqual(engine.case.main_category, "火警")
+                self.assertNotIn(MAIN_REASK_Q, io.messages)
+                run_fire.assert_called_once()
+
+    def test_unclear_opening_still_reasks(self) -> None:
+        engine, io, run_fire, run_rescue = _run_unsure(["我要報案", "有東西在燒", "有東西在燒"])
+        self.assertIn(MAIN_REASK_Q, io.messages)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1455,6 +1455,18 @@ class SopEngine119:
         # 開場只問「火災還是救護」，報案人可能一句話含糊帶過（例：「有東西燒起來
         # 有人受傷」火警/救護難分）；此時多問一句，避免一開始就走錯整條 SOP。
         _MAIN_REASK_Q = "不好意思，請問現場是發生火災，還是有人身體不適或受傷需要救護？"
+        # 第一句話已經明確是火警（例如「這邊火燒車」）→ 主案類模型沒把握也不追問，直接當火警。
+        # 用其他案類追問同一個判斷（救護優先）：同時講到有人受傷時結果會是救護，照樣追問。
+        if (
+            (main_conf is None or main_conf < MAIN_CONF_THRESHOLD
+             or main_margin is None or main_margin < MAIN_MARGIN_THRESHOLD)
+            and self._route_other_from_clarify("") == "火警"
+        ):
+            self._debug_print(
+                "main_fire_keyword_without_reask",
+                {"bert": main_cat, "conf": main_conf, "margin": main_margin},
+            )
+            main_cat, main_conf, main_margin = "火警", 1.0, 1.0
         _main_reask = 0
         while (
             _main_reask < MAX_MAIN_REASK
