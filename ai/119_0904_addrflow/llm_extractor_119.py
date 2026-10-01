@@ -46,7 +46,7 @@ import re
 from threading import Lock
 from typing import Any, Dict, List, Optional, Tuple
 
-from important_tags_119 import IMPORTANT_TAGS, normalize_important_tags
+from important_tags_119 import CASE_CONTENT_TAGS, normalize_important_tags
 from sop_utils_119 import (
     clean_address_fragment,
     format_qa_for_llm,
@@ -1317,7 +1317,8 @@ class LLMExtractor119:
             "- pregnancy_week/due_date/multiple_pregnancy/"
             "water_broken_bleeding/contractions/prenatal_history/prenatal_clinic：孕產資訊。\n"
         )
-        allowed_tags = "、".join(IMPORTANT_TAGS)
+        # 只給 LLM 選案情標籤；系統狀態標籤（地址搜尋失敗、火災類別無法確認…）只由程式寫入
+        allowed_tags = "、".join(CASE_CONTENT_TAGS)
         universal_rules = (
             "【全類型通用標記】只依報警人本輪回答中的明確新證據抽取；"
             "未提及或無法判斷必須輸出 null，不得沿用問題或先前內容。\n"
@@ -1448,7 +1449,7 @@ class LLMExtractor119:
                 if not isinstance(val, bool) and level in (0, 1, 2):
                     result[key] = level
             elif key == "ImportantTag":
-                tags = normalize_important_tags(val)
+                tags = normalize_important_tags(val, CASE_CONTENT_TAGS)
                 if tags:
                     result[key] = tags
             elif key in (
