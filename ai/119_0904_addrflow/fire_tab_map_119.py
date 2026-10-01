@@ -345,6 +345,38 @@ TAB_QUESTIONS: Dict[str, Tuple[FireQuestion, ...]] = {
 }
 
 
+# ─── 每一輪要請 LLM 抽取哪些火警欄位 ────────────────────────────────────────
+# 只送這一輪用得到的欄位，避免把四張垂片的規則全部塞給 LLM（太長會超過模型上限）。
+# 細類代碼：報案人更正或講出其他細類（例如「不是汽車，是機車」）時要抓得到
+FIRE_IDENTITY_FIELDS: Tuple[str, ...] = (
+    "fire_incident_type", "building_type_code", "non_building_fire",
+    "vehicle_wildfire_code", "minor_fire_code",
+)
+# 轉人工要看的欄位：不管在哪張垂片，報案人講出有人出不來都要立刻轉
+FIRE_TRANSFER_FIELDS: Tuple[str, ...] = ("trapped_status", "occupants_status")
+# 還不知道是哪張垂片時（報地址、案類分析），先抽四張垂片共用的欄位
+FIRE_SHARED_FIELDS: Tuple[str, ...] = (
+    "fire_or_smoke", "smoke_color", "spread_status", "caller_role", "odor", "fire_extent",
+)
+
+
+def fire_fields_to_extract(tab: Optional[str]) -> Tuple[str, ...]:
+    """
+    這一輪要請 LLM 抽取的火警欄位（依序、不重複）。
+    - 已經知道垂片：細類代碼 + 轉人工欄位 + 這張垂片 xlsx 上的所有欄位（含被動題）
+    - 還不知道垂片：細類代碼 + 轉人工欄位 + 四張垂片共用的欄位
+    細類名稱（sub_category）不請 LLM 直接填，由細類代碼換算，所以不列入。
+    """
+    if tab in TAB_QUESTIONS:
+        tab_fields = tuple(
+            item.field for item in TAB_QUESTIONS[tab] if item.field != "sub_category"
+        )
+    else:
+        tab_fields = FIRE_SHARED_FIELDS
+    ordered = FIRE_IDENTITY_FIELDS + FIRE_TRANSFER_FIELDS + tab_fields
+    return tuple(dict.fromkeys(ordered))
+
+
 def sop_slots_for_tab(tab: Optional[str]) -> Tuple[str, ...]:
     """返回該垂片所有題目（含被動題）存答案的欄位。"""
     questions = TAB_QUESTIONS.get(tab or "", ())

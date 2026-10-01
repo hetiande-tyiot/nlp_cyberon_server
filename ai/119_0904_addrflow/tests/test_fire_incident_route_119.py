@@ -72,7 +72,7 @@ class FakeLLM:
         self.tab_calls: list[tuple[str, str | None]] = []
 
     def extract_general_fields(self, caller_text, question=None, *,
-                               main_category=None, call_type=None) -> dict:
+                               main_category=None, call_type=None, fire_tab=None) -> dict:
         return dict(self.extracted.get(caller_text.strip(), {}))
 
     def classify_fire_tab(self, caller_text, question=None):

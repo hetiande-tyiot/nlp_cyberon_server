@@ -58,7 +58,7 @@ class FakeLLM:
         self.extracted = extracted
 
     def extract_general_fields(self, caller_text, question=None, *,
-                               main_category=None, call_type=None) -> dict:
+                               main_category=None, call_type=None, fire_tab=None) -> dict:
         return dict(self.extracted.get(caller_text.strip(), {}))
 
     def classify_fire_tab(self, caller_text, question=None):
@@ -235,7 +235,8 @@ class OccupantsFixedAnswerCheckTests(unittest.TestCase):
     def _extract(self, llm_output: dict) -> dict:
         ext = object.__new__(LLMExtractor119)
         ext.extract_slots = lambda *args, **kwargs: dict(llm_output)  # type: ignore[method-assign]
-        return ext.extract_general_fields("測試", "測試", main_category="火警")
+        # 指定垂片 B1：只會抽垂片 B1 用得到的欄位
+        return ext.extract_general_fields("測試", "測試", main_category="火警", fire_tab="B1")
 
     def test_valid_answer_kept(self) -> None:
         self.assertEqual(

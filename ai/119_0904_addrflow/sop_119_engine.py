@@ -1244,11 +1244,17 @@ class SopEngine119:
         # 1) LLM 全欄位抽取（主路徑，每輪必做）
         if self._llm is not None:
             try:
+                # 火警：告訴抽取器目前是哪張垂片，只抽這張垂片用得到的欄位
+                fire_extra = (
+                    {"fire_tab": self.case.fire_tab}
+                    if self.case.main_category == "火警" else {}
+                )
                 extracted = self._llm.extract_general_fields(
                     caller_text,
                     question=qa_question,
                     main_category=self.case.main_category,
                     call_type=self.case.call_type,
+                    **fire_extra,
                 )
                 self._debug_print("general_extract", {
                     "question": qa_question,

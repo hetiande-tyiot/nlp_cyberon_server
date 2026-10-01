@@ -62,7 +62,7 @@ class FakeLLM:
         self.remapped = remapped or {}
 
     def extract_general_fields(self, caller_text, question=None, *,
-                               main_category=None, call_type=None) -> dict:
+                               main_category=None, call_type=None, fire_tab=None) -> dict:
         return dict(self.extracted.get(caller_text.strip(), {}))
 
     def classify_fire_tab(self, caller_text, question=None):
@@ -344,7 +344,8 @@ class FixedAnswerCheckTests(unittest.TestCase):
     def _extract(self, llm_output: dict) -> dict:
         ext = object.__new__(LLMExtractor119)
         ext.extract_slots = lambda *args, **kwargs: dict(llm_output)  # type: ignore[method-assign]
-        return ext.extract_general_fields("測試", "測試", main_category="火警")
+        # 指定垂片 A：只會抽垂片 A 用得到的欄位
+        return ext.extract_general_fields("測試", "測試", main_category="火警", fire_tab="A")
 
     def test_valid_fixed_answers_are_kept(self) -> None:
         out = self._extract({"fire_or_smoke": "只有煙", "trapped_status": "有人受困"})

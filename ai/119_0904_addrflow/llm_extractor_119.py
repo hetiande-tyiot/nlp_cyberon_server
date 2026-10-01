@@ -44,7 +44,7 @@ import json
 import os
 import re
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from important_tags_119 import IMPORTANT_TAGS, normalize_important_tags
 from sop_utils_119 import (
@@ -56,6 +56,7 @@ from sop_utils_119 import (
 from fire_tab_map_119 import (
     FIRE_CODE_FIELDS,
     FIRE_FIXED_ANSWERS,
+    fire_fields_to_extract,
     infer_tab,
     normalize_extracted_fire_fields,
     normalize_fire_field,
@@ -475,6 +476,212 @@ def _clean_str(val: Any) -> Optional[str]:
 
 
 # ─── 核心類 ───────────────────────────────────────────────────────────────────
+
+# ─── 火警欄位抽取規則：一個欄位一條規則 ────────────────────────────────────────
+# 每一輪只挑這一輪用得到的欄位（fire_tab_map_119.fire_fields_to_extract）組成規則送給 LLM，
+# 不再一次送四張垂片的全部欄位（太長會超過模型上限，也容易讓 LLM 混淆）。
+# 0901 以前舊流程留下的文字欄位（fire_trend、fire_category、caller_position、people_trapped、
+# trapped_count、fire_spread、building_layout、factory_*、vehicle_occupants、
+# vehicle_occupant_count、road_type、outdoor_fire_type、affected_targets）已不再抽取，
+# 欄位本身保留在 CaseInfo119，是否刪除另行討論。
+_FIRE_RULES_HEADER = (
+    "【火災欄位】只依報警人本輪實際回答抽取；可同時填多欄；"
+    "未提及 → null，不得從受理員問題複製答案。代碼欄可填整數代碼或中文標籤。"
+    "文字欄的「參考」只是常見說法，不是選擇題：回答符合某個參考說法就用那個說法；"
+    "不符合但和這一欄有關，就用報案人的話簡短記下。標★的欄位例外："
+    "只能從列出的說法選一個，依報案人話裡的意思判斷，不是看有沒有出現那幾個字。\n"
+)
+
+# 欄位 → (JSON Schema 型別, 規則說明)
+_FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
+    # 細類代碼（決定走哪張垂片、哪個細類）
+    "fire_incident_type": (
+        "0|1|null",
+        "- fire_incident_type：房子/房屋/建築物正在燒=0；其他東西=1。",
+    ),
+    "building_type_code": (
+        "00|10|11|12|20|21|22|23|24|25|26|27|28|29|null",
+        "- building_type_code：00未知；10透天厝；11集合住宅/公寓大樓；12倉庫；"
+        "20旅館百貨商場；21運輸中樞；22電影院；23學校醫院老人院；24毒災場所；"
+        "25大型違章建築區與傳統市場(含工廠)；26石化廠；27古蹟文化財；"
+        "28地下建築物；29高層建築物(10層以上)。",
+    ),
+    "non_building_fire": (
+        "0|1|null",
+        "- non_building_fire：交通工具或山林草木=0；輕微火警=1。",
+    ),
+    "vehicle_wildfire_code": (
+        "0|1|2|3|4|5|6|7|8|null",
+        "- vehicle_wildfire_code：0汽車；1機車；2隧道；3軌道型交通工具；"
+        "4化學毒劑交通工具；5船舶；6航空器；7山林田野(平地)；8山林田野(山地)。",
+    ),
+    "minor_fire_code": (
+        "0|1|2|3|4|null",
+        "- minor_fire_code：0垃圾；1電線桿(電纜)；2瓦斯漏氣；3警報器作響；4查看案件。",
+    ),
+    # 轉人工要看的欄位
+    "trapped_status": (
+        "有人受困|無人受困|不確定|null",
+        "- trapped_status 有無受困★：只能填 有人受困、無人受困、不確定。"
+        "有人受困＝還有人在裡面出不來、沒出來、有人呼救"
+        "（例如「三樓還有阿嬤出不來」）；無人受困＝人都出來了、裡面沒人；"
+        "不確定＝報案人說不知道或不清楚。",
+    ),
+    "occupants_status": (
+        "人已全部下車|仍有人在車上|不確定|null",
+        "- occupants_status 乘客下車狀況★：只能填 人已全部下車、仍有人在車上、不確定。"
+        "仍有人在車上＝車上還有人沒下來或出不來。",
+    ),
+    # 多張垂片共用
+    "fire_or_smoke": (
+        "有火|只有煙|無火無煙|不確定|null",
+        "- fire_or_smoke 火煙狀況★：只能填 有火、只有煙、無火無煙、不確定。"
+        "有火＝看到火，有沒有煙都算（例如「火很大，煙也很多」）；"
+        "只有煙＝看到煙但沒看到火；無火無煙＝明確說沒看到火也沒看到煙"
+        "（例如只聞到味道、只聽到警報器）；不確定＝人不在現場、沒去看、"
+        "聽別人說的、說不知道。「不確定」不可填成「無火無煙」。",
+    ),
+    "smoke_color": (
+        "string|null",
+        "- smoke_color 濃煙顏色：參考 無煙、黑色煙、白色煙、其他色煙；"
+        "報案人說沒有煙時一定要填「無煙」。",
+    ),
+    "spread_status": (
+        "string|null",
+        "- spread_status 延燒：參考 延燒可能性低、極可能或已延燒、無、有；"
+        "報案人描述火勢大小也記在這裡。",
+    ),
+    "caller_role": (
+        "string|null",
+        "- caller_role 報案人身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、里長、"
+        "車主或駕駛、同車乘客、後方或路過駕駛、附近住戶或商家、當地住戶、"
+        "掃墓或作業民眾、其他。",
+    ),
+    "odor": (
+        "string|null",
+        "- odor 氣味：參考 無、燒焦味、塑膠味、瓦斯味、其他；"
+        "報案人說沒聞到任何味道時一定要填「無」。",
+    ),
+    "fire_extent": (
+        "string|null",
+        "- fire_extent 燃燒範圍：建築物參考 未知、0~50坪、50~100坪、100~300坪、"
+        "300~500坪、500坪以上；山林田野參考 小於一個停車格、約一台車、"
+        "約半個籃球場、一個籃球場以上；報案人用其他方式形容範圍也照記。",
+    ),
+    "door_response": (
+        "string|null",
+        "- door_response 應門狀況（起火戶或負責人有沒有應門、聯絡上）：參考 "
+        "有人在或已聯絡上、敲門無回應或聯絡不上。",
+    ),
+    "extinguish_status": (
+        "string|null",
+        "- extinguish_status 滅火狀況：參考 無人、有人在場、已在自行滅火。",
+    ),
+    # 垂片 A（建築物火警）
+    "place_usage": (
+        "string|null",
+        "- place_usage 場所用途：參考 住家、店家、工廠、辦公室、其他。",
+    ),
+    "fire_floor": (
+        "string|null",
+        "- fire_floor 起火樓層：參考 未知、地下室起火、1~3層樓、4~10層樓、"
+        "11~15層樓、16層樓以上；報案人說幾樓就記幾樓（例如「3樓」）。",
+    ),
+    "building_total_floors": (
+        "string|null",
+        "- building_total_floors 建物樓層：參考 未知、1層樓、2~3層樓、4~10層樓、"
+        "11~15層樓、16層樓以上；報案人說幾層就記幾層（例如「5層樓」）。",
+    ),
+    "building_construction": (
+        "string|null",
+        "- building_construction 建物構造：參考 木造屋、鐵皮屋、連造式鐵皮屋、"
+        "磚造屋、RC、SRC、其他。",
+    ),
+    "hazardous_materials": (
+        "string|null",
+        "- hazardous_materials 危險物品：參考 無或未知、有（瓦斯桶、化學藥品等）；"
+        "有的話記下是什麼。",
+    ),
+    "explosion_status": (
+        "string|null",
+        "- explosion_status 有無爆炸：參考 無爆炸、有爆炸。",
+    ),
+    "access_info": (
+        "string|null",
+        "- access_info 其他資訊：消防車進不進得去、附近有沒有水源；"
+        "參考 一般情況、小巷、缺水、小巷且缺水。",
+    ),
+    # 垂片 B1（交通工具火警）
+    "vehicle_type": (
+        "string|null",
+        "- vehicle_type 車種：參考 自小客車、貨車、電動車、電動機車、其他；"
+        "只要是貨車（小貨車、大貨車、貨櫃車等）一律填「貨車」，其他照報案人說的記。",
+    ),
+    "fire_origin_part": (
+        "string|null",
+        "- fire_origin_part 起火部位：參考 車頭或引擎、車廂或車斗、車底、電瓶、其他。",
+    ),
+    "vehicle_count": (
+        "string|null",
+        "- vehicle_count 起火車輛數量：照報案人說的記，例如一台、兩台。",
+    ),
+    "engine_off_status": (
+        "string|null",
+        "- engine_off_status 車輛是否已熄火：參考 已熄火、未熄火。",
+    ),
+    "injury_status": (
+        "string|null",
+        "- injury_status 有無人員受傷：參考 無、有；有的話記下受傷情形。",
+    ),
+    "cargo": (
+        "string|null",
+        "- cargo 載運物：參考 無或未知、易燃物、化學品、鋰電池、其他。",
+    ),
+    "vehicle_motion": (
+        "string|null",
+        "- vehicle_motion 車輛停放或行駛中：參考 停放路邊、行駛中起火、停車場內。",
+    ),
+    "plate_number": (
+        "string|null",
+        "- plate_number 車牌號碼：照報案人說的記。",
+    ),
+    # 垂片 B2（山林田野火警）
+    "burning_object": (
+        "string|null",
+        "- burning_object 燃燒物：什麼東西在燒；參考 雜草、樹木、公墓或墳墓、"
+        "農作物、垃圾雜物、其他。",
+    ),
+    "nearby_water_source": (
+        "string|null",
+        "- nearby_water_source 水源狀況：附近有沒有水源；參考 無或未知、有。",
+    ),
+    # 垂片 C（輕微火警）
+    "alarm_status": (
+        "string|null",
+        "- alarm_status 警報器狀態：參考 已停止、仍在響、疑似誤報。",
+    ),
+    "source_located": (
+        "string|null",
+        "- source_located 來源確認：知不知道是哪一戶、哪一層傳出來的；"
+        "參考 已確認位置、聞得到但找不到來源；知道的話記下位置。",
+    ),
+    "target_object": (
+        "string|null",
+        "- target_object 標的物：哪裡在冒煙或起火；參考 電線桿或電纜、電表、"
+        "電箱或變電箱、人孔蓋或水溝蓋、招牌、其他。",
+    ),
+}
+
+
+def _build_fire_schema_and_rules(
+    fire_tab: Optional[str],
+) -> Tuple[Dict[str, str], str]:
+    """依目前垂片挑出這一輪要抽的火警欄位，組成 JSON Schema 與規則文字。"""
+    fields = fire_fields_to_extract(fire_tab)
+    schema = {field: _FIRE_FIELD_RULES[field][0] for field in fields}
+    rules = _FIRE_RULES_HEADER + "\n".join(_FIRE_FIELD_RULES[field][1] for field in fields)
+    return schema, rules
+
 
 class LLMExtractor119:
     """
@@ -961,9 +1168,12 @@ class LLMExtractor119:
         *,
         main_category: Optional[str] = None,
         call_type: Optional[str] = None,
+        fire_tab: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         每輪輸入後依案件類型跨欄位抽取業務欄位。
+        火警時 fire_tab 是目前的垂片（A / B1 / B2 / C，還不知道就是 None），
+        只抽這張垂片用得到的火警欄位。
 
         設計原則：
         - 每一則報警人回答都抽取通用欄位
@@ -1026,60 +1236,8 @@ class LLMExtractor119:
             "prenatal_history":      "string|null",
             "prenatal_clinic":       "string|null",
         }
-        fire_schema = {
-            "fire_or_smoke":          "有火|只有煙|無火無煙|不確定|null",
-            "smoke_color":            "string|null",
-            "burning_object":         "string|null",
-            "fire_trend":             "string|null",
-            "fire_extent":            "string|null",
-            "fire_category":          "建築物|工廠|車輛|露天野外|null",
-            "caller_position":        "string|null",
-            "caller_role":            "string|null",
-            "people_trapped":         "true|false|null",
-            "trapped_count":          "string|null",
-            "building_total_floors":  "string|null",
-            "fire_floor":             "string|null",
-            "fire_spread":            "true|false|null",
-            "building_layout":        "string|null",
-            "factory_scale_type":     "string|null",
-            "factory_people_present": "true|false|null",
-            "hazardous_materials":    "string|null",
-            "vehicle_type":           "string|null",
-            "vehicle_count":          "string|null",
-            "vehicle_occupants":      "true|false|null",
-            "vehicle_occupant_count": "string|null",
-            "road_type":              "一般道路|高速公路|null",
-            "outdoor_fire_type":      "string|null",
-            "nearby_water_source":    "string|null",
-            "affected_targets":       "string|null",
-            "fire_incident_type":     "0|1|null",
-            "building_type_code":     "00|10|11|12|20|21|22|23|24|25|26|27|28|29|null",
-            # 垂片 A（建築物火警）照 0929 xlsx 的欄位，存文字
-            "place_usage":            "string|null",
-            "spread_status":          "string|null",
-            "trapped_status":         "有人受困|無人受困|不確定|null",
-            "door_response":          "string|null",
-            "building_construction":  "string|null",
-            "odor":                   "string|null",
-            "explosion_status":       "string|null",
-            "access_info":            "string|null",
-            # 垂片 B1（交通工具火警）照 0929 xlsx 的欄位，存文字
-            "fire_origin_part":       "string|null",
-            "engine_off_status":      "string|null",
-            "occupants_status":       "人已全部下車|仍有人在車上|不確定|null",
-            "injury_status":          "string|null",
-            "cargo":                  "string|null",
-            "extinguish_status":      "string|null",
-            "vehicle_motion":         "string|null",
-            "plate_number":           "string|null",
-            # 垂片 C（輕微火警）照 0929 xlsx 的欄位，存文字
-            "alarm_status":           "string|null",
-            "source_located":         "string|null",
-            "target_object":          "string|null",
-            "non_building_fire":      "0|1|null",
-            "vehicle_wildfire_code":  "0|1|2|3|4|5|6|7|8|null",
-            "minor_fire_code":        "0|1|2|3|4|null",
-        }
+        # 火警：只請 LLM 抽這一輪用得到的欄位（依目前垂片挑選，見 _build_fire_schema_and_rules）
+        fire_schema, fire_rules = _build_fire_schema_and_rules(fire_tab)
         universal_schema = {
             "ImportantCase":  "0|1|2|null",
             "ImportantTag":   "string[]|null",
@@ -1150,87 +1308,6 @@ class LLMExtractor119:
             "- blood_glucose/blood_pressure/seizure_info：血糖/血壓/抽搐。\n"
             "- pregnancy_week/due_date/multiple_pregnancy/"
             "water_broken_bleeding/contractions/prenatal_history/prenatal_clinic：孕產資訊。\n"
-        )
-        fire_rules = (
-            "【火災欄位】只依報警人本輪實際回答抽取；可同時填多欄；"
-            "未提及 → null，不得從受理員問題複製答案。"
-            "代碼欄可填整數代碼或中文標籤。\n"
-            "- fire_incident_type：房子/房屋/建築物正在燒=0；其他東西=1。\n"
-            "- building_type_code：00未知；10透天厝；11集合住宅/公寓大樓；12倉庫；"
-            "20旅館百貨商場；21運輸中樞；22電影院；23學校醫院老人院；24毒災場所；"
-            "25大型違章建築區與傳統市場(含工廠)；26石化廠；27古蹟文化財；"
-            "28地下建築物；29高層建築物(10層以上)。\n"
-            "【建築物火警欄位（存文字）】下列「參考」只是常見說法，不是選擇題："
-            "回答符合某個參考說法就用那個說法；不符合但和這一欄有關，"
-            "就用報案人的話簡短記下。標★的欄位例外：只能從列出的說法選一個，"
-            "依報案人話裡的意思判斷，不是看有沒有出現那幾個字。\n"
-            "- fire_or_smoke 火煙狀況★：只能填 有火、只有煙、無火無煙、不確定。"
-            "有火＝看到火，有沒有煙都算（例如「火很大，煙也很多」）；"
-            "只有煙＝看到煙但沒看到火；無火無煙＝明確說沒看到火也沒看到煙"
-            "（例如只聞到味道、只聽到警報器）；不確定＝人不在現場、沒去看、"
-            "聽別人說的、說不知道。「不確定」不可填成「無火無煙」。\n"
-            "- smoke_color 濃煙顏色：參考 無煙、黑色煙、白色煙、其他色煙；"
-            "報案人說沒有煙時一定要填「無煙」。\n"
-            "- fire_floor 起火樓層：參考 未知、地下室起火、1~3層樓、4~10層樓、"
-            "11~15層樓、16層樓以上；報案人說幾樓就記幾樓（例如「3樓」）。\n"
-            "- spread_status 延燒可能：參考 延燒可能性低、極可能或已延燒；"
-            "報案人描述火勢大小也記在這裡。\n"
-            "- trapped_status 有無受困★：只能填 有人受困、無人受困、不確定。"
-            "有人受困＝還有人在裡面出不來、沒出來、有人呼救"
-            "（例如「三樓還有阿嬤出不來」）；無人受困＝人都出來了、裡面沒人；"
-            "不確定＝報案人說不知道或不清楚。\n"
-            "- door_response 應門狀況（起火戶或負責人有沒有應門、聯絡上）：參考 "
-            "有人在或已聯絡上、敲門無回應或聯絡不上。\n"
-            "- building_total_floors 建物樓層：參考 未知、1層樓、2~3層樓、4~10層樓、"
-            "11~15層樓、16層樓以上；報案人說幾層就記幾層（例如「5層樓」）。\n"
-            "- place_usage 場所用途：參考 住家、店家、工廠、辦公室、其他。\n"
-            "- caller_role 報案人身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、"
-            "里長、其他。\n"
-            "- building_construction 建物構造：參考 木造屋、鐵皮屋、連造式鐵皮屋、"
-            "磚造屋、RC、SRC、其他。\n"
-            "- hazardous_materials 危險物品：參考 無或未知、有（瓦斯桶、化學藥品等）；"
-            "有的話記下是什麼。\n"
-            "- odor 氣味：參考 無、燒焦味、塑膠味、瓦斯味、其他；"
-            "報案人說沒聞到任何味道時一定要填「無」。\n"
-            "- explosion_status 有無爆炸：參考 無爆炸、有爆炸。\n"
-            "- access_info 其他資訊：消防車進不進得去、附近有沒有水源；"
-            "參考 一般情況、小巷、缺水、小巷且缺水。\n"
-            "- fire_extent 燃燒範圍：建築物參考 未知、0~50坪、50~100坪、100~300坪、"
-            "300~500坪、500坪以上；山林田野參考 小於一個停車格、約一台車、"
-            "約半個籃球場、一個籃球場以上；報案人用其他方式形容範圍也照記。\n"
-            "【交通工具火警欄位（存文字）】規則同上：參考只是常見說法，標★的只能從列出的說法選。\n"
-            "- vehicle_type 車種：參考 自小客車、貨車、電動車、電動機車、其他；"
-            "只要是貨車（小貨車、大貨車、貨櫃車等）一律填「貨車」，其他照報案人說的記。\n"
-            "- fire_origin_part 起火部位：參考 車頭或引擎、車廂或車斗、車底、電瓶、其他。\n"
-            "- vehicle_count 起火車輛數量：照報案人說的記，例如一台、兩台。\n"
-            "- engine_off_status 車輛是否已熄火：參考 已熄火、未熄火。\n"
-            "- occupants_status 乘客下車狀況★：只能填 人已全部下車、仍有人在車上、不確定。"
-            "仍有人在車上＝車上還有人沒下來或出不來。\n"
-            "- injury_status 有無人員受傷：參考 無、有；有的話記下受傷情形。\n"
-            "- cargo 載運物：參考 無或未知、易燃物、化學品、鋰電池、其他。\n"
-            "- extinguish_status 滅火狀況：參考 無人、有人在場、已在自行滅火。\n"
-            "- vehicle_motion 車輛停放或行駛中：參考 停放路邊、行駛中起火、停車場內。\n"
-            "- plate_number 車牌號碼：照報案人說的記。\n"
-            "【輕微火警欄位（存文字）】規則同上。\n"
-            "- alarm_status 警報器狀態：參考 已停止、仍在響、疑似誤報。\n"
-            "- source_located 來源確認：知不知道是哪一戶、哪一層傳出來的；"
-            "參考 已確認位置、聞得到但找不到來源；知道的話記下位置。\n"
-            "- target_object 標的物：哪裡在冒煙或起火；參考 電線桿或電纜、電表、"
-            "電箱或變電箱、人孔蓋或水溝蓋、招牌、其他。\n"
-            "- non_building_fire：交通工具或山林草木=0；輕微火警=1。\n"
-            "- vehicle_wildfire_code：0汽車；1機車；2隧道；3軌道型交通工具；"
-            "4化學毒劑交通工具；5船舶；6航空器；7山林田野(平地)；8山林田野(山地)。\n"
-            "- minor_fire_code：0垃圾；1電線桿(電纜)；2瓦斯漏氣；3警報器作響；"
-            "4查看案件。\n"
-            "- burning_object 燃燒物：什麼東西在燒；山林田野參考 雜草、樹木、"
-            "公墓或墳墓、農作物、垃圾雜物、其他。\n"
-            "- nearby_water_source 水源狀況：附近有沒有水源；參考 無或未知、有。\n"
-            "- fire_trend：自由文本補充。\n"
-            "- fire_category：若能判斷，住宅房子大樓=建築物；工廠廠房=工廠；"
-            "汽機車=車輛；雜草垃圾山林=露天野外。\n"
-            "- caller_position、people_trapped、trapped_count、fire_spread、"
-            "factory_*、vehicle_occupants、vehicle_occupant_count、road_type、"
-            "outdoor_*：報案人有提到才填。"
         )
         allowed_tags = "、".join(IMPORTANT_TAGS)
         universal_rules = (

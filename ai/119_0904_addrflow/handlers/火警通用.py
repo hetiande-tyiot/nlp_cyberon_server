@@ -46,6 +46,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
         # 報地址時就講出有人受困 → 不必問案類，直接轉人工
         self._transfer_if_people_trapped(engine)
         self._resolve_tab(engine)
+        self._backfill_earlier_answers_for_tab(engine)
 
         engine._sub_reclassify_enabled = True
         try:
@@ -92,6 +93,47 @@ class HuoJingGenericHandler(SubCategoryHandler):
         )
         engine._say(TRAPPED_TRANSFER_MESSAGE)
         raise TransferToHumanError("fire_people_trapped", result="human_transfer")
+
+    def _backfill_earlier_answers_for_tab(self, engine: "SopEngine119") -> None:
+        """
+        垂片剛決定時，把報案人前面說過的話，用這張垂片的欄位再抽一次。
+        為什麼需要：還不知道垂片時（報地址、案類分析），每一輪只抽四張垂片共用的欄位，
+        所以像「我家公寓三樓燒起來」裡的「三樓」當時沒被記下；不補抽的話，
+        進了垂片 A 會再問一次「是幾樓在冒煙呢？」。
+        只補還空白的欄位，已經有答案的不蓋掉；只收火警欄位，不動地址等其他欄位。
+        抽取失敗就跳過，流程照常繼續。
+        """
+        from fire_tab_map_119 import fire_fields_to_extract
+
+        caller_texts = engine.case.caller_texts()
+        if engine._llm is None or not caller_texts:
+            return
+        tab = engine.case.fire_tab
+        try:
+            extracted = engine._llm.extract_general_fields(
+                "\n".join(caller_texts),
+                question=None,
+                main_category="火警",
+                call_type=engine.case.call_type,
+                fire_tab=tab,
+            )
+        except Exception as exc:
+            engine._debug_print("fire_backfill_error", exc)
+            return
+        fire_fields = set(fire_fields_to_extract(tab))
+        # 先查哪些欄位還空著（會短暫上鎖），再上鎖寫入；鎖不能重複上，所以分兩步
+        blanks = {
+            key: value
+            for key, value in (extracted or {}).items()
+            if key in fire_fields and value is not None
+            and not engine._is_field_filled(key)
+        }
+        engine._debug_print("fire_backfill", {"tab": tab, "filled": blanks})
+        if not blanks:
+            return
+        with engine._case_lock:
+            engine._apply_extracted_fields(blanks)
+        engine._notify_case_update()
 
     def _flag_fire_issue(self, engine: "SopEngine119", tag: str) -> None:
         """記錄無法判斷／資訊缺失，繼續流程、不轉人工。"""
