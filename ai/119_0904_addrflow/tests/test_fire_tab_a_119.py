@@ -89,7 +89,7 @@ def _building_fire_engine(
     engine = SopEngine119(io=io, llm_extractor=FakeLLM(extracted))  # type: ignore[arg-type]
     io.engine = engine
     engine.case.main_category = "火警"
-    engine.case.fire_incident_type = 0
+    engine.case.fire_tab = TAB_A  # 已經在垂片 A
     for key, value in prefilled.items():
         setattr(engine.case, key, value)
     return engine, io

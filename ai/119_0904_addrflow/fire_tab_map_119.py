@@ -175,7 +175,7 @@ def _warehouse_or_factory(case: Any) -> bool:
 
 
 def _subtype_is(*names: str) -> Callable[[Any], bool]:
-    """前置條件「細類 = 某幾種」，例如「交通工具＝汽車、機車」。細類還不知道就不成立。"""
+    """前置條件「次案類 = 某幾種」，例如「交通工具＝汽車、機車」。次案類還不知道就不成立。"""
     return lambda case: getattr(case, "sub_category", None) in names
 
 
@@ -347,10 +347,11 @@ TAB_QUESTIONS: Dict[str, Tuple[FireQuestion, ...]] = {
 
 # ─── 每一輪要請 LLM 抽取哪些火警欄位 ────────────────────────────────────────
 # 只送這一輪用得到的欄位，避免把四張垂片的規則全部塞給 LLM（太長會超過模型上限）。
-# 細類代碼：報案人更正或講出其他細類（例如「不是汽車，是機車」）時要抓得到
+# 次案類代碼：報案人講出或更正次案類（例如「不是汽車，是機車」）時要抓得到。
+# 舊流程「先分是不是建築物、再分交通山林或輕微」用的 fire_incident_type、non_building_fire
+# 已不再抽取：現在由次案類決定垂片，不需要先分是不是建築物（欄位保留，不再填值）。
 FIRE_IDENTITY_FIELDS: Tuple[str, ...] = (
-    "fire_incident_type", "building_type_code", "non_building_fire",
-    "vehicle_wildfire_code", "minor_fire_code",
+    "building_type_code", "vehicle_wildfire_code", "minor_fire_code",
 )
 # 轉人工要看的欄位：不管在哪張垂片，報案人講出有人出不來都要立刻轉
 FIRE_TRANSFER_FIELDS: Tuple[str, ...] = ("trapped_status", "occupants_status")
@@ -363,9 +364,9 @@ FIRE_SHARED_FIELDS: Tuple[str, ...] = (
 def fire_fields_to_extract(tab: Optional[str]) -> Tuple[str, ...]:
     """
     這一輪要請 LLM 抽取的火警欄位（依序、不重複）。
-    - 已經知道垂片：細類代碼 + 轉人工欄位 + 這張垂片 xlsx 上的所有欄位（含被動題）
-    - 還不知道垂片：細類代碼 + 轉人工欄位 + 四張垂片共用的欄位
-    細類名稱（sub_category）不請 LLM 直接填，由細類代碼換算，所以不列入。
+    - 已經知道垂片：次案類代碼 + 轉人工欄位 + 這張垂片 xlsx 上的所有欄位（含被動題）
+    - 還不知道垂片：次案類代碼 + 轉人工欄位 + 四張垂片共用的欄位
+    次案類名稱（sub_category）不請 LLM 直接填，由次案類代碼換算，所以不列入。
     """
     if tab in TAB_QUESTIONS:
         tab_fields = tuple(
@@ -385,9 +386,9 @@ def sop_slots_for_tab(tab: Optional[str]) -> Tuple[str, ...]:
 
 def _clear_tab_exclusive_fields(case: Any, keep_tab: Optional[str]) -> None:
     """
-    換垂片時只清掉「細類代碼」，報案人已經回答過的內容全部保留、不重問。
-    細類代碼是用來決定走哪張垂片的（建築物類型、交通工具山林火警、輕微火警），
-    換到新垂片後舊的細類不再成立，所以要清掉；B1 / B2 共用同一個細類代碼欄位，
+    換垂片時只清掉「次案類代碼」，報案人已經回答過的內容全部保留、不重問。
+    次案類代碼是用來決定走哪張垂片的（建築物類型、交通工具山林火警、輕微火警），
+    換到新垂片後舊的次案類不再成立，所以要清掉；B1 / B2 共用同一個次案類代碼欄位，
     在 B1 與 B2 之間切換時不清。
     """
     for field in FIRE_IDENTITY_CODE_FIELDS:
@@ -411,8 +412,9 @@ def apply_subtype_identity_codes(
     update_tab: bool = False,
 ) -> bool:
     """
-    依子類名寫入身份編號欄，並清掉其他垂片的專屬碼。
-    成功解析標籤則返回 True。
+    依次案類名稱寫入次案類代碼，並清掉其他垂片的次案類代碼。
+    成功解析次案類則返回 True。
+    （fire_incident_type、non_building_fire 已不再使用，不寫入。）
     """
     item = lookup_subtype(label)
     if item is None:
@@ -420,11 +422,6 @@ def apply_subtype_identity_codes(
     _clear_tab_exclusive_fields(case, item.tab)
     if update_tab:
         case.fire_tab = item.tab
-    case.fire_incident_type = item.fire_incident_type
-    if item.tab == TAB_A:
-        case.non_building_fire = None
-    elif item.non_building_fire is not None:
-        case.non_building_fire = item.non_building_fire
     case.building_type_code = item.building_type_code
     case.vehicle_wildfire_code = item.vehicle_wildfire_code
     case.minor_fire_code = item.minor_fire_code
@@ -494,7 +491,7 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "vehicle_wildfire_code": "交通工具山林火警",
     "minor_fire_code": "輕微火警",
     # 垂片 A 照 0929 xlsx 重寫後使用的欄位（存文字）
-    "sub_category": "火警類型",  # 各垂片的細類：透天厝、汽車、山林田野(平地)、垃圾…
+    "sub_category": "次案類",  # 透天厝、機車、山林田野(平地)、垃圾…（決定走哪張垂片）
     "place_usage": "場所用途",
     "fire_or_smoke": "火煙狀況",
     "smoke_color": "濃煙顏色",
@@ -674,8 +671,27 @@ def codes_for_label(label: Optional[str]) -> Optional[Dict[str, Any]]:
 
 
 def tab_for_subtype(label: Optional[str]) -> Optional[str]:
+    """次案類所屬的垂片，例如 機車 → B1。不是火警次案類就回傳 None。"""
     item = lookup_subtype(label)
     return item.tab if item else None
+
+
+def subtype_name_for_code(field: str, value: Any) -> Optional[str]:
+    """
+    LLM 抽到的一個次案類代碼 → 次案類名稱，例如 vehicle_wildfire_code = 1 → 機車。
+    代碼對不上任何次案類（例如建築物類型 00 未知）就回傳 None。
+    """
+    for item in FIRE_SUBTYPES:
+        if field == "building_type_code":
+            if item.building_type_code is not None and item.building_type_code == str(value).strip():
+                return item.name
+        elif field == "vehicle_wildfire_code":
+            if item.vehicle_wildfire_code is not None and item.vehicle_wildfire_code == _as_int(value):
+                return item.name
+        elif field == "minor_fire_code":
+            if item.minor_fire_code is not None and item.minor_fire_code == _as_int(value):
+                return item.name
+    return None
 
 
 def tab_for_codes(
@@ -959,8 +975,8 @@ def apply_bert_subtype_to_case(
     allow_tab_switch: bool = False,
 ) -> None:
     """
-    將 BERT 細類寫入 case。
-    fire_tab 已鎖定且 allow_tab_switch=False 時只更新該垂片內的細類碼，不改路由。
+    將 BERT 次案類寫入 case。
+    fire_tab 已鎖定且 allow_tab_switch=False 時只更新該垂片內的次案類碼，不改路由。
     allow_tab_switch=True 時可改 fire_tab 並寫入新垂片代碼。
     """
     codes = codes_for_label(label)
@@ -995,16 +1011,11 @@ def apply_bert_subtype_to_case(
 
 
 def resolve_fire_tab(case: Any) -> Optional[str]:
-    """依已填代碼推導垂片；成功則寫入 fire_tab。"""
+    """
+    目前應該走哪張垂片：已經決定就用已決定的；還沒決定但已知次案類，就用次案類所屬的垂片
+    （次案類決定垂片）。都不知道就回傳 None。
+    """
     tab = getattr(case, "fire_tab", None)
     if tab in TAB_QUESTIONS:
         return tab
-    tab = tab_for_codes(
-        getattr(case, "fire_incident_type", None),
-        getattr(case, "non_building_fire", None),
-        getattr(case, "vehicle_wildfire_code", None),
-        getattr(case, "minor_fire_code", None),
-    )
-    if tab:
-        case.fire_tab = tab
-    return tab
+    return tab_for_subtype(getattr(case, "sub_category", None))

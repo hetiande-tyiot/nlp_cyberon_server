@@ -19,9 +19,6 @@ from fire_tab_map_119 import (
     MODE_PASSIVE,
     OCCUPANTS_STILL_INSIDE,
     SAFETY_MESSAGE,
-    TAB_A,
-    TAB_B1,
-    TAB_B2,
     TAB_C,
     TAB_QUESTIONS,
     TRAPPED_TRANSFER_MESSAGE,
@@ -101,17 +98,19 @@ class HuoJingGenericHandler(SubCategoryHandler):
         所以像「我家公寓三樓燒起來」裡的「三樓」當時沒被記下；不補抽的話，
         進了垂片 A 會再問一次「是幾樓在冒煙呢？」。
         只補還空白的欄位，已經有答案的不蓋掉；只收火警欄位，不動地址等其他欄位。
-        抽取失敗就跳過，流程照常繼續。
+        每一句都連同它當時回答的受理員問題一起送，模型才分得出「4樓」是在回答地址、
+        不是起火樓層。抽取失敗就跳過，流程照常繼續。
         """
         from fire_tab_map_119 import fire_fields_to_extract
+        from sop_utils_119 import format_qa_for_llm
 
-        caller_texts = engine.case.caller_texts()
-        if engine._llm is None or not caller_texts:
+        qa_pairs = engine._iter_caller_qa_pairs()
+        if engine._llm is None or not qa_pairs:
             return
         tab = engine.case.fire_tab
         try:
             extracted = engine._llm.extract_general_fields(
-                "\n".join(caller_texts),
+                "\n".join(format_qa_for_llm(q, a) for q, a in qa_pairs),
                 question=None,
                 main_category="火警",
                 call_type=engine.case.call_type,
@@ -159,47 +158,43 @@ class HuoJingGenericHandler(SubCategoryHandler):
                 engine._debug_print("fire_tab_llm_error", exc)
         return tab or infer_tab(answer)
 
+    def _classify_earlier_answers(self, engine: "SopEngine119") -> Optional[str]:
+        """
+        次案類還不知道時，用報案人前面說過的話判斷是哪張垂片，跟案類分析用同一個判斷。
+        例如開頭說「我的機車燒起來」就判斷得出 B1，不必再問。
+        只送報案人說的話，不含受理員問題（判斷不出來時改用關鍵詞，問題文字會被誤比對）。
+        判斷不出來回傳 None，由案類分析去問。
+        """
+        caller_texts = engine.case.caller_texts()
+        if not caller_texts:
+            return None
+        return self._classify_tab(engine, None, "\n".join(caller_texts))
+
     def _tab_already_known(self, engine: "SopEngine119") -> Optional[str]:
         """
-        報案人在前面（例如報地址時）已經講出是什麼在燒，系統也已經記下來了，
-        就直接用那個結果，不用再問。還不知道就回傳 None。
+        垂片已經決定，或已經知道次案類（次案類決定垂片），就直接用，不用再問。
+        還不知道就回傳 None。
         """
         tab = resolve_fire_tab(engine.case)
-        if tab in TAB_QUESTIONS:
-            return tab
-        if engine.case.non_building_fire == 1:
-            return TAB_C
-        code = engine.case.vehicle_wildfire_code
-        if code is not None and 0 <= code <= 6:
-            return TAB_B1
-        if code in (7, 8):
-            return TAB_B2
-        return None
+        return tab if tab in TAB_QUESTIONS else None
 
     def _lock_tab(self, engine: "SopEngine119", tab: str) -> None:
         with engine._case_lock:
             engine.case.fire_tab = tab
-            if tab == TAB_A:
-                engine.case.fire_incident_type = 0
-            elif tab == TAB_C:
-                engine.case.fire_incident_type = 1
-                engine.case.non_building_fire = 1
-            else:
-                engine.case.fire_incident_type = 1
-                engine.case.non_building_fire = 0
         engine._notify_case_update()
 
     def _resolve_tab(self, engine: "SopEngine119") -> str:
         """
         案類分析：決定這通電話要走哪張垂片。
-        - 前面已經知道是什麼在燒 → 不問，直接用
-        - 不知道 → 問「請問發生什麼事？是什麼東西在燒？」
+        - 已經知道次案類 → 用次案類所屬的垂片，不問
+        - 次案類還不知道 → 先用報案人前面說過的話判斷是哪張垂片，判斷得出來就不問
+        - 還是判斷不出來 → 問「請問發生什麼事？是什麼東西在燒？」
         - 聽不出來 → 再問「不好意思，請您再說一次是什麼在燒？」
         - 問兩次仍分不出是哪種火災 → 先當成輕微火警（垂片 C）處理，並在 ImportantTag
           記下原因，讓下游知道這通電話的火災類型是系統預設的，不是報案人說的
         """
         engine._ensure_known_fields_from_history()
-        known = self._tab_already_known(engine)
+        known = self._tab_already_known(engine) or self._classify_earlier_answers(engine)
         if known:
             self._lock_tab(engine, known)
             return known

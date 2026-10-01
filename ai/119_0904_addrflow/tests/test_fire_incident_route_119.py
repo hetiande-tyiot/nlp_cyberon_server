@@ -173,20 +173,18 @@ class ResolveTabFlowTests(unittest.TestCase):
 
     def test_one_question_routes_to_each_tab(self) -> None:
         cases = {
-            "我家公寓燒起來了": (TAB_A, 0, None),
-            "我的機車燒起來": (TAB_B1, 1, 0),
-            "山上雜草在燒": (TAB_B2, 1, 0),
-            "有人在燒垃圾": (TAB_C, 1, 1),
+            "我家公寓燒起來了": TAB_A,
+            "我的機車燒起來": TAB_B1,
+            "山上雜草在燒": TAB_B2,
+            "有人在燒垃圾": TAB_C,
         }
-        for answer, (tab, incident_type, non_building) in cases.items():
+        for answer, tab in cases.items():
             with self.subTest(answer=answer):
                 llm = FakeLLM(tab_answers={answer: tab})
                 engine, io = _make_engine([answer], llm)
                 result = HuoJingGenericHandler()._resolve_tab(engine)
                 self.assertEqual(result, tab)
                 self.assertEqual(engine.case.fire_tab, tab)
-                self.assertEqual(engine.case.fire_incident_type, incident_type)
-                self.assertEqual(engine.case.non_building_fire, non_building)
                 self.assertEqual(_asked(io), [INCIDENT_Q])
                 self.assertEqual(io.stages_when_asked, [INCIDENT_STAGE])
                 self.assertNotIn(UNRESOLVED_TAB_TAG, engine.case.ImportantTag)
@@ -202,28 +200,34 @@ class ResolveTabFlowTests(unittest.TestCase):
         engine, io = _make_engine(["警報器一直響"], llm)
         self.assertEqual(HuoJingGenericHandler()._resolve_tab(engine), TAB_C)
 
-    def test_known_tab_skips_question(self) -> None:
-        llm = FakeLLM()
-        engine, io = _make_engine([], llm)
-        engine.case.fire_incident_type = 1
-        engine.case.vehicle_wildfire_code = 1  # 報地址時已說「機車燒起來」
-        self.assertEqual(HuoJingGenericHandler()._resolve_tab(engine), TAB_B1)
-        self.assertEqual(_asked(io), [])
-        self.assertEqual(llm.tab_calls, [])
+    def test_known_subtype_decides_tab_without_asking(self) -> None:
+        # 次案類決定垂片：報地址時已經知道次案類，就直接用它所屬的垂片
+        for subtype, tab in (("機車", TAB_B1), ("集合住宅", TAB_A),
+                             ("山林田野(山地)", TAB_B2), ("警報器作響", TAB_C)):
+            with self.subTest(subtype=subtype):
+                llm = FakeLLM()
+                engine, io = _make_engine([], llm)
+                engine.case.sub_category = subtype
+                self.assertEqual(HuoJingGenericHandler()._resolve_tab(engine), tab)
+                self.assertEqual(_asked(io), [])
+                self.assertEqual(llm.tab_calls, [])
 
-    def test_known_building_skips_question(self) -> None:
-        llm = FakeLLM()
+    def test_earlier_answers_decide_tab_without_asking(self) -> None:
+        # 「摩托車相撞起火」那通：開頭已經講了機車，後面「有火災」不該讓它變成建築物火警。
+        # 次案類還不知道時，先用報案人前面說過的話判斷垂片，判斷得出來就不問。
+        earlier = ["報火災 摩托車相撞起火", "有火災"]
+        llm = FakeLLM(tab_answers={"\n".join(earlier): TAB_B1})
         engine, io = _make_engine([], llm)
-        engine.case.fire_incident_type = 0
-        self.assertEqual(HuoJingGenericHandler()._resolve_tab(engine), TAB_A)
+        for text in earlier:
+            engine.case.transcript.append({"role": "caller", "text": text})
+        engine._extracted_caller_count = len(earlier)
+        self.assertEqual(HuoJingGenericHandler()._resolve_tab(engine), TAB_B1)
         self.assertEqual(_asked(io), [])
 
     def test_answer_extraction_fills_codes_without_llm_route(self) -> None:
         # 每一輪的欄位抽取已經從回答裡記下「山地火警」→ 直接決定垂片，不用再請 LLM 判斷
         answer = "山上那邊整片在燒"
-        llm = FakeLLM(extracted={answer: {"fire_incident_type": 1,
-                                           "non_building_fire": 0,
-                                           "vehicle_wildfire_code": 8}})
+        llm = FakeLLM(extracted={answer: {"vehicle_wildfire_code": 8}})
         engine, io = _make_engine([answer], llm)
         self.assertEqual(HuoJingGenericHandler()._resolve_tab(engine), TAB_B2)
         self.assertEqual(llm.tab_calls, [])
@@ -241,8 +245,6 @@ class ResolveTabFlowTests(unittest.TestCase):
         engine, io = _make_engine(["好多煙，快點", "我也不知道啦"], llm)
         self.assertEqual(HuoJingGenericHandler()._resolve_tab(engine), TAB_C)
         self.assertEqual(engine.case.fire_tab, TAB_C)
-        self.assertEqual(engine.case.fire_incident_type, 1)
-        self.assertEqual(engine.case.non_building_fire, 1)
         self.assertEqual(_asked(io), [INCIDENT_Q, INCIDENT_REASK_Q])
         self.assertIn(UNRESOLVED_TAB_TAG, engine.case.ImportantTag)
         self.assertEqual(engine.case.ImportantCase, 1)
@@ -260,14 +262,12 @@ class GenericFlowEndToEndTests(unittest.TestCase):
     """run_generic_flow：案類分析接到垂片問題，最後播安全提示。"""
 
     def test_subtype_known_from_incident_answer_skips_subtype_question(self) -> None:
-        # 「我的機車燒起來」→ B1 且細類已知 → 不問 B1 第一題「交通工具」，直接問下一題「車種」。
+        # 「我的機車燒起來」→ B1 且次案類已知 → 不問 B1 第一題「交通工具」，直接問下一題「車種」。
         # 只準備一句回答：問到車種時回答用完就停，這裡只檢查問了哪兩句。
         answer = "我的機車燒起來"
         llm = FakeLLM(
             tab_answers={answer: TAB_B1},
-            extracted={answer: {"fire_incident_type": 1,
-                                "non_building_fire": 0,
-                                "vehicle_wildfire_code": 1}},
+            extracted={answer: {"vehicle_wildfire_code": 1}},
         )
         engine, io = _make_engine([answer], llm)
         with self.assertRaises(AssertionError):  # 回答用完
@@ -287,6 +287,19 @@ class GenericFlowEndToEndTests(unittest.TestCase):
         minor_q = {item.element: item.question for item in TAB_C_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_C)
         self.assertEqual(io.messages, [INCIDENT_Q, minor_q["輕微火警"]])
+
+
+    def test_subtype_and_tab_mismatch_switches_to_subtype_tab(self) -> None:
+        # 次案類是機車、垂片卻是 A（兩邊對不上）→ 換到機車所屬的 B1，問 B1 的題目
+        engine, io = _make_engine([], FakeLLM())
+        engine.case.fire_tab = TAB_A
+        engine.case.sub_category = "機車"
+        engine.case.vehicle_wildfire_code = 1
+        with self.assertRaises(AssertionError):  # 回答用完：只看第一句問什麼
+            HuoJingGenericHandler().run_generic_flow(engine)
+        vehicle_q = {item.element: item.question for item in TAB_B1_QUESTIONS}
+        self.assertEqual(engine.case.fire_tab, TAB_B1)
+        self.assertEqual(io.messages, [vehicle_q["車種"]])
 
 
 if __name__ == "__main__":

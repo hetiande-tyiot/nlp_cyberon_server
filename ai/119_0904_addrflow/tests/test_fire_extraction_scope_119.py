@@ -4,8 +4,8 @@
 為什麼：原本每一輪都把四張垂片全部欄位的規則一起送給 LLM（約 4,400 字），
 太長可能超過模型上限，超過時火警欄位會一個都抽不到而且沒有錯誤訊息。
 現在依目前垂片挑欄位：
-  - 已經知道垂片：細類代碼 + 轉人工欄位 + 這張垂片 xlsx 上的所有欄位
-  - 還不知道垂片：細類代碼 + 轉人工欄位 + 四張垂片共用的欄位
+  - 已經知道垂片：次案類代碼 + 轉人工欄位 + 這張垂片 xlsx 上的所有欄位
+  - 還不知道垂片：次案類代碼 + 轉人工欄位 + 四張垂片共用的欄位
 垂片一決定，就把報案人前面說過的話，用這張垂片的欄位再抽一次，只補空白欄位。
 """
 
@@ -94,14 +94,17 @@ class ExtractorSendsOnlySelectedFieldsTests(unittest.TestCase):
             for field in LEGACY_FIELDS:
                 self.assertNotIn(field, schema)
 
-    def test_prompt_shorter_than_before_this_change(self) -> None:
-        # 改動之前火警這一組是 2,676 字；每張垂片都不應該比那時更長
+    def test_prompt_fits_model_limit(self) -> None:
+        # 模型上限 4,096 token，其中 512 留給模型回答。
+        # 2026-10-01 用真的模型實測：垂片 A 的規則 2,851 字＋報案人 600 字，提示是 2,497 token，
+        # 加上回答保留共 3,009 token，還剩約 1,000 token。
+        # 上限訂 3,200 字：規則再長一點仍有足夠空間；超過就要先實測 token 再放寬。
         import json
         for tab in (None, *TAB_QUESTIONS):
             with self.subTest(tab=tab):
                 schema, rules = self._fire_call(tab)
                 total = len(json.dumps(schema, ensure_ascii=False)) + len(rules)
-                self.assertLess(total, 2676)
+                self.assertLess(total, 3200)
 
 
 class ScriptedIO(DialogueIO):
@@ -160,14 +163,14 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
     def test_floor_said_before_tab_known_is_not_asked_again(self) -> None:
         early = "我家公寓三樓燒起來，火很大"
         llm = TabAwareFakeLLM({
-            # 報地址時（垂片還不知道）只抽得到共用欄位與細類代碼
-            (early, None): {"fire_incident_type": 0, "building_type_code": "11",
+            # 報地址時（垂片還不知道）只抽得到共用欄位與次案類代碼
+            (early, None): {"building_type_code": "11",
                             "fire_or_smoke": "有火"},
             # 垂片決定為 A 後補抽：這時才抽得到 A 的起火樓層
             (early, TAB_A): {"fire_floor": "3樓", "fire_or_smoke": "有火"},
         })
         engine, io = self._engine_after_address(early, llm, answers=[])
-        engine.case.fire_incident_type = 0
+        engine.case.fire_tab = TAB_A
         engine.case.building_type_code = "11"
         engine.case.fire_or_smoke = "有火"
         engine.case.sub_category = "集合住宅"
@@ -184,7 +187,7 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
             (early, TAB_A): {"fire_or_smoke": "只有煙", "place_usage": "住家"},
         })
         engine, io = self._engine_after_address(early, llm, answers=[])
-        engine.case.fire_incident_type = 0
+        engine.case.fire_tab = TAB_A
         engine.case.fire_or_smoke = "有火"   # 報案人已經回答過
         handler = HuoJingGenericHandler()
         handler._resolve_tab(engine)
@@ -198,7 +201,7 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
             (early, TAB_A): {"place_usage": "住家", "address": "不該被寫入的地址"},
         })
         engine, io = self._engine_after_address(early, llm, answers=[])
-        engine.case.fire_incident_type = 0
+        engine.case.fire_tab = TAB_A
         handler = HuoJingGenericHandler()
         handler._resolve_tab(engine)
         handler._backfill_earlier_answers_for_tab(engine)
@@ -211,7 +214,7 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
                 raise RuntimeError("LLM 逾時")
 
         engine, io = self._engine_after_address("我家公寓燒起來", BrokenLLM({}), answers=[])
-        engine.case.fire_incident_type = 0
+        engine.case.fire_tab = TAB_A
         handler = HuoJingGenericHandler()
         handler._resolve_tab(engine)
         handler._backfill_earlier_answers_for_tab(engine)  # 不應拋出錯誤
@@ -232,7 +235,7 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
             by_tab[(answer, TAB_A)] = out
         llm = TabAwareFakeLLM(by_tab)
         engine, io = self._engine_after_address(early, llm, [a for a, _ in steps])
-        engine.case.fire_incident_type = 0
+        engine.case.fire_tab = TAB_A
         engine.case.building_type_code = "11"
         engine.case.sub_category = "集合住宅"
         engine.case.fire_or_smoke = "有火"

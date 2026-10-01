@@ -243,7 +243,7 @@ SUB_MARGIN_THRESHOLD: float = 0.15
 SUB_LATER_PREFER_DELTA: float = 0.1
 MAX_SUB_REASK: int = 2
 
-# ─── 火警細類：margin 閘門 ─────────────────────────────────────────────────────
+# ─── 火警次案類：margin 閘門 ─────────────────────────────────────────────────────
 # 火警不走「追問發生什麼事」，而是每輪自動重跑分類。除了既有的
 # FIRE_BERT_CONF_THRESHOLD(=0.5) 置信度門檻，再加 top1−top2 margin 門檻：
 # 前兩名咬得太近（兩類難分）時不填入/不切換，等文字更清楚的下一輪再說。
@@ -646,7 +646,7 @@ class SopEngine119:
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
 
-        identity_updated = False
+        identity_updates: Dict[str, Any] = {}  # 本輪 LLM 抽到的次案類代碼
         for key, val in extracted.items():
             if val is None:
                 continue
@@ -711,7 +711,7 @@ class SopEngine119:
                 # 火災資訊以本輪明確新證據為準，允許報案人後續補充或更正。
                 setattr(self.case, key, val)
                 if key in FIRE_IDENTITY_CODE_FIELDS:
-                    identity_updated = True
+                    identity_updates[key] = val
                 if key == "people_trapped_code" and val in (0, 1):
                     self.case.people_trapped = bool(val)
                 elif key == "people_trapped" and isinstance(val, bool):
@@ -757,8 +757,8 @@ class SopEngine119:
             if not current:
                 setattr(self.case, key, val)
 
-        if identity_updated and self.case.main_category == "火警":
-            self._sync_fire_sub_category_from_identity_codes()
+        if identity_updates and self.case.main_category == "火警":
+            self._sync_fire_sub_category_from_identity_codes(identity_updates)
 
     def _is_same_place_as_current(self, new_addr: str) -> bool:
         """新抽到的地址是不是「同一個地方的另一種講法」。
@@ -795,13 +795,18 @@ class SopEngine119:
         if new_type in {"address", "intersection", "landmark", "highway", "mrt"}:
             self.case.location_type = new_type
 
-    def _sync_fire_sub_category_from_identity_codes(self) -> None:
-        """身份編號寫入後反寫 sub_category。"""
-        from fire_tab_map_119 import subtype_name_from_identity_codes
+    def _sync_fire_sub_category_from_identity_codes(self, updates: Dict[str, Any]) -> None:
+        """
+        LLM 本輪從報案人的話抽到次案類代碼 → 換算成次案類名稱寫入 sub_category
+        （例如 vehicle_wildfire_code = 1 → 機車）。只看本輪抽到的代碼，不依目前垂片推算；
+        換到別張垂片的次案類時，由 _maybe_reclassify_sub 的「次案類決定垂片」檢查負責換垂片。
+        """
+        from fire_tab_map_119 import subtype_name_for_code
 
-        name = subtype_name_from_identity_codes(self.case)
-        if name and name != self.case.sub_category:
-            self.case.sub_category = name
+        for field, value in updates.items():
+            name = subtype_name_for_code(field, value)
+            if name and name != self.case.sub_category:
+                self.case.sub_category = name
 
     def _apply_location_rules(self, caller_text: str) -> None:
         """以确定性规则补强本轮地点组件，并重组可显示地址。"""
@@ -1862,7 +1867,7 @@ class SopEngine119:
         return None, None, None, None
 
     def _refresh_fire_subtype_from_bert(self) -> None:
-        """拼接全部報案人文本，BERT 細類置信度 > 0.5 時填入垂片代碼。"""
+        """拼接全部報案人文本，BERT 次案類置信度 > 0.5 時填入垂片代碼。"""
         from fire_tab_map_119 import (
             FIRE_BERT_CONF_THRESHOLD,
             apply_bert_subtype_to_case,
@@ -1930,6 +1935,17 @@ class SopEngine119:
         fire_tab_locked = (
             main_cat == "火警" and self.case.fire_tab in TAB_QUESTIONS
         )
+        # 次案類決定垂片：次案類所屬的垂片跟目前垂片對不上（例如次案類是機車、垂片卻是 A），
+        # 就走換垂片流程，換到次案類所屬的垂片，從新垂片的題目重新問（已回答的內容保留）。
+        if fire_tab_locked and current:
+            subtype_tab = tab_for_subtype(current)
+            if subtype_tab and subtype_tab != self.case.fire_tab:
+                self._debug_print(
+                    "fire_subtype_tab_mismatch",
+                    {"次案類": current, "次案類的垂片": subtype_tab, "目前垂片": self.case.fire_tab},
+                )
+                self._switch_subcategory(current, current, self.case.sub_conf)
+                return (current, current)
         if not current and not fire_tab_locked:
             return None
         if self._sub_clf is None:
@@ -2083,7 +2099,7 @@ class SopEngine119:
             ambiguous = (old_slots & set(new_slots)) - SHARED_SEMANTIC_SLOTS
             exclusive_old = old_slots - set(new_slots)
             if main_cat == "火警":
-                # 火警換垂片或換細類時，只清細類代碼；報案人已經回答過的內容全部保留、不重問。
+                # 火警換垂片或換次案類時，只清次案類代碼；報案人已經回答過的內容全部保留、不重問。
                 ambiguous &= FIRE_IDENTITY_CODE_FIELDS
                 exclusive_old &= FIRE_IDENTITY_CODE_FIELDS
             for field in exclusive_old | ambiguous:

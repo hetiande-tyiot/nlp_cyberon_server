@@ -19,7 +19,7 @@ LABELS: Dict[str, str] = {
     # 分類結果
     "main_category": "主類別",
     "main_conf": "主類置信度",
-    "sub_category": "子類別",
+    "sub_category": "次案類",
     "sub_conf": "子類置信度",
     # 地址
     "address": "完整地址",
