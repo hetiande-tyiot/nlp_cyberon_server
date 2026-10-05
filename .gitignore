@@ -69,3 +69,9 @@ deploy_nlp_model.sh
 *.xlsx
 # llama-server binary（258MB，從 204 rsync 過來，不進 repo）
 llama-server-sm120/
+
+# 效能量測跑出來的結果（每次跑都不一樣，不進 repo）。
+# 量測工具與測試案件本身有進：bench/replay.py、bench/cases_*.json。
+# 跑過的紀錄另外保存在 ~/bench_records/<日期>_<機器>/，那邊有 README 說明是哪一次、測出什麼。
+bench/*.log
+bench/out_*.json
