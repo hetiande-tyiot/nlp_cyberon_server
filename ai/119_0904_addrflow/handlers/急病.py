@@ -66,7 +66,9 @@ class JiBingHandler(SubCategoryHandler):
             not engine._is_field_filled("incident_description")
             or self._incident_is_vague(engine)
         ):
-            q0 = "請問現場發生什麼事？需要救護車嗎？"
+            # 不問「需要救護車嗎」：走到這裡時地址流程已經告知「救護車已派出了喔」，
+            # 再問一次要不要救護車會前後矛盾。這句只是要病情描述。
+            q0 = "請問現場發生什麼事？"
             answer0 = engine._ask_and_extract(q0)
             self._check_and_respond_to_triggers(answer0, engine)
         else:

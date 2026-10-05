@@ -3624,8 +3624,11 @@ class SopEngine119:
 
             # 首輪且尚無任何病情描述 → 用正常語氣初問（而非「請再說一次」的重問，
             # 後者會讓還沒講過的報案人以為系統漏聽）；否則沿用換句話重問。
+            # 這句不問「需要救護車嗎」：地址確認完已經先告知「救護車已派出了喔」，
+            # 再問要不要救護車，報案人會以為系統沒聽懂、或懷疑車到底有沒有派出去。
+            # 這句問的目的只是取得病情描述給次案類分類用，不是在確認要不要派車。
             if no_symptom_yet and _reask_i == 0:
-                reask_question = "請問現場發生什麼狀況？需要救護車嗎？"
+                reask_question = "請問現場發生什麼狀況？"
             else:
                 reask_question = _SUB_REASK_QUESTIONS[_reask_i]
             self._ask_and_extract(reask_question)
