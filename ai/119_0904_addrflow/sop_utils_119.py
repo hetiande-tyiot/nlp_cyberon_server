@@ -1649,3 +1649,83 @@ def _looks_like_address(t: str) -> bool:
     if has_district and has_number and len(t) >= 6:
         return True
     return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 電話號碼驗證
+# ═══════════════════════════════════════════════════════════════════════════
+# 2026-09-16 實測 f91714ac：報案人唸「0922338444」，STT 把尾三碼「444」聽成
+# 「是是是」，case 只存到 "0922338"（7 碼）就收工。號碼長度從來沒被檢查過，
+# 殘缺號碼照樣覆誦、照樣寫進派遣紀錄——回撥不到人。
+
+# 市話：區號 → 區號後的用戶號碼碼數（總長 = 區號長 + 用戶號碼長）
+# 119 在新北，絕大多數是 02（總長 10 碼）；其餘列表供跨區報案使用。
+_AREA_CODE_SUBSCRIBER_LEN = {
+    "02": 8,                                        # 台北／新北／基隆 → 10 碼
+    "03": 7, "037": 6, "049": 7,                    # 桃竹宜花／苗栗／南投 → 9-10
+    "04": 8, "05": 7, "06": 7, "07": 7, "08": 7,    # 中彰／嘉雲／台南／高雄／屏東
+    "082": 6, "0823": 5, "0826": 5, "0836": 5,      # 金門／烏坵／馬祖
+    "089": 6,                                       # 台東
+}
+_MOBILE_TOTAL_LEN = 10          # 09 + 8 碼
+_TOLL_FREE_PREFIXES = ("0800", "0809", "0806")   # 客服／免付費，總長 10 碼
+_SHORT_SERVICE_NUMBERS = frozenset({"110", "119", "112", "113", "165", "166", "167"})
+
+
+def normalize_phone_digits(raw: Optional[str]) -> str:
+    """取出號碼中的純數字；+886/886 開頭轉回 0 開頭的國內格式。"""
+    if not raw:
+        return ""
+    digits = re.sub(r"\D", "", str(raw))
+    if digits.startswith("886") and len(digits) > 3:
+        digits = "0" + digits[3:]
+    return digits
+
+
+def validate_phone_number(raw: Optional[str]) -> tuple[str, Optional[bool], Optional[str]]:
+    """驗證電話號碼。
+
+    回傳 (正規化後的號碼, 是否有效, 無效原因)。
+    - 沒給號碼 → ("", None, None)：未知不是錯誤，別誤報。
+    - 有效     → (digits, True, None)
+    - 無效     → (digits, False, 原因)
+
+    規則（依使用者 2026-09-16 確認）：
+      手機 09 開頭共 10 碼；市話 區號 + 用戶號碼（新北 02 + 8 碼 = 10 碼）。
+    """
+    digits = normalize_phone_digits(raw)
+    if not digits:
+        return "", None, None
+
+    if digits in _SHORT_SERVICE_NUMBERS:
+        return digits, True, None
+
+    if digits.startswith("09"):
+        if len(digits) == _MOBILE_TOTAL_LEN:
+            return digits, True, None
+        short = "不足" if len(digits) < _MOBILE_TOTAL_LEN else "超過"
+        return digits, False, (
+            f"手機號碼應為 {_MOBILE_TOTAL_LEN} 碼（09+8 碼），實際 {len(digits)} 碼（{short}）"
+        )
+
+    for prefix in _TOLL_FREE_PREFIXES:
+        if digits.startswith(prefix):
+            if len(digits) == 10:
+                return digits, True, None
+            return digits, False, f"{prefix} 號碼應為 10 碼，實際 {len(digits)} 碼"
+
+    if not digits.startswith("0"):
+        return digits, False, f"缺少開頭的 0（區號或手機前綴），實際「{digits}」"
+
+    # 市話：由長到短比對區號，避免 "08" 先吃掉 "089"/"0826"
+    for code in sorted(_AREA_CODE_SUBSCRIBER_LEN, key=len, reverse=True):
+        if digits.startswith(code):
+            expected = len(code) + _AREA_CODE_SUBSCRIBER_LEN[code]
+            if len(digits) == expected:
+                return digits, True, None
+            short = "不足" if len(digits) < expected else "超過"
+            return digits, False, (
+                f"{code} 區號的市話應為 {expected} 碼，實際 {len(digits)} 碼（{short}）"
+            )
+
+    return digits, False, f"無法辨識的號碼格式「{digits}」（{len(digits)} 碼）"

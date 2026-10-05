@@ -670,9 +670,9 @@ class SubCategoryHandler:
 
         with engine._case_lock:
             engine.case.caller_name    = caller_name
-            engine.case.caller_contact = caller_contact
             if include_address:
                 engine.case.caller_address = caller_address
+        engine.set_caller_contact(caller_contact)   # 含號碼格式檢查
         engine._notify_case_update()
 
         if not caller_name and not caller_contact:

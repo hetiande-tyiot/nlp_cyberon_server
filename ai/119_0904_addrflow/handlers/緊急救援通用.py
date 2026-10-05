@@ -58,7 +58,9 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
 
         with engine._case_lock:
             engine.case.caller_name = caller_name
-            engine.case.caller_contact = caller_contact
+        # set_caller_contact 自己會拿 _case_lock（普通 Lock、不可重入），
+        # 必須在 with 區塊外呼叫，否則死鎖。
+        engine.set_caller_contact(caller_contact)
         engine._notify_case_update()
 
         if not caller_name and not caller_contact:

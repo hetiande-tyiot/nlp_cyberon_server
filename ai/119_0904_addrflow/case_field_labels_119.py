@@ -103,6 +103,8 @@ LABELS: Dict[str, str] = {
     # 報案人訊息
     "caller_name": "報案人姓名",
     "caller_contact": "報案人聯繫方式",
+    "caller_contact_valid": "聯繫方式格式是否合格",
+    "caller_contact_reason": "聯繫方式格式問題",
     "caller_salutation": "報案人稱呼",
     "caller_address": "報案人住址",
     # 全類型通用標記
