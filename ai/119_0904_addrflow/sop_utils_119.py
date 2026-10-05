@@ -888,7 +888,11 @@ _ADDRESS_ROAD_RE = re.compile(
     rf"(?:{_ADDRESS_NUMBER_TOKEN}弄)?)"
 )
 _ADDRESS_NUMBER_RE = re.compile(
-    rf"({_ADDRESS_NUMBER_TOKEN}(?:之{_ADDRESS_NUMBER_TOKEN})?(?:號|号))"
+    # 支援兩種口語：「51之12號」（之在號前）與「51號之12」（之在號後）。
+    # 「號之X」的 X 若後面緊接「樓」（如「51號之十二三樓」），代表子號與樓層
+    # 被 STT 糊在一起、無從斷點——此時不吃這段子號，留給「之幾」追問去消歧。
+    rf"({_ADDRESS_NUMBER_TOKEN}(?:之{_ADDRESS_NUMBER_TOKEN})?(?:號|号)"
+    rf"(?:之{_ADDRESS_NUMBER_TOKEN}(?!(?:[零〇一二三四五六七八九十百千兩\d])*樓))?)"
 )
 
 

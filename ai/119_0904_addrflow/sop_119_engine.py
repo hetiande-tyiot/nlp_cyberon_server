@@ -2563,6 +2563,41 @@ class SopEngine119:
         self._fill_components_from_address()
         self._merge_lane_into_road(answer)
         self._rebuild_street_address()
+        if missing_sub:
+            self._apply_confirmed_sub(answer)
+
+    def _apply_confirmed_sub(self, answer: str) -> None:
+        """把追問「之幾」得到的子號併回門牌，並把糊在樓層裡的子號切出來。
+
+        2026-09-16 實測（fa9905db）：「51號之十二三樓」被抽成門牌「51號」、
+        子號「之十二」掉了、樓層糊成「十二三樓」；追問「51號之幾」答「之十二」
+        也沒被併回。此處用追問到的子號當**權威切點**：門牌補上「之十二」、樓層
+        去掉子號前綴還原成「三樓」。保留中文數字（「十二」帶天然斷點，轉阿拉伯
+        反而更難切；見用戶界線）。
+        """
+        m = re.search(
+            r"[零〇一二三四五六七八九十百千兩\d]+", (answer or "").replace("之", "")
+        )
+        if not m:
+            return
+        subnum = m.group(0)          # 十二
+        sub = f"之{subnum}"          # 之十二
+        with self._case_lock:
+            num = self.case.address_number or ""
+            if not num or "之" in num:
+                return
+            self.case.address_number = f"{num}{sub}"
+            addr = self.case.address or ""
+            floor_m = re.search(
+                r"(?:地下)?[零〇一二三四五六七八九十百千兩\d]+樓", addr
+            )
+            if floor_m and subnum in floor_m.group(0):
+                # 樓層被糊成「十二三樓」→ 去掉子號前綴 → 「三樓」
+                fixed = floor_m.group(0).replace(subnum, "", 1)
+                addr = addr[:floor_m.start()] + fixed + addr[floor_m.end():]
+            if num in addr and sub not in addr:
+                addr = addr.replace(num, f"{num}{sub}", 1)
+            self.case.address = addr
 
     def _narrowed_reask(self, fallback: str) -> str:
         """第二輪重問時，已經確定的元件就不要再問一次。
