@@ -1,0 +1,36 @@
+# aitop100 (aitop-pro6000-2) — 路徑已核對：/home/taiyan/project/nlp_cyberon_server
+# GPU: 2x RTX PRO 6000 Blackwell 96GB (sm_120)，驅動正常。
+[Unit]
+Description=llama-server (8-slot) — sop119 併發後端 (aitop100 / RTX PRO 6000 sm_120)
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
+[Service]
+Type=simple
+User=taiyan
+Group=taiyan
+# 單張 96GB，20GB 模型綽綽有餘 → 預設綁 GPU0 一張
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=LD_LIBRARY_PATH=/home/taiyan/project/nlp_cyberon_server/llama-server-sm120/bin:/usr/local/cuda-12.9/lib64
+ExecStart=/home/taiyan/project/nlp_cyberon_server/llama-server-sm120/bin/llama-server \
+  --model /home/taiyan/project/nlp_cyberon_server/models/TW-119-Model.gguf \
+  --alias tw-119-model \
+  --host 127.0.0.1 --port 8091 \
+  --n-gpu-layers 99 --ctx-size 262144 --parallel 32 \
+  --cont-batching --flash-attn on --batch-size 2048 --ubatch-size 512 --slots
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-server
+
+[Install]
+WantedBy=multi-user.target
+
+# ── 吃滿兩張卡（96GB×2，模型小，建議雙實例做法 B）──────────────────────
+# 複製本檔為 llama-server-gpu1.service，改 3 處：
+#   CUDA_VISIBLE_DEVICES=1 / --port 8092 / SyslogIdentifier=llama-server-gpu1
+# 兩實例都 enable --now，再於 client/SOP 後端池同掛 8091+8092（LB 輪詢）→ 吞吐 ~翻倍。
+# 單實例也可直接加大並發：--parallel 16（96GB 容得下），先量單卡再決定。
