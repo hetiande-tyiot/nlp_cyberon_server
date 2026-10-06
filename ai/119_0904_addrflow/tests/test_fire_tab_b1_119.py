@@ -1,10 +1,12 @@
 """
-垂片 B1（交通工具火警）照 0929 xlsx 重寫後的測試。
+垂片 B1（交通工具火警）照 xlsx 重寫後的測試。
 
-規格：docs/修改後_(all)火警垂片規格_關鍵要素與問句_0929.xlsx 的「02-垂片B1_交通工具」
+規格：docs/(all)火警垂片規格_關鍵要素與問句_1005.xlsx 的「02-垂片B1_交通工具」
 規則同垂片 A（見 test_fire_tab_a_119.py 開頭說明），另外：
   - 乘客下車狀況答「仍有人在車上」→ 跟有人受困一樣，立刻轉人工
   - 載運物：交通工具是化學、毒劑交通工具，或車種是貨車，才問
+  - 1005 版：看得到煙（有火有煙、無火有煙）才問濃煙顏色、車輛是否已熄火；
+    看得到火（有火有煙、有火無煙）才問起火車輛數量、滅火狀況
 
 這裡的 LLM 是假的：每一句回答要抽出什麼，都由測試事先指定。
 所以這些測試檢查的是「流程有沒有照規則問、跳過、轉人工」，
@@ -104,7 +106,7 @@ def _vehicle(answer: str, name: str) -> tuple[str, dict]:
 
 
 # 共同的回答
-FIRE = ("火很大", {"fire_or_smoke": "有火"})
+FIRE = ("火很大", {"fire_or_smoke": "有火有煙"})
 BLACK = ("黑煙", {"smoke_color": "黑色煙"})
 PASSERBY = ("我是路過的", {"caller_role": "後方或路過駕駛"})
 NO_SPREAD = ("沒有燒到旁邊", {"spread_status": "無"})
@@ -179,6 +181,26 @@ class TabB1QuestionOrderTests(unittest.TestCase):
         ])
         self.assertEqual(_asked(io)[-2:], ["載運物", "滅火狀況"])
 
+    def test_fire_no_smoke_skips_color_and_engine_off(self) -> None:
+        _, io = _run_vehicle_fire([
+            _vehicle("港口有一艘船在燒", "船舶"),
+            ("有火，沒什麼煙", {"fire_or_smoke": "有火無煙"}),
+            PASSERBY, NO_SPREAD, ONE_CAR, NOBODY_FIGHTING,
+        ])
+        self.assertEqual(_asked(io), [
+            "交通工具", "火煙狀況", "報案人身分", "是否延燒", "起火車輛數量", "滅火狀況",
+        ])
+
+    def test_smoke_no_fire_asks_color_and_engine_off_only(self) -> None:
+        _, io = _run_vehicle_fire([
+            _vehicle("港口有一艘船在冒煙", "船舶"),
+            ("只看到煙，沒看到火", {"fire_or_smoke": "無火有煙"}),
+            BLACK, PASSERBY, NO_SPREAD, ENGINE_OFF,
+        ])
+        self.assertEqual(_asked(io), [
+            "交通工具", "火煙狀況", "濃煙顏色", "報案人身分", "是否延燒", "車輛是否已熄火",
+        ])
+
     def test_unsure_fire_skips_visual_questions(self) -> None:
         _, io = _run_vehicle_fire([
             _vehicle("聽說有汽車燒起來", "汽車"),
@@ -199,7 +221,7 @@ class TabB1QuestionOrderTests(unittest.TestCase):
             _vehicle("是機車", "機車"),
             ("一般的", {"vehicle_type": "其他"}),
             BLACK, NO_SPREAD, ONE_CAR, ENGINE_OFF, NO_INJURY, NOBODY_FIGHTING,
-        ], fire_or_smoke="有火", caller_role="路人")
+        ], fire_or_smoke="有火有煙", caller_role="路人")
         asked = _asked(io)
         self.assertNotIn("火煙狀況", asked)
         self.assertNotIn("報案人身分", asked)

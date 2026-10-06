@@ -74,7 +74,7 @@ class CaseInfo119:
     prenatal_clinic:       Optional[str] = None  # 產檢醫院/診所
 
     # ── 火警 SOP 要素 ────────────────────────────────────────────────────────
-    fire_or_smoke:       Optional[str] = None  # 火煙狀況：只記 有火/只有煙/無火無煙/不確定
+    fire_or_smoke:       Optional[str] = None  # 火煙狀況：只記 只有火花/有火有煙/有火無煙/無火有煙/無火無煙/不確定
     smoke_color:         Optional[str] = None  # 黑煙/白煙/其他顏色
     burning_object:      Optional[str] = None  # 燒什麼（房子/車子/雜草…）
     fire_trend:          Optional[str] = None  # 變大/消退/穩定
@@ -125,6 +125,7 @@ class CaseInfo119:
     # 垂片 C（輕微火警）照 0929 xlsx 新增的欄位，存文字。
     # 氣味類型沿用 odor、無人應門沿用 door_response、燃燒範圍沿用 fire_extent（都跟 A 共用）。
     alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
+    power_outage:          Optional[str] = None  # 停電狀況（1005 xlsx 新增，電線桿(電纜)才問）：有停電/沒有停電
     source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
     target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
 
@@ -223,6 +224,9 @@ class CaseInfo119:
     def to_dict(self) -> Dict[str, Any]:
         """序列化為純 Python dict（供 JSON 或 Streamlit 顯示）。"""
         d = asdict(self)
+        # 系統內部用的次案類代號，不放進送出去的 JSON
+        for name in ("building_type_code", "vehicle_wildfire_code", "minor_fire_code"):
+            d.pop(name, None)
         return d
 
     def caller_texts(self) -> List[str]:

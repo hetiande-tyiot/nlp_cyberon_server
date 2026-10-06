@@ -165,14 +165,14 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
         llm = TabAwareFakeLLM({
             # 報地址時（垂片還不知道）只抽得到共用欄位與次案類代碼
             (early, None): {"building_type_code": "11",
-                            "fire_or_smoke": "有火"},
+                            "fire_or_smoke": "有火有煙"},
             # 垂片決定為 A 後補抽：這時才抽得到 A 的起火樓層
-            (early, TAB_A): {"fire_floor": "3樓", "fire_or_smoke": "有火"},
+            (early, TAB_A): {"fire_floor": "3樓", "fire_or_smoke": "有火有煙"},
         })
         engine, io = self._engine_after_address(early, llm, answers=[])
         engine.case.fire_tab = TAB_A
         engine.case.building_type_code = "11"
-        engine.case.fire_or_smoke = "有火"
+        engine.case.fire_or_smoke = "有火有煙"
         engine.case.sub_category = "集合住宅"
         handler = HuoJingGenericHandler()
         handler._resolve_tab(engine)
@@ -184,15 +184,15 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
     def test_backfill_does_not_overwrite_existing_answers(self) -> None:
         early = "我家公寓燒起來"
         llm = TabAwareFakeLLM({
-            (early, TAB_A): {"fire_or_smoke": "只有煙", "place_usage": "住家"},
+            (early, TAB_A): {"fire_or_smoke": "無火有煙", "place_usage": "住家"},
         })
         engine, io = self._engine_after_address(early, llm, answers=[])
         engine.case.fire_tab = TAB_A
-        engine.case.fire_or_smoke = "有火"   # 報案人已經回答過
+        engine.case.fire_or_smoke = "有火有煙"   # 報案人已經回答過
         handler = HuoJingGenericHandler()
         handler._resolve_tab(engine)
         handler._backfill_earlier_answers_for_tab(engine)
-        self.assertEqual(engine.case.fire_or_smoke, "有火")   # 沒被蓋掉
+        self.assertEqual(engine.case.fire_or_smoke, "有火有煙")   # 沒被蓋掉
         self.assertEqual(engine.case.place_usage, "住家")     # 空白的有補上
 
     def test_backfill_only_touches_fire_fields(self) -> None:
@@ -224,10 +224,10 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
         early = "我家公寓三樓燒起來，火很大"
         steps = [
             ("住家", {"place_usage": "住家"}),
+            ("五層樓", {"building_total_floors": "5層樓"}),
             ("黑煙", {"smoke_color": "黑色煙"}),
             ("會燒到隔壁", {"spread_status": "極可能或已延燒"}),
             ("人都出來了", {"trapped_status": "無人受困"}),
-            ("五層樓", {"building_total_floors": "5層樓"}),
             ("我是住戶", {"caller_role": "住戶(起火戶)"}),
         ]
         by_tab = {(early, TAB_A): {"fire_floor": "3樓"}}
@@ -238,7 +238,7 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
         engine.case.fire_tab = TAB_A
         engine.case.building_type_code = "11"
         engine.case.sub_category = "集合住宅"
-        engine.case.fire_or_smoke = "有火"
+        engine.case.fire_or_smoke = "有火有煙"
         HuoJingGenericHandler().run_generic_flow(engine)
         self.assertEqual(engine.case.fire_floor, "3樓")
         self.assertNotIn(Q_A["起火樓層"], io.messages)   # 前面講過三樓，不再問

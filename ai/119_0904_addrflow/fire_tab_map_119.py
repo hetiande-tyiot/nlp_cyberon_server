@@ -117,11 +117,16 @@ class FireQuestion:
 
 # 條件會用到的固定說法。報案人的回答符合這些情況時，欄位一定要記成這幾個字，
 # 條件才判斷得出來；其他情況照報案人說的內容記（參考範圍不是選擇題）。
-FIRE_SMOKE_HAS_FIRE = "有火"
-FIRE_SMOKE_ONLY_SMOKE = "只有煙"
+# 火煙狀況（1005 xlsx 起分成 6 種）
+FIRE_SMOKE_SPARK_ONLY = "只有火花"
+FIRE_SMOKE_FIRE_AND_SMOKE = "有火有煙"
+FIRE_SMOKE_FIRE_NO_SMOKE = "有火無煙"
+FIRE_SMOKE_SMOKE_NO_FIRE = "無火有煙"
 FIRE_SMOKE_NONE = "無火無煙"
 FIRE_SMOKE_UNSURE = "不確定"
-SMOKE_COLOR_NONE = "無煙"
+# 前置條件「看得到煙」「看得到火」各包含哪幾種火煙狀況（照 xlsx 的前置條件欄）
+FIRE_SMOKE_SMOKE_VISIBLE = (FIRE_SMOKE_FIRE_AND_SMOKE, FIRE_SMOKE_SMOKE_NO_FIRE)
+FIRE_SMOKE_FIRE_VISIBLE = (FIRE_SMOKE_FIRE_AND_SMOKE, FIRE_SMOKE_FIRE_NO_SMOKE)
 TRAPPED_YES = "有人受困"
 TRAPPED_NO = "無人受困"
 TRAPPED_UNSURE = "不確定"
@@ -139,18 +144,22 @@ ODOR_NONE = "無"
 # 由 LLM 理解報案人的話後，從這些說法裡選一個；選了清單以外的值就不記（當作這一輪沒抽到）。
 FIRE_FIXED_ANSWERS: Dict[str, Tuple[str, ...]] = {
     "fire_or_smoke": (
-        FIRE_SMOKE_HAS_FIRE, FIRE_SMOKE_ONLY_SMOKE, FIRE_SMOKE_NONE, FIRE_SMOKE_UNSURE,
+        FIRE_SMOKE_SPARK_ONLY, FIRE_SMOKE_FIRE_AND_SMOKE, FIRE_SMOKE_FIRE_NO_SMOKE,
+        FIRE_SMOKE_SMOKE_NO_FIRE, FIRE_SMOKE_NONE, FIRE_SMOKE_UNSURE,
     ),
     "trapped_status": (TRAPPED_YES, TRAPPED_NO, TRAPPED_UNSURE),
     "occupants_status": (OCCUPANTS_ALL_OUT, OCCUPANTS_STILL_INSIDE, OCCUPANTS_UNSURE),
 }
 
 
-def _fire_or_smoke_seen(case: Any) -> bool:
-    """火煙狀況 = 有火、只有煙（報案人確定看得到火或煙）。"""
-    return getattr(case, "fire_or_smoke", None) in (
-        FIRE_SMOKE_HAS_FIRE, FIRE_SMOKE_ONLY_SMOKE,
-    )
+def _smoke_visible(case: Any) -> bool:
+    """火煙狀況 = 有火有煙、無火有煙（報案人確定看得到煙）。"""
+    return getattr(case, "fire_or_smoke", None) in FIRE_SMOKE_SMOKE_VISIBLE
+
+
+def _fire_visible(case: Any) -> bool:
+    """火煙狀況 = 有火有煙、有火無煙（報案人確定看得到火）。"""
+    return getattr(case, "fire_or_smoke", None) in FIRE_SMOKE_FIRE_VISIBLE
 
 
 def _no_fire_no_smoke(case: Any) -> bool:
@@ -158,10 +167,34 @@ def _no_fire_no_smoke(case: Any) -> bool:
     return getattr(case, "fire_or_smoke", None) == FIRE_SMOKE_NONE
 
 
-def _smoke_color_known_not_none(case: Any) -> bool:
-    """濃煙顏色 ≠ 無煙：一定要已經問出顏色，而且不是「無煙」；還不知道就不算。"""
-    value = (getattr(case, "smoke_color", None) or "").strip()
-    return bool(value) and value != SMOKE_COLOR_NONE
+_CN_FLOOR_ABOVE_ONE = "二兩三四五六七八九十"
+
+
+def _building_more_than_one_floor(case: Any) -> bool:
+    """
+    建物樓層 > 1層樓。建物樓層還不知道（沒問到、報案人答未知）就不算。
+    建物樓層存的是報案人說的文字，例如「5層樓」「2~3層樓」「三層」「1層樓」。
+    有阿拉伯數字就看第一個數字；沒有的話看有沒有二到十的中文數字（「十一層」也算大於 1）。
+    """
+    text = (getattr(case, "building_total_floors", None) or "").strip()
+    if not text:
+        return False
+    match = re.search(r"\d+", text)
+    if match:
+        return int(match.group()) > 1
+    return any(ch in text for ch in _CN_FLOOR_ABOVE_ONE)
+
+
+def _fire_visible_and_more_than_one_floor(case: Any) -> bool:
+    """看得到火（有火有煙、有火無煙），而且建物樓層 > 1層樓（xlsx 的「＋」是「而且」）。"""
+    return _fire_visible(case) and _building_more_than_one_floor(case)
+
+
+# 地址裡的樓層寫法：「5樓」「十二樓」「5F」「B1」「地下室」
+_ADDRESS_FLOOR_RE = re.compile(
+    r"[0-9０-９一二兩三四五六七八九十]+\s*樓|\d+\s*[Ff](?![A-Za-z])|[Bb]\d|地下"
+)
+LOCATION_TYPE_LANDMARK = "landmark"  # 地點型態＝地標（學校、公園、市場這類可辨識的地點）
 
 
 def _people_trapped(case: Any) -> bool:
@@ -179,15 +212,27 @@ def _subtype_is(*names: str) -> Callable[[Any], bool]:
     return lambda case: getattr(case, "sub_category", None) in names
 
 
-def _odor_known_not_none_or_alarm(case: Any) -> bool:
+def _address_has_floor(case: Any) -> bool:
+    """完整地址（address）裡已經有樓層，例如「華興街16號5樓」。"""
+    return bool(_ADDRESS_FLOOR_RE.search(getattr(case, "address", None) or ""))
+
+
+def _source_location_unknown(case: Any) -> bool:
     """
-    氣味類型 ≠ 無，或 輕微火警＝警報器作響（xlsx 前置條件的換行當作「或」）。
-    氣味一定要已經問出來、而且不是「無」才算；還不知道就不算。
+    C 來源確認的前置條件：
+    （氣味類型 ≠ 無　或　輕微火警＝警報器作響）＋ 地址沒有樓層 ＋ 地點型態 ≠ 地標
+    「＋」是「而且」。氣味一定要已經問出來、而且不是「無」才算；還不知道就不算。
+    地址已經講到幾樓、或地點是學校公園這類地標時，不用再問哪一戶哪一層（問卷抱怨）。
     """
     odor = (getattr(case, "odor", None) or "").strip()
-    return (
+    smell_or_alarm = (
         (bool(odor) and odor != ODOR_NONE)
         or getattr(case, "sub_category", None) == "警報器作響"
+    )
+    return (
+        smell_or_alarm
+        and not _address_has_floor(case)
+        and getattr(case, "location_type", None) != LOCATION_TYPE_LANDMARK
     )
 
 
@@ -204,17 +249,20 @@ TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
                  "建築物火警-建築物類型", "是哪一種建築物呢？是公寓還是大樓？"),
     FireQuestion("場所用途", "place_usage", MODE_ACTIVE,
                  "建築物火警-場所用途", "現場是住家還是工廠呢？"),
+    FireQuestion("建物樓層", "building_total_floors", MODE_ACTIVE,
+                 "建築物火警-建物樓層", "那棟房子總共幾層樓？"),
     FireQuestion("火煙狀況", "fire_or_smoke", MODE_ACTIVE,
                  "建築物火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
     FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,
                  "建築物火警-濃煙顏色", "是黑煙還是白煙？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+                 _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
     FireQuestion("起火樓層", "fire_floor", MODE_CONDITIONAL,
-                 "建築物火警-起火樓層", "是幾樓在冒煙呢？",
-                 _smoke_color_known_not_none, "濃煙顏色 ≠ 無煙"),
+                 "建築物火警-起火樓層", "是幾樓在冒火呢？",
+                 _fire_visible_and_more_than_one_floor,
+                 "火煙狀況 = 有火有煙、有火無煙 ＋ 建物樓層 > 1層樓"),
     FireQuestion("延燒可能", "spread_status", MODE_CONDITIONAL,
-                 "建築物火警-延燒可能", "火大概燒多大？會波及到旁邊的房子嗎？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+                 "建築物火警-延燒可能", "火大概燒多大？會燒到旁邊的房子嗎？",
+                 _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("有無受困", "trapped_status", MODE_ACTIVE,
                  "建築物火警-有無受困", "裡面還有沒有人沒出來？"),
     # 有人受困會立刻轉人工，所以 AI 實際上問不到這一題；
@@ -222,8 +270,6 @@ TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("起火戶應門", "door_response", MODE_CONDITIONAL,
                  "建築物火警-起火戶應門", "有去敲過門嗎？裡面有人回應嗎？",
                  _people_trapped, "有無受困 = 有人受困"),
-    FireQuestion("建物樓層", "building_total_floors", MODE_ACTIVE,
-                 "建築物火警-建物樓層", "那棟房子總共幾層樓？"),
     FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
                  "建築物火警-報案人身分", "請問您是住在附近，還是路人？"),
     FireQuestion("建物構造", "building_construction", MODE_CONDITIONAL,
@@ -252,7 +298,7 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
                  "交通工具火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
     FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,
                  "交通工具火警-濃煙顏色", "請問是黑煙還是白煙？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+                 _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
     FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
                  "交通工具火警-報案人身分", "請問您是車主或駕駛嗎？還是路人呢？"),
     FireQuestion("是否延燒", "spread_status", MODE_ACTIVE,
@@ -262,10 +308,10 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _subtype_is("汽車"), "交通工具＝汽車"),
     FireQuestion("起火車輛數量", "vehicle_count", MODE_CONDITIONAL,
                  "交通工具火警-起火車輛數量", "現場幾台在燒？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+                 _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("車輛是否已熄火", "engine_off_status", MODE_CONDITIONAL,
                  "交通工具火警-車輛是否已熄火", "車子熄火了嗎？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+                 _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
     # 答「仍有人在車上」會立刻轉人工（跟有人受困一樣）
     FireQuestion("乘客下車狀況", "occupants_status", MODE_CONDITIONAL,
                  "交通工具火警-乘客下車狀況", "車上的人都下來了嗎？",
@@ -278,7 +324,7 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _hazmat_vehicle_or_truck, "交通工具＝化學、毒劑交通工具，或 車種=貨車"),
     FireQuestion("滅火狀況", "extinguish_status", MODE_CONDITIONAL,
                  "交通工具火警-滅火狀況", "現場有人在滅火嗎？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+                 _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("車輛停放或行駛中", "vehicle_motion", MODE_PASSIVE,
                  "交通工具火警-車輛停放或行駛中"),
     FireQuestion("車牌號碼", "plate_number", MODE_PASSIVE, "交通工具火警-車牌號碼"),
@@ -291,9 +337,6 @@ TAB_B2_QUESTIONS: Tuple[FireQuestion, ...] = (
                  "山林田野火警-燃燒物", "是雜草、樹木，還是垃圾燒起來嗎？"),
     FireQuestion("火煙狀況", "fire_or_smoke", MODE_ACTIVE,
                  "山林田野火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
-    FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,
-                 "山林田野火警-濃煙顏色", "請問是黑煙還是白煙？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
     FireQuestion("燃燒面積", "fire_extent", MODE_ACTIVE,
                  "山林田野火警-燃燒面積", "燒的範圍有一個籃球場那麼大嗎？"),
     FireQuestion("是否延燒", "spread_status", MODE_ACTIVE,
@@ -310,17 +353,17 @@ TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("警報器狀態", "alarm_status", MODE_CONDITIONAL,
                  "輕微火警-警報器狀態", "警報器現在還在響嗎？",
                  _subtype_is("警報器作響"), "輕微火警＝警報器作響"),
+    FireQuestion("停電狀況", "power_outage", MODE_CONDITIONAL,
+                 "輕微火警-停電狀況", "現在有停電嗎？",
+                 _subtype_is("電線桿(電纜)"), "輕微火警＝電線桿(電纜)"),
     FireQuestion("火煙狀況", "fire_or_smoke", MODE_ACTIVE,
                  "輕微火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
-    FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,
-                 "輕微火警-濃煙顏色", "請問是黑煙還是白煙？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
     FireQuestion("氣味類型", "odor", MODE_CONDITIONAL,
                  "輕微火警-氣味類型", "現場有聞到燒焦味嗎？",
                  _no_fire_no_smoke, "火煙狀況 = 無火無煙"),
     FireQuestion("是否延燒", "spread_status", MODE_CONDITIONAL,
                  "輕微火警-是否延燒", "火有沒有燒到旁邊的東西？",
-                 _fire_or_smoke_seen, "火煙狀況 = 有火、只有煙"),
+                 _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
                  "輕微火警-報案人身分", "請問您是住在附近，還是剛好經過？"),
     # 答「有人受困」會立刻轉人工（跟建築物火警一樣）
@@ -329,8 +372,8 @@ TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _subtype_is("警報器作響", "查看案件"), "輕微火警＝警報器作響、查看案件"),
     FireQuestion("來源確認", "source_located", MODE_CONDITIONAL,
                  "輕微火警-來源確認", "知道是哪一戶、哪一層傳出來的嗎？",
-                 _odor_known_not_none_or_alarm,
-                 "氣味類型 ≠ 無，或 輕微火警＝警報器作響"),
+                 _source_location_unknown,
+                 "（氣味類型 ≠ 無　或　輕微火警＝警報器作響）＋ 地址沒有樓層 ＋ 地點型態 ≠ 地標"),
     FireQuestion("標的物", "target_object", MODE_PASSIVE, "輕微火警-標的物"),
     FireQuestion("無人應門或聯絡不上", "door_response", MODE_PASSIVE,
                  "輕微火警-無人應門或聯絡不上"),
@@ -476,7 +519,6 @@ def subtype_name_from_identity_codes(case: Any) -> Optional[str]:
 FIELD_LABELS_ZH: Dict[str, str] = {
     "fire_tab": "垂片",
     "fire_incident_type": "建築物火警",  # 0＝是建築物火警、1＝不是
-    "building_type_code": "建築物類型",
     "has_flame": "有無火焰",
     "smoke_color_code": "濃煙顏色",
     "has_explosion": "有無爆炸",
@@ -488,8 +530,6 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "burn_area_code": "延燒面積",
     "access_water_info": "其他資訊",
     "non_building_fire": "非建築物火警",
-    "vehicle_wildfire_code": "交通工具山林火警",
-    "minor_fire_code": "輕微火警",
     # 垂片 A 照 0929 xlsx 重寫後使用的欄位（存文字）
     "sub_category": "次案類",  # 透天厝、機車、山林田野(平地)、垃圾…（決定走哪張垂片）
     "place_usage": "場所用途",
@@ -523,6 +563,7 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "nearby_water_source": "水源狀況",
     # 垂片 C（輕微火警）
     "alarm_status": "警報器狀態",
+    "power_outage": "停電狀況",
     "source_located": "來源確認",
     "target_object": "標的物",
 }

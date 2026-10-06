@@ -156,6 +156,7 @@ LABELS: Dict[str, str] = {
     "plate_number": "車牌號碼",
     # 火警垂片 C（輕微火警）照 0929 xlsx 新增的欄位（存文字）
     "alarm_status": "警報器狀態",
+    "power_outage": "停電狀況",
     "source_located": "來源確認",
     "target_object": "標的物",
     # 元資訊

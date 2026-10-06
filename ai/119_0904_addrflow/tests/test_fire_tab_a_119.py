@@ -1,7 +1,9 @@
 """
-垂片 A（建築物火警）照 0929 xlsx 重寫後的測試。
+垂片 A（建築物火警）照 xlsx 重寫後的測試。
 
-規格：docs/修改後_(all)火警垂片規格_關鍵要素與問句_0929.xlsx 的「01-垂片A_建築物火警」
+規格：docs/(all)火警垂片規格_關鍵要素與問句_1005.xlsx 的「01-垂片A_建築物火警」
+  - 1005 版：建物樓層移到第 3 題；火煙狀況分成 6 種；
+    起火樓層改成「看得到火 ＋ 建物樓層 > 1層樓」才問
   - 主動題：還不知道才問
   - 條件題：前置條件確定成立才問；不確定就不問
   - 被動題：不問，報案人講到才記
@@ -16,6 +18,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from fire_tab_map_119 import (
     SAFETY_MESSAGE,
@@ -23,6 +26,7 @@ from fire_tab_map_119 import (
     TAB_A_QUESTIONS,
     TAB_B1,
     TRAPPED_TRANSFER_MESSAGE,
+    _building_more_than_one_floor,
     apply_subtype_identity_codes,
 )
 from handlers.火警通用 import HuoJingGenericHandler
@@ -101,16 +105,16 @@ def _asked_elements(io: ScriptedIO) -> list[str]:
     return [by_question[m] for m in io.messages if m in by_question]
 
 
-# 一通「透天厝、有火、黑煙、二樓、沒有受困」的標準回答
+# 一通「透天厝、三層樓、有火有煙、黑煙、二樓、沒有受困」的標準回答（依被問的順序）
 TOWNHOUSE_ANSWERS = {
     "透天厝": {"building_type_code": "10"},
     "住家": {"place_usage": "住家"},
-    "火很大，煙也很多": {"fire_or_smoke": "有火"},
+    "三層樓": {"building_total_floors": "3層樓"},
+    "火很大，煙也很多": {"fire_or_smoke": "有火有煙"},
     "黑煙": {"smoke_color": "黑色煙"},
     "二樓": {"fire_floor": "2樓"},
     "還好沒燒過去": {"spread_status": "延燒可能性低"},
     "人都出來了": {"trapped_status": "無人受困"},
-    "三層樓": {"building_total_floors": "3層樓"},
     "我是隔壁鄰居": {"caller_role": "鄰居"},
 }
 
@@ -121,21 +125,21 @@ class TabAQuestionOrderTests(unittest.TestCase):
         engine, io = _building_fire_engine(list(TOWNHOUSE_ANSWERS), TOWNHOUSE_ANSWERS)
         HuoJingGenericHandler().run_generic_flow(engine)
         self.assertEqual(_asked_elements(io), [
-            "建築物類型", "場所用途", "火煙狀況", "濃煙顏色", "起火樓層",
-            "延燒可能", "有無受困", "建物樓層", "報案人身分",
+            "建築物類型", "場所用途", "建物樓層", "火煙狀況", "濃煙顏色",
+            "起火樓層", "延燒可能", "有無受困", "報案人身分",
         ])
         # 透天厝不問構造、危險物品；有火不問氣味；沒人受困不問應門
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
         self.assertEqual(engine.case.fire_tab, TAB_A)
         self.assertEqual(engine.case.sub_category, "透天厝")
-        self.assertEqual(engine.case.fire_or_smoke, "有火")
+        self.assertEqual(engine.case.fire_or_smoke, "有火有煙")
         self.assertEqual(engine.case.caller_role, "鄰居")
 
     def test_stage_names_use_building_fire_prefix(self) -> None:
         engine, io = _building_fire_engine(list(TOWNHOUSE_ANSWERS), TOWNHOUSE_ANSWERS)
         HuoJingGenericHandler().run_generic_flow(engine)
         self.assertEqual(io.stages_when_asked[:3], [
-            "建築物火警-建築物類型", "建築物火警-場所用途", "建築物火警-火煙狀況",
+            "建築物火警-建築物類型", "建築物火警-場所用途", "建築物火警-建物樓層",
         ])
 
     def test_known_active_answers_are_not_asked_again(self) -> None:
@@ -153,9 +157,9 @@ class TabAQuestionOrderTests(unittest.TestCase):
 
 class FireSmokeConditionTests(unittest.TestCase):
     """
-    火煙狀況的四種回答，各自追問哪些題。
-    回答依「實際被問的順序」排列：火煙狀況之後的追問（after_fire）→ 有無受困 →
-    建物樓層 → 報案人身分 → 最後的追問（at_end，例如氣味）。
+    火煙狀況的 6 種回答，各自追問哪些題。
+    回答依「實際被問的順序」排列：建物樓層 → 火煙狀況 → 火煙狀況之後的追問（after_fire）
+    → 有無受困 → 報案人身分 → 最後的追問（at_end，例如氣味）。
     """
 
     def _run(
@@ -163,14 +167,15 @@ class FireSmokeConditionTests(unittest.TestCase):
         fire_answer: tuple[str, str],
         after_fire: list[tuple[str, dict]],
         at_end: list[tuple[str, dict]] = (),
+        floors: tuple[str, dict] = ("三層樓", {"building_total_floors": "3層樓"}),
     ) -> list[str]:
         steps = [
             ("透天厝", {"building_type_code": "10"}),
             ("住家", {"place_usage": "住家"}),
+            floors,
             (fire_answer[0], {"fire_or_smoke": fire_answer[1]}),
             *after_fire,
             ("人都出來了", {"trapped_status": "無人受困"}),
-            ("三層樓", {"building_total_floors": "3層樓"}),
             ("我是鄰居", {"caller_role": "鄰居"}),
             *at_end,
         ]
@@ -181,53 +186,76 @@ class FireSmokeConditionTests(unittest.TestCase):
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
         return _asked_elements(io)
 
-    def test_only_smoke_asks_color_floor_spread(self) -> None:
-        asked = self._run(("只看到煙", "只有煙"), [
+    HEAD = ["建築物類型", "場所用途", "建物樓層", "火煙狀況"]
+    TAIL = ["有無受困", "報案人身分"]
+
+    def test_fire_and_smoke_asks_color_floor_spread(self) -> None:
+        asked = self._run(("火很大，煙也很多", "有火有煙"), [
             ("白煙", {"smoke_color": "白色煙"}),
             ("三樓", {"fire_floor": "3樓"}),
             ("應該不會", {"spread_status": "延燒可能性低"}),
         ])
-        self.assertEqual(asked, [
-            "建築物類型", "場所用途", "火煙狀況", "濃煙顏色", "起火樓層",
-            "延燒可能", "有無受困", "建物樓層", "報案人身分",
+        self.assertEqual(asked, self.HEAD + ["濃煙顏色", "起火樓層", "延燒可能"] + self.TAIL)
+
+    def test_fire_no_smoke_skips_color_but_asks_floor_and_spread(self) -> None:
+        asked = self._run(("有火，沒什麼煙", "有火無煙"), [
+            ("三樓", {"fire_floor": "3樓"}),
+            ("會燒到隔壁", {"spread_status": "極可能或已延燒"}),
         ])
+        self.assertEqual(asked, self.HEAD + ["起火樓層", "延燒可能"] + self.TAIL)
+
+    def test_smoke_no_fire_asks_color_only(self) -> None:
+        # 看不到火 → 不問起火樓層、延燒可能
+        asked = self._run(("只看到煙", "無火有煙"), [
+            ("白煙", {"smoke_color": "白色煙"}),
+        ])
+        self.assertEqual(asked, self.HEAD + ["濃煙顏色"] + self.TAIL)
+
+    def test_spark_only_skips_visual_questions_and_odor(self) -> None:
+        asked = self._run(("只有在噴火花", "只有火花"), [])
+        self.assertEqual(asked, self.HEAD + self.TAIL)
 
     def test_no_fire_no_smoke_skips_visual_questions_and_asks_odor(self) -> None:
         asked = self._run(("火跟煙都沒看到，只有聞到味道", "無火無煙"), [], [
             ("有燒焦味", {"odor": "燒焦味"}),
         ])
-        self.assertEqual(asked, [
-            "建築物類型", "場所用途", "火煙狀況",
-            "有無受困", "建物樓層", "報案人身分", "氣味",
-        ])
+        self.assertEqual(asked, self.HEAD + self.TAIL + ["氣味"])
 
     def test_unsure_skips_visual_questions_and_odor(self) -> None:
         asked = self._run(("我人不在現場，不知道", "不確定"), [])
-        self.assertEqual(asked, [
-            "建築物類型", "場所用途", "火煙狀況",
-            "有無受困", "建物樓層", "報案人身分",
-        ])
+        self.assertEqual(asked, self.HEAD + self.TAIL)
 
-    def test_fire_but_no_smoke_skips_fire_floor(self) -> None:
-        asked = self._run(("有看到火", "有火"), [
-            ("沒有煙", {"smoke_color": "無煙"}),
-            ("會燒到隔壁", {"spread_status": "極可能或已延燒"}),
-        ])
-        self.assertEqual(asked, [
-            "建築物類型", "場所用途", "火煙狀況", "濃煙顏色",
-            "延燒可能", "有無受困", "建物樓層", "報案人身分",
-        ])
-
-    def test_smoke_color_not_answered_skips_fire_floor(self) -> None:
-        # 問了濃煙顏色但沒問出來 → 不確定 → 不問起火樓層
-        asked = self._run(("有看到火", "有火"), [
-            ("看不清楚", {}),
+    def test_one_floor_building_skips_fire_floor(self) -> None:
+        asked = self._run(("有看到火", "有火有煙"), [
+            ("黑煙", {"smoke_color": "黑色煙"}),
             ("應該不會", {"spread_status": "延燒可能性低"}),
-        ])
-        self.assertEqual(asked, [
-            "建築物類型", "場所用途", "火煙狀況", "濃煙顏色",
-            "延燒可能", "有無受困", "建物樓層", "報案人身分",
-        ])
+        ], floors=("平房一層", {"building_total_floors": "1層樓"}))
+        self.assertEqual(asked, self.HEAD + ["濃煙顏色", "延燒可能"] + self.TAIL)
+
+    def test_unknown_floors_skips_fire_floor(self) -> None:
+        # 建物樓層不知道 → 不確定大於 1 層 → 不問起火樓層
+        asked = self._run(("有看到火", "有火有煙"), [
+            ("黑煙", {"smoke_color": "黑色煙"}),
+            ("應該不會", {"spread_status": "延燒可能性低"}),
+        ], floors=("不知道幾層", {"building_total_floors": "未知"}))
+        self.assertEqual(asked, self.HEAD + ["濃煙顏色", "延燒可能"] + self.TAIL)
+
+
+class BuildingMoreThanOneFloorTests(unittest.TestCase):
+    """起火樓層前置條件「建物樓層 > 1層樓」怎麼看報案人說的樓層文字。"""
+
+    def _check(self, text: str | None) -> bool:
+        return _building_more_than_one_floor(SimpleNamespace(building_total_floors=text))
+
+    def test_more_than_one_floor(self) -> None:
+        for text in ("3層樓", "2~3層樓", "16層樓以上", "三層", "十一層", "兩層樓"):
+            with self.subTest(text=text):
+                self.assertTrue(self._check(text))
+
+    def test_one_floor_or_unknown(self) -> None:
+        for text in ("1層樓", "一層", "未知", "", None):
+            with self.subTest(text=text):
+                self.assertFalse(self._check(text))
 
 
 class WarehouseFactoryConditionTests(unittest.TestCase):
@@ -237,9 +265,9 @@ class WarehouseFactoryConditionTests(unittest.TestCase):
         steps = [
             (building_answer, {"building_type_code": code}),
             ("做生意的地方", {"place_usage": "店家"}),
+            ("一層", {"building_total_floors": "1層樓"}),
             ("我人不在現場", {"fire_or_smoke": "不確定"}),
             ("不清楚", {"trapped_status": "不確定"}),
-            ("一層", {"building_total_floors": "1層樓"}),
             ("我是管理員", {"caller_role": "管理員或警衛"}),
         ]
         if code in ("12", "25"):
@@ -254,7 +282,7 @@ class WarehouseFactoryConditionTests(unittest.TestCase):
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
         return _asked_elements(io)
 
-    BASE = ["建築物類型", "場所用途", "火煙狀況", "有無受困", "建物樓層", "報案人身分"]
+    BASE = ["建築物類型", "場所用途", "建物樓層", "火煙狀況", "有無受困", "報案人身分"]
 
     def test_warehouse_asks_construction_and_hazards(self) -> None:
         self.assertEqual(self._asked_for("倉庫", "12"), self.BASE + ["建物構造", "危險物品"])
@@ -272,7 +300,8 @@ class PeopleTrappedTransferTests(unittest.TestCase):
         extracted = {
             "透天厝": {"building_type_code": "10"},
             "住家": {"place_usage": "住家"},
-            "有火": {"fire_or_smoke": "有火"},
+            "三層樓": {"building_total_floors": "3層樓"},
+            "有火": {"fire_or_smoke": "有火有煙"},
             "黑煙": {"smoke_color": "黑色煙"},
             "二樓": {"fire_floor": "2樓"},
             "會": {"spread_status": "極可能或已延燒"},
@@ -286,7 +315,7 @@ class PeopleTrappedTransferTests(unittest.TestCase):
         asked = _asked_elements(io)
         self.assertEqual(asked[-1], "有無受困")
         self.assertNotIn("起火戶應門", asked)
-        self.assertNotIn("建物樓層", asked)
+        self.assertNotIn("報案人身分", asked)
 
     def test_trapped_mentioned_in_incident_answer_transfers_before_tab_questions(self) -> None:
         io = ScriptedIO(["房子燒起來，裡面還有人出不來"])
@@ -318,7 +347,7 @@ class PassiveAndFreeTextTests(unittest.TestCase):
     def test_passive_fields_are_recorded_but_never_asked(self) -> None:
         extracted = dict(TOWNHOUSE_ANSWERS)
         extracted["火很大，煙也很多"] = {
-            "fire_or_smoke": "有火",
+            "fire_or_smoke": "有火有煙",
             "explosion_status": "有爆炸",
             "fire_extent": "整棟都在燒",
         }
@@ -348,12 +377,13 @@ class FixedAnswerCheckTests(unittest.TestCase):
         return ext.extract_general_fields("測試", "測試", main_category="火警", fire_tab="A")
 
     def test_valid_fixed_answers_are_kept(self) -> None:
-        out = self._extract({"fire_or_smoke": "只有煙", "trapped_status": "有人受困"})
-        self.assertEqual(out["fire_or_smoke"], "只有煙")
+        out = self._extract({"fire_or_smoke": "無火有煙", "trapped_status": "有人受困"})
+        self.assertEqual(out["fire_or_smoke"], "無火有煙")
         self.assertEqual(out["trapped_status"], "有人受困")
 
     def test_wrong_format_is_dropped(self) -> None:
-        out = self._extract({"fire_or_smoke": "有火有煙", "trapped_status": "有人受困。"})
+        # 「有火」是 1005 版以前的說法，現在不在固定說法裡
+        out = self._extract({"fire_or_smoke": "有火", "trapped_status": "有人受困。"})
         self.assertNotIn("fire_or_smoke", out)
         self.assertNotIn("trapped_status", out)
 
@@ -371,7 +401,7 @@ class TabSwitchKeepsAnswersTests(unittest.TestCase):
         case.main_category = "火警"
         apply_subtype_identity_codes(case, "透天厝", update_tab=True)
         case.sub_category = "透天厝"
-        case.fire_or_smoke = "有火"
+        case.fire_or_smoke = "有火有煙"
         case.smoke_color = "黑色煙"
         case.caller_role = "路人"
         case.place_usage = "住家"
@@ -384,19 +414,19 @@ class TabSwitchKeepsAnswersTests(unittest.TestCase):
         self.assertEqual(case.fire_tab, TAB_B1)
         self.assertIsNone(case.building_type_code)  # 舊細類代碼清掉
         self.assertEqual(case.vehicle_wildfire_code, 0)
-        self.assertEqual(case.fire_or_smoke, "有火")
+        self.assertEqual(case.fire_or_smoke, "有火有煙")
         self.assertEqual(case.caller_role, "路人")
 
     def test_engine_switch_keeps_answers_and_remap_only_fills_blanks(self) -> None:
         engine = self._filled_case_engine(remapped={
-            "fire_or_smoke": "只有煙",          # 已經有答案 → 不可蓋掉
+            "fire_or_smoke": "無火有煙",        # 已經有答案 → 不可蓋掉
             "vehicle_wildfire_code": 0,         # 空白 → 可以補
         })
         engine._switch_subcategory("透天厝", "汽車", 0.9)
         case = engine.case
         self.assertEqual(case.fire_tab, TAB_B1)
         self.assertEqual(case.sub_category, "汽車")
-        self.assertEqual(case.fire_or_smoke, "有火")
+        self.assertEqual(case.fire_or_smoke, "有火有煙")
         self.assertEqual(case.smoke_color, "黑色煙")
         self.assertEqual(case.caller_role, "路人")
         self.assertEqual(case.place_usage, "住家")

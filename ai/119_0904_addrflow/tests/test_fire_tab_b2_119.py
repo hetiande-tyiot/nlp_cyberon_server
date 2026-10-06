@@ -1,8 +1,9 @@
 """
-垂片 B2（山林田野火警）照 0929 xlsx 重寫後的測試。
+垂片 B2（山林田野火警）照 xlsx 重寫後的測試。
 
-規格：docs/修改後_(all)火警垂片規格_關鍵要素與問句_0929.xlsx 的「03-垂片B2_山林田野」
+規格：docs/(all)火警垂片規格_關鍵要素與問句_1005.xlsx 的「03-垂片B2_山林田野」
 規則同垂片 A（見 test_fire_tab_a_119.py 開頭說明）。
+1005 版：拿掉濃煙顏色；燃燒物、燃燒面積可以記「不確定」（報案人在遠處看不清楚）。
 
 這裡的 LLM 是假的：每一句回答要抽出什麼，都由測試事先指定。
 所以這些測試檢查的是「流程有沒有照規則問、跳過」，
@@ -92,8 +93,7 @@ def _asked(io: ScriptedIO) -> list[str]:
 
 ON_MOUNTAIN = ("在山上", {"vehicle_wildfire_code": MOUNTAIN})
 WEEDS = ("雜草在燒", {"burning_object": "雜草"})
-FIRE = ("有看到火", {"fire_or_smoke": "有火"})
-WHITE = ("白煙", {"smoke_color": "白色煙"})
+FIRE = ("有看到火，也有白煙", {"fire_or_smoke": "有火有煙", "smoke_color": "白色煙"})
 BIG = ("比籃球場還大", {"fire_extent": "一個籃球場以上"})
 SPREADING = ("快燒到旁邊的樹林了", {"spread_status": "是"})
 PASSERBY = ("我開車經過", {"caller_role": "路過"})
@@ -103,37 +103,42 @@ class TabB2QuestionOrderTests(unittest.TestCase):
 
     def test_asks_in_xlsx_order(self) -> None:
         engine, io = _run_wildfire([
-            ON_MOUNTAIN, WEEDS, FIRE, WHITE, BIG, SPREADING, PASSERBY,
+            ON_MOUNTAIN, WEEDS, FIRE, BIG, SPREADING, PASSERBY,
         ])
+        # 看得到煙也不問濃煙顏色（1005 版拿掉）；報案人自己講的顏色照樣記
         self.assertEqual(_asked(io), [
-            "山林火警", "燃燒物", "火煙狀況", "濃煙顏色", "燃燒面積", "是否延燒", "報案人身分",
+            "山林火警", "燃燒物", "火煙狀況", "燃燒面積", "是否延燒", "報案人身分",
         ])
+        self.assertEqual(engine.case.smoke_color, "白色煙")
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
         self.assertEqual(engine.case.sub_category, "山林田野(山地)")
         self.assertEqual(io.stages_when_asked[0], "山林田野火警-山林火警")
 
     def test_known_subtype_is_not_asked(self) -> None:
         _, io = _run_wildfire(
-            [WEEDS, FIRE, WHITE, BIG, SPREADING, PASSERBY],
+            [WEEDS, FIRE, BIG, SPREADING, PASSERBY],
             vehicle_wildfire_code=FLAT, sub_category="山林田野(平地)",
         )
         self.assertNotIn("山林火警", _asked(io))
 
-    def test_unsure_fire_skips_smoke_color(self) -> None:
-        _, io = _run_wildfire([
-            ON_MOUNTAIN, WEEDS,
+    def test_far_away_caller_answers_are_recorded_as_unsure(self) -> None:
+        engine, io = _run_wildfire([
+            ON_MOUNTAIN,
+            ("太遠了看不出來在燒什麼", {"burning_object": "其他(不確定)"}),
             ("遠遠的看不清楚", {"fire_or_smoke": "不確定"}),
-            ("不知道多大", {"fire_extent": "未知"}),
+            ("不知道多大", {"fire_extent": "不確定"}),
             ("不清楚", {"spread_status": "不確定"}),
             PASSERBY,
         ])
         self.assertEqual(_asked(io), [
             "山林火警", "燃燒物", "火煙狀況", "燃燒面積", "是否延燒", "報案人身分",
         ])
+        self.assertEqual(engine.case.burning_object, "其他(不確定)")
+        self.assertEqual(engine.case.fire_extent, "不確定")
 
     def test_passive_fields_recorded_but_not_asked(self) -> None:
         engine, io = _run_wildfire([
-            ON_MOUNTAIN, WEEDS, FIRE, WHITE,
+            ON_MOUNTAIN, WEEDS, FIRE,
             ("大概一個籃球場，旁邊有條溪，地主在拿水管澆",
              {"fire_extent": "一個籃球場以上", "nearby_water_source": "有（溪）",
               "extinguish_status": "已在自行滅火"}),
@@ -147,7 +152,7 @@ class TabB2QuestionOrderTests(unittest.TestCase):
     def test_burning_object_outside_reference_range_is_kept(self) -> None:
         engine, _ = _run_wildfire([
             ON_MOUNTAIN, ("有人在燒金紙", {"burning_object": "金紙"}),
-            FIRE, WHITE, BIG, SPREADING, PASSERBY,
+            FIRE, BIG, SPREADING, PASSERBY,
         ])
         self.assertEqual(engine.case.burning_object, "金紙")
 

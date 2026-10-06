@@ -662,6 +662,8 @@ class SopEngine119:
             "alarm_status",
             "source_located",
             "target_object",
+            # 垂片 C 照 1005 xlsx 新增
+            "power_outage",
         }
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS

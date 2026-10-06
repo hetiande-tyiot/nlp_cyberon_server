@@ -1,10 +1,13 @@
 """
-垂片 C（輕微火警）照 0929 xlsx 重寫後的測試。
+垂片 C（輕微火警）照 xlsx 重寫後的測試。
 
-規格：docs/修改後_(all)火警垂片規格_關鍵要素與問句_0929.xlsx 的「04-垂片C_輕微火警」
+規格：docs/(all)火警垂片規格_關鍵要素與問句_1005.xlsx 的「04-垂片C_輕微火警」
 規則同垂片 A（見 test_fire_tab_a_119.py 開頭說明），另外：
-  - 有無受困：細類是警報器作響、查看案件才問；答「有人受困」立刻轉人工
-  - 來源確認：確定有聞到味道（氣味已記下且不是「無」），或細類是警報器作響，才問
+  - 有無受困：次案類是警報器作響、查看案件才問；答「有人受困」立刻轉人工
+  - 停電狀況（1005 新增）：次案類是電線桿(電纜)才問
+  - 來源確認：（確定有聞到味道（氣味已記下且不是「無」），或次案類是警報器作響）
+    而且 地址沒有樓層 而且 地點型態不是地標，才問
+  - 1005 版拿掉濃煙顏色
 
 這裡的 LLM 是假的：每一句回答要抽出什麼，都由測試事先指定。
 所以這些測試檢查的是「流程有沒有照規則問、跳過、轉人工」，
@@ -14,12 +17,14 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from fire_tab_map_119 import (
     SAFETY_MESSAGE,
     TAB_C,
     TAB_C_QUESTIONS,
     TRAPPED_TRANSFER_MESSAGE,
+    _address_has_floor,
 )
 from handlers.火警通用 import HuoJingGenericHandler
 from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
@@ -27,7 +32,7 @@ from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
 # 垂片 C 各題的問句（取自題目表，xlsx 改問句時測試不必跟著改）
 Q = {item.element: item.question for item in TAB_C_QUESTIONS}
 
-# 細類代碼（minor_fire_code）：LLM 抽到這個代碼後，程式會自動填好細類名稱
+# 次案類代碼（minor_fire_code）：LLM 抽到這個代碼後，程式會自動填好次案類名稱
 MINOR_CODE = {"垃圾": 0, "電線桿(電纜)": 1, "瓦斯漏氣": 2, "警報器作響": 3, "查看案件": 4}
 
 
@@ -128,13 +133,13 @@ class TabCQuestionOrderTests(unittest.TestCase):
     def test_garbage_fire_with_flames(self) -> None:
         _, io = _run_minor_fire([
             _minor("有人在燒垃圾", "垃圾"),
-            ("有看到火", {"fire_or_smoke": "有火"}),
-            ("黑煙", {"smoke_color": "黑色煙"}),
+            ("有看到火", {"fire_or_smoke": "有火有煙"}),
             ("沒有燒到旁邊", {"spread_status": "無"}),
             ("我路過", {"caller_role": "路人"}),
         ])
+        # 不問濃煙顏色（1005 版拿掉）、不問停電（不是電線桿）
         self.assertEqual(_asked(io), [
-            "輕微火警", "火煙狀況", "濃煙顏色", "是否延燒", "報案人身分",
+            "輕微火警", "火煙狀況", "是否延燒", "報案人身分",
         ])
 
     def test_check_case_with_burning_smell_asks_source(self) -> None:
@@ -158,17 +163,74 @@ class TabCQuestionOrderTests(unittest.TestCase):
         ])
         self.assertNotIn("來源確認", _asked(io))
 
-    def test_passive_target_object_recorded_but_not_asked(self) -> None:
+    def test_utility_pole_asks_power_outage(self) -> None:
         engine, io = _run_minor_fire([
             _minor("電線桿上面在冒煙", "電線桿(電纜)"),
+            ("整條街都停電了", {"power_outage": "有停電"}),
             ("只看到煙，是電線桿上面的變壓器",
-             {"fire_or_smoke": "只有煙", "target_object": "電線桿或電纜（變壓器）"}),
-            ("白煙", {"smoke_color": "白色煙"}),
-            ("沒有", {"spread_status": "無"}),
+             {"fire_or_smoke": "無火有煙", "target_object": "電線桿或電纜（變壓器）"}),
             ("我是路人", {"caller_role": "路人"}),
         ])
+        # 看不到火 → 不問是否延燒
+        self.assertEqual(_asked(io), ["輕微火警", "停電狀況", "火煙狀況", "報案人身分"])
+        self.assertEqual(engine.case.power_outage, "有停電")
+        # 標的物是被動題：報案人講到就記，但不問
         self.assertEqual(engine.case.target_object, "電線桿或電纜（變壓器）")
         self.assertNotIn("標的物", _asked(io))
+
+
+class SourceLocatedConditionTests(unittest.TestCase):
+    """
+    來源確認：地址已經講到幾樓、或地點是學校公園這類地標，就不問哪一戶哪一層
+    （問卷抱怨：報案地點是國中、已經講了幾樓還被問）。
+    """
+
+    ALARM_STEPS = [
+        _minor("樓上的警報器一直響", "警報器作響"),
+        ("還在響", {"alarm_status": "仍在響"}),
+        NO_FIRE_NO_SMOKE,
+        ("有一點燒焦味", {"odor": "燒焦味"}),
+        RESIDENT, NOBODY_CALLING,
+    ]
+
+    def test_address_without_floor_asks_source(self) -> None:
+        _, io = _run_minor_fire(
+            self.ALARM_STEPS + [("不知道是哪一戶", {"source_located": "聞得到但找不到來源"})],
+            address="新北市板橋區華興街16號", location_type="address",
+        )
+        self.assertIn("來源確認", _asked(io))
+
+    def test_address_with_floor_skips_source(self) -> None:
+        _, io = _run_minor_fire(
+            self.ALARM_STEPS,
+            address="新北市板橋區華興街16號5樓", location_type="address",
+        )
+        self.assertNotIn("來源確認", _asked(io))
+
+    def test_landmark_skips_source(self) -> None:
+        _, io = _run_minor_fire(
+            self.ALARM_STEPS, address="板橋國中", location_type="landmark",
+        )
+        self.assertNotIn("來源確認", _asked(io))
+
+
+class AddressHasFloorTests(unittest.TestCase):
+    """「地址沒有樓層」怎麼看完整地址（address）。"""
+
+    def _check(self, address: str | None) -> bool:
+        return _address_has_floor(SimpleNamespace(address=address))
+
+    def test_floor_written_in_address(self) -> None:
+        for address in ("華興街16號5樓", "華興街16號5樓之1", "中山路一段3號十二樓",
+                        "中山路3號5F", "中山路3號B1", "中山路3號地下室"):
+            with self.subTest(address=address):
+                self.assertTrue(self._check(address))
+
+    def test_no_floor_in_address(self) -> None:
+        # 「大樓」的「樓」前面不是數字，不算樓層
+        for address in ("華興街16號", "台北101大樓", "板橋國中", "", None):
+            with self.subTest(address=address):
+                self.assertFalse(self._check(address))
 
 
 class TabCTrappedTransferTests(unittest.TestCase):
