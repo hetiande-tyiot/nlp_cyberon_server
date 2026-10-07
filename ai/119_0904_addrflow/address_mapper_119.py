@@ -15,7 +15,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from sop_utils_119 import is_known_district
 
@@ -145,6 +145,18 @@ class ThreeStageLocationMapper:
                     len(removed),
                 )
 
+        # 有些鍵剛好是另一條真實路名的後半段：「河西路→橫溪路」碰上報案人
+        # 講對的「環河西路」，會替出「環橫溪路」（2026-10-06 8d211dc0 那通）。
+        # 這裡記下每個這種鍵對應哪些較長的真實路名（表上 43 個鍵），替換時
+        # 往前看，若前面的字連起來正好是那條真實路名，就保留原文不替換。
+        # 真實路名取表上所有映射的目標值。
+        real_roads = set(self.street_mapping.values())
+        self._street_key_longer_roads: Dict[str, List[str]] = {}
+        for road in real_roads:
+            for key in self.street_mapping:
+                if len(road) > len(key) and road.endswith(key):
+                    self._street_key_longer_roads.setdefault(key, []).append(road)
+
         self._district_pattern = _addr_build_regex_from_keys(self.district_mapping)
         self._street_pattern = _addr_build_regex_from_keys(self.street_mapping)
         self._other_pattern = _addr_build_regex_from_keys(self.other_mapping)
@@ -161,6 +173,7 @@ class ThreeStageLocationMapper:
         text: str,
         mapping: Dict[str, str],
         pattern: re.Pattern,
+        longer_roads: Optional[Dict[str, List[str]]] = None,
     ) -> str:
         if not isinstance(text, str) or not text:
             return text
@@ -170,6 +183,12 @@ class ThreeStageLocationMapper:
             value = mapping.get(key)
             if value is None:
                 return key
+            # 這次命中是某條較長真實路名的後半段（「環河西路」裡的「河西路」）
+            # → 報案人講的是那條真實路名，保留原文。
+            for road in (longer_roads or {}).get(key, ()):
+                head = len(road) - len(key)
+                if m.start() >= head and text[m.start() - head:m.end()] == road:
+                    return key
             # 目標名稱已經在原文裡 → 這次命中只是它的一小段，別再替換。
             # 「北大道→新北大道」碰上「新北大道」會替出「新新北大道」；
             # 「冷飯→冷飯坑」碰上「冷飯坑」會替出「冷飯坑坑」。
@@ -286,7 +305,8 @@ class ThreeStageLocationMapper:
         s1, guess = self._apply_district_with_fallback(text)
         s2 = (
             self._apply_simple_mapping(
-                s1, self.street_mapping, self._street_pattern
+                s1, self.street_mapping, self._street_pattern,
+                longer_roads=self._street_key_longer_roads,
             )
             if include_street
             else s1

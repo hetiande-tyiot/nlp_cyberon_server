@@ -68,6 +68,28 @@ class AddressMapperUnitTests(unittest.TestCase):
             "板橋區府中路32號",
         )
 
+    def test_key_inside_longer_real_road_is_not_replaced(self) -> None:
+        """「河西路→橫溪路」不能套進報案人講對的「環河西路」。
+
+        2026-10-06 8d211dc0 那通：門牌查無後套表重查，「環河西路」被替成
+        不存在的「環橫溪路」，之後報案人再講對也一直被改掉。
+        """
+        self.assertEqual(
+            self.mapper.map_location("新北市永和區環河西路2段45號"),
+            "新北市永和區環河西路2段45號",
+        )
+
+    def test_other_longer_real_road_is_not_replaced(self) -> None:
+        """同一類：「樹林路→佳園路」不能套進「紅樹林路」。"""
+        self.assertEqual(
+            self.mapper.map_location("紅樹林路12號"),
+            "紅樹林路12號",
+        )
+
+    def test_key_alone_is_still_replaced(self) -> None:
+        """單獨講「河西路」（前面不是組成真實路名的字）照常套表。"""
+        self.assertEqual(self.mapper.map_location("河西路45號"), "橫溪路45號")
+
 
 class AddressMapperFlowTests(unittest.TestCase):
     @patch("sop_119_engine.query_jurisdiction")
