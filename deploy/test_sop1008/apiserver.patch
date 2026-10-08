@@ -1,0 +1,275 @@
+diff --git a/api_server.py b/api_server.py
+index 7156d2a..3ec6de7 100644
+--- a/api_server.py
++++ b/api_server.py
+@@ -28,7 +28,7 @@ import sop_client as sop
+ import tts_client as tts
+ import machinec_client as machinec
+ import sse_consumer
+-from config    import AMIDAEMON_URL, SOP_SERVER_URL
++from config    import AMIDAEMON_URL, SOP_SERVER_URL, SOP_TEST_SERVER_URL, SOP_TEST_DIALED_NUMBERS
+ from payloads  import CallStartPayload, SttPayload, CallEndPayload, TransferPayload, PrecheckPayload
+ from state     import sop_sessions, turn_counters, mc_state, MCSessionState
+ 
+@@ -38,8 +38,10 @@ app = FastAPI(title="110 API Server", version="1.1")
+ 
+ @app.on_event("startup")
+ def _on_startup() -> None:
+-    """啟動時 fetch 機器B 的 case 欄位中文 label 對照表（給 caseDetails 用）。"""
++    """啟動時 fetch 機器B 的 case 欄位中文 label 對照表（給 caseDetails 用）。
++    再從 912 測試環境補進它新增的欄位，測試通話的新欄位在前端才會顯示中文名稱。"""
+     machinec.fetch_labels(SOP_SERVER_URL)
++    machinec.fetch_extra_labels(SOP_TEST_SERVER_URL)
+ 
+ 
+ # ═══════════════════════════════════════════════════════════════════════════
+@@ -125,7 +127,7 @@ def call_precheck(payload: PrecheckPayload):
+ @app.post("/call/start")
+ def call_start(payload: CallStartPayload):
+     uuid = payload.uuid
+-    db.insert_case(uuid, payload.channel)
++    db.insert_case(uuid, payload.channel, payload.dialed_number, payload.caller_number)
+ 
+     if payload.transfer_mode:
+         # 轉接模式：只建 cases 紀錄，不啟動 NLP session、不啟動 SSE
+@@ -136,7 +138,12 @@ def call_start(payload: CallStartPayload):
+                 "sop_session_id": ""}
+ 
+     # 把通話編號一起傳給 NLP，案件 JSON 的檔名尾碼才會跟錄音檔同一組編號
+-    sop_id, greet_outputs = sop.new_session(uuid)
++    # 撥打 912 的是 SOP 調整測試環境的通話，送測試用的 119 服務；其他照舊送正式環境
++    is_test = payload.dialed_number in SOP_TEST_DIALED_NUMBERS
++    server_url = SOP_TEST_SERVER_URL if is_test else SOP_SERVER_URL
++    if is_test:
++        print(f"🧪 [{uuid[:8]}] 撥打 {payload.dialed_number} → 測試環境 {server_url}", flush=True)
++    sop_id, greet_outputs = sop.new_session(uuid, server_url)
+     sop_sessions[uuid] = sop_id
+     turn_counters[uuid] = 0
+ 
+@@ -268,6 +275,8 @@ def call_end(payload: CallEndPayload):
+     sop.hangup(sop_id)
+ 
+     case = sop.get_result(sop_id)
++    # hangup 和取最後結果都要打這通電話所在的那一台，所以兩件事做完才清掉網址記錄
++    sop.forget(sop_id)
+     if case:
+         db.save_case(uuid, case)
+ 
+diff --git a/config.example.py b/config.example.py
+index a2933df..03328e2 100644
+--- a/config.example.py
++++ b/config.example.py
+@@ -17,6 +17,11 @@ import os
+ # ================================================================
+ SOP_SERVER_URL = os.environ.get("SOP_SERVER_URL", "http://<機器B-IP>:8200")   # ← 改我
+ 
++# 機器B 的 SOP 調整測試環境（同一台機器另一張顯卡，port 8300）。
++# 撥打的號碼在 SOP_TEST_DIALED_NUMBERS 裡的通話（目前是 912）送到這裡，其他照舊送 SOP_SERVER_URL。
++SOP_TEST_SERVER_URL = os.environ.get("SOP_TEST_SERVER_URL", "http://<機器B-IP>:8300")
++SOP_TEST_DIALED_NUMBERS = {"912"}
++
+ # ================================================================
+ # amidaemon 內部控制端點（介入轉接 + 通話結束指令）
+ # 日後 api 與 ami 機器拆分時，把 host 改成內網 IP
+diff --git a/db.py b/db.py
+index aeb26c8..547c9e6 100644
+--- a/db.py
++++ b/db.py
+@@ -22,13 +22,16 @@ def get_db():
+     )
+ 
+ 
+-def insert_case(uuid: str, channel: str) -> None:
++def insert_case(uuid: str, channel: str, dialed_number: str = "", caller_number: str = "") -> None:
++    """建一筆案件。dialed_number 是撥打的號碼（912 = SOP 調整測試環境），
++    查測試資料用 WHERE dialed_number='912'；空字串存成 NULL（舊流程沒帶號碼的通話）。"""
+     try:
+         db = get_db()
+         with db.cursor() as cur:
+             cur.execute(
+-                "INSERT IGNORE INTO cases (uuid, channel, created_at) VALUES (%s, %s, %s)",
+-                (uuid, channel, datetime.now()),
++                """INSERT IGNORE INTO cases (uuid, channel, dialed_number, caller_number, created_at)
++                   VALUES (%s, %s, %s, %s, %s)""",
++                (uuid, channel, dialed_number or None, caller_number or None, datetime.now()),
+             )
+         db.close()
+     except Exception as e:
+diff --git a/machinec_client.py b/machinec_client.py
+index ed6d96d..03ae931 100644
+--- a/machinec_client.py
++++ b/machinec_client.py
+@@ -90,6 +90,25 @@ def fetch_labels(sop_server_url: str, timeout: int = 5) -> int:
+         return 0
+ 
+ 
++def fetch_extra_labels(sop_server_url: str, timeout: int = 5) -> int:
++    """再從另一台 119 服務（912 SOP 調整測試環境）抓 label，只補進目前沒有的欄位。
++
++    測試環境新增的欄位才有中文名稱可以顯示；已經有的欄位一律保留正式環境的名稱，
++    所以測試環境若只改既有欄位的中文名稱，前端看不到這個變更。
++    失敗時只 log，不影響正式環境已載入的對照表。回傳補進的條數。"""
++    url = f"{sop_server_url}/schema/case-fields/labels"
++    try:
++        resp = requests.get(url, timeout=timeout)
++        resp.raise_for_status()
++        added = {k: v for k, v in (resp.json() or {}).items() if k not in _LABEL_MAP}
++        _LABEL_MAP.update(added)
++        print(f"📚 [MachineC] 測試環境補進 case 欄位 label：{len(added)} 條 {_ts()}", flush=True)
++        return len(added)
++    except Exception as e:
++        print(f"⚠️ [MachineC] 載入測試環境 label 失敗（不影響正式環境）：{e} {_ts()}", flush=True)
++        return 0
++
++
+ def _stringify(v) -> str:
+     """把 case 欄位值轉成字串給 MC（MC 規格要求 caseDetails 內全部值都是字串）。"""
+     if isinstance(v, bool):
+diff --git a/payloads.py b/payloads.py
+index 7278985..e48dd65 100644
+--- a/payloads.py
++++ b/payloads.py
+@@ -10,6 +10,8 @@ class CallStartPayload(BaseModel):
+     uuid: str
+     channel: str
+     transfer_mode: bool = False   # True = 轉接模式，不建立 NLP session
++    dialed_number: str = ""       # 撥打的號碼（911 正式、912 SOP 調整測試環境），決定送哪一台 119 服務
++    caller_number: str = ""       # 來電號碼（分機或外線號碼）
+ 
+ 
+ class SttPayload(BaseModel):
+diff --git a/schema_119.sql b/schema_119.sql
+index ae14717..1983d8e 100644
+--- a/schema_119.sql
++++ b/schema_119.sql
+@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS cases (
+   id             INT AUTO_INCREMENT PRIMARY KEY,
+   uuid           VARCHAR(64)  NOT NULL UNIQUE,
+   channel        VARCHAR(64),
++  dialed_number  VARCHAR(32),           -- 撥打的號碼：911 正式 / 912 SOP 調整測試環境
++  caller_number  VARCHAR(32),           -- 來電號碼（分機或外線號碼）
+   main_category  VARCHAR(32),           -- 火警 / 救護
+   sub_category   VARCHAR(32),           -- 急病 等子類
+   address        VARCHAR(255),
+diff --git a/sop_client.py b/sop_client.py
+index 34c56ae..b9f652a 100644
+--- a/sop_client.py
++++ b/sop_client.py
+@@ -16,8 +16,23 @@ import requests
+ 
+ from config import SOP_SERVER_URL, HTTP_TIMEOUT
+ 
++# session_id → 開這個 session 的 119 服務網址。
++# 912 的測試通話開在測試環境（SOP_TEST_SERVER_URL），之後 input / observe / hangup / result
++# 和 SSE 都要打同一台；沒記錄的 session 一律當正式環境。
++_session_base: dict[str, str] = {}
+ 
+-def new_session(call_uuid: str = "") -> tuple[str, list[str]]:
++
++def base_url(sop_session_id: str) -> str:
++    """這個 session 所在的 119 服務網址（沒記錄就是正式環境 SOP_SERVER_URL）。"""
++    return _session_base.get(sop_session_id, SOP_SERVER_URL)
++
++
++def forget(sop_session_id: str) -> None:
++    """通話完全收尾後清掉網址記錄。要在 hangup 和取最後結果之後才呼叫。"""
++    _session_base.pop(sop_session_id, None)
++
++
++def new_session(call_uuid: str = "", server_url: str = SOP_SERVER_URL) -> tuple[str, list[str]]:
+     """建立 119 NLP session，回傳 (session_id, 開場白 outputs)。
+ 
+     call_uuid 是這通電話在我們這邊的通話編號，跟錄音檔名用的是同一組。
+@@ -29,16 +44,22 @@ def new_session(call_uuid: str = "") -> tuple[str, list[str]]:
+     就查不出是哪一通的案件 JSON（2026-10-05 之前就是這個狀況）。
+ 
+     沒有 call_uuid 時不帶 request body，行為與過去完全相同。
++
++    server_url 是要開在哪一台 119 服務（預設正式環境）；開成功後記下來，
++    之後這個 session 的其他呼叫都會打同一台。
+     """
+     try:
+         resp = requests.post(
+-            f"{SOP_SERVER_URL}/session/new",
++            f"{server_url}/session/new",
+             json={"call_uuid": call_uuid} if call_uuid else None,
+             timeout=HTTP_TIMEOUT,
+         )
+         resp.raise_for_status()
+         data = resp.json()
+-        return data.get("session_id", ""), data.get("outputs", [])
++        sid = data.get("session_id", "")
++        if sid:
++            _session_base[sid] = server_url
++        return sid, data.get("outputs", [])
+     except Exception as e:
+         print(f"⚠️  119 NLP new session 失敗：{e}", flush=True)
+         return "", []
+@@ -53,7 +74,7 @@ def push(sop_session_id: str, text: str) -> tuple[list[str], bool, str | None]:
+         return [], False, None
+     try:
+         resp = requests.post(
+-            f"{SOP_SERVER_URL}/session/{sop_session_id}/input",
++            f"{base_url(sop_session_id)}/session/{sop_session_id}/input",
+             json={"text": text}, timeout=HTTP_TIMEOUT,
+         )
+         resp.raise_for_status()
+@@ -79,7 +100,7 @@ def observe(sop_session_id: str, text: str, role: str) -> dict:
+         return {}
+     try:
+         resp = requests.post(
+-            f"{SOP_SERVER_URL}/session/{sop_session_id}/observe",
++            f"{base_url(sop_session_id)}/session/{sop_session_id}/observe",
+             json={"text": text, "role": role}, timeout=HTTP_TIMEOUT,
+         )
+         resp.raise_for_status()
+@@ -93,7 +114,7 @@ def hangup(sop_session_id: str) -> None:
+     if not sop_session_id:
+         return
+     try:
+-        requests.post(f"{SOP_SERVER_URL}/session/{sop_session_id}/hangup", timeout=HTTP_TIMEOUT)
++        requests.post(f"{base_url(sop_session_id)}/session/{sop_session_id}/hangup", timeout=HTTP_TIMEOUT)
+     except Exception:
+         pass
+ 
+@@ -107,7 +128,7 @@ def get_result(sop_session_id: str) -> dict | None:
+         return None
+     try:
+         resp = requests.get(
+-            f"{SOP_SERVER_URL}/session/{sop_session_id}/result", timeout=HTTP_TIMEOUT
++            f"{base_url(sop_session_id)}/session/{sop_session_id}/result", timeout=HTTP_TIMEOUT
+         )
+         resp.raise_for_status()
+         return resp.json().get("case")
+diff --git a/sse_consumer.py b/sse_consumer.py
+index b95af9d..f2e9fef 100644
+--- a/sse_consumer.py
++++ b/sse_consumer.py
+@@ -2,7 +2,7 @@
+ sse_consumer.py — 訂閱機器B 的 case 變化 SSE 串流，把更新即時推給機器C。
+ （2026-06-XX 從 ai/ami/ 搬到 apiserver/，由 api_server 集中管理）
+ 
+-對應機器B 端點（host 跟著 config.SOP_SERVER_URL，各機器不同）：
++對應機器B 端點（host 是開這個 session 的那一台 119 服務：正式 SOP_SERVER_URL 或 912 測試環境 SOP_TEST_SERVER_URL）：
+   GET {SOP_SERVER_URL}/session/{sop_session_id}/case/stream
+ 
+ 事件類型：
+@@ -18,7 +18,8 @@ from typing import Generator
+ 
+ import requests
+ 
+-from config import SOP_SERVER_URL, AMIDAEMON_URL
++from config import AMIDAEMON_URL
++from sop_client import base_url as sop_base_url
+ from state  import mc_state, MCSessionState
+ from utils  import _ts
+ import machinec_client as machinec
+@@ -131,7 +132,7 @@ def notify_amidaemon_end(call_uuid: str) -> None:
+ def _listen_loop(call_uuid: str, sop_session_id: str,
+                  stop_event: threading.Event) -> None:
+     """背景 thread 主迴圈。連線到 done 事件或外部 stop signal 為止。"""
+-    url = f"{SOP_SERVER_URL}/session/{sop_session_id}/case/stream"
++    url = f"{sop_base_url(sop_session_id)}/session/{sop_session_id}/case/stream"
+     print(f"🔌 [{call_uuid[:8]}] SSE 連線：{url} {_ts()}", flush=True)
+     try:
+         with requests.get(url, stream=True, timeout=None,

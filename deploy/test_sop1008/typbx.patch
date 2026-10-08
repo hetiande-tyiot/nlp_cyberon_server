@@ -1,0 +1,44 @@
+--- a/session.py
++++ b/session.py
+@@ -36,3 +36,7 @@
+         self.transfer_mode         = False  # True = bridge 後，STT 走 /observe
+         self.nlp_pending           = False  # True = NLP 處理中，封鎖新 STT 輸入
+         self.should_end            = False  # True = api_server 通知該結束、等最後 TTS 播完就掛斷
++        # 撥打的號碼（911 正式、912 SOP 調整測試環境）與來電號碼，由 Asterisk 的 AI_CALL_START 事件帶入。
++        # api_server 靠撥打的號碼決定這通電話送正式還是測試的 119 服務，兩個號碼也一起寫進資料庫。
++        self.dialed_number         = ""
++        self.caller_number         = ""
+--- a/amidaemon.py
++++ b/amidaemon.py
+@@ -165,7 +165,10 @@
+                     session_dir = event.get("SESSION_DIR")
+                     if uuid and channel and session_dir:
+                         sessions[uuid] = Session(uuid, channel, session_dir)
+-                        print(f"📞 通話開始：{uuid} {_ts()}")
++                        sessions[uuid].dialed_number = event.get("DIALED", "")
++                        sessions[uuid].caller_number = event.get("CALLER", "")
++                        print(f"📞 通話開始：{uuid}（撥打 {sessions[uuid].dialed_number or '未知'}，"
++                              f"來電 {sessions[uuid].caller_number or '未知'}）{_ts()}")
+ 
+                 elif ue == "AI_PLAY_DONE":
+                     uuid = event.get("UUID")
+--- a/api_client.py
++++ b/api_client.py
+@@ -57,11 +57,16 @@
+     """通話開始：通知 api_server 建立案件紀錄與 110LLM session、播開場白 TTS。
+ 
+     SSE 訂閱、MC Conversation 推送都由 api_server 內部處理，amidaemon 不參與。
++    撥打的號碼與來電號碼一起送過去：api_server 靠撥打的號碼決定送正式（911）
++    還是 SOP 調整測試環境（912）的 119 服務，並把兩個號碼寫進資料庫。
+     """
++    session = sessions.get(call_uuid)
+     try:
+         resp = requests.post(
+             f"{API_SERVER_URL}/call/start",
+-            json={"uuid": call_uuid, "channel": channel, "transfer_mode": transfer_mode},
++            json={"uuid": call_uuid, "channel": channel, "transfer_mode": transfer_mode,
++                  "dialed_number": session.dialed_number if session else "",
++                  "caller_number": session.caller_number if session else ""},
+             timeout=API_TIMEOUT,
+         )
+         resp.raise_for_status()

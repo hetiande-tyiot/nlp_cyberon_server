@@ -1,0 +1,24 @@
+--- a/extensions-internal.conf
++++ b/extensions-internal.conf
+@@ -1,6 +1,9 @@
+ [internal] ;name=分機撥號規則 ;level=1
+ 
+-exten => 911,1,Goto(ai-call,s,1) ;name=AI助理入口
++exten => 911,1,Set(__AI_DIALED=911) ;name=記下撥打的號碼（apiserver 用來分正式/測試環境，並寫進資料庫）
++ same => n,Goto(ai-call,s,1) ;name=AI助理入口
++exten => 912,1,Set(__AI_DIALED=912) ;name=記下撥打的號碼（912 = SOP 調整測試環境，apiserver 會改打 8300）
++ same => n,Goto(ai-call,s,1) ;name=AI助理測試入口（SOP 調整）
+ exten => _21XX,1,Goto(to-sip-trunk,${EXTEN},1) ;name=受理席位內線 ;note=輸入1001-1999
+ exten => 9999,1,Goto(ivr-ai-full,s,1)  ;name=AI 線路滿線提示 ;note=輸入9999
+ 
+--- a/extensions-ai.conf
++++ b/extensions-ai.conf
+@@ -2,7 +2,7 @@
+ exten => s,1,NoOp(=== WELCOME MESSAGE ===)
+  ;same => n,Goto(ai-speak,s,transfer_agent)
+  same => n,Wait(2)
+- same => n,UserEvent(AI_CALL_START,UUID:${MYUUID},CHANNEL:${CHANNEL},SESSION_DIR:${SESSION_DIR}) ;傳送AMI事件
++ same => n,UserEvent(AI_CALL_START,UUID:${MYUUID},CHANNEL:${CHANNEL},SESSION_DIR:${SESSION_DIR},DIALED:${AI_DIALED},CALLER:${CALLERID(num)}) ;傳送AMI事件（DIALED＝撥打的號碼、CALLER＝來電號碼，amidaemon 轉給 apiserver）
+  same => n,Goto(caller-stt,s,1)
+ 
+ [ai-end]

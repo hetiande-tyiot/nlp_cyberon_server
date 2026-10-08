@@ -1,0 +1,31 @@
+# 測試環境（SOP 調整用）的模型服務：綁 GPU1、port 8093，跟正式的 llama-server.service（GPU0、8091）分開。
+# 8092 已被其他程式占用，所以用 8093。
+# 模型檔跟正式版共用同一個 TW-119-Model.gguf。
+[Unit]
+Description=llama-server 測試環境（GPU1 / port 8093）— sop119-test 後端
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
+[Service]
+Type=simple
+User=taiyan
+Group=taiyan
+Environment=CUDA_VISIBLE_DEVICES=1
+Environment=LD_LIBRARY_PATH=/home/taiyan/project/nlp_cyberon_server/llama-server-sm120/bin:/usr/local/cuda-12.9/lib64
+# 測試用量小，開 8 個並行；每個並行的上下文長度跟正式版一樣是 8192（65536 ÷ 8）。
+ExecStart=/home/taiyan/project/nlp_cyberon_server/llama-server-sm120/bin/llama-server \
+  --model /home/taiyan/project/nlp_cyberon_server/models/TW-119-Model.gguf \
+  --alias tw-119-model \
+  --host 127.0.0.1 --port 8093 \
+  --n-gpu-layers 99 --ctx-size 65536 --parallel 8 \
+  --cont-batching --flash-attn on --batch-size 2048 --ubatch-size 512 --slots
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llama-server-gpu1
+
+[Install]
+WantedBy=multi-user.target

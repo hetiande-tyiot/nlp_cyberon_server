@@ -1,0 +1,4 @@
+# 機器B 的 SOP 調整測試環境（同一台機器另一張顯卡，port 8300）。
+# 撥打的號碼在 SOP_TEST_DIALED_NUMBERS 裡的通話（目前是 912）送到這裡，其他照舊送 SOP_SERVER_URL。
+SOP_TEST_SERVER_URL = os.environ.get("SOP_TEST_SERVER_URL", "http://127.0.0.1:8300")
+SOP_TEST_DIALED_NUMBERS = {"912"}
