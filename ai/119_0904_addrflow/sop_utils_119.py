@@ -1249,12 +1249,18 @@ def compose_street_address(
     if city and any(city in str(part or "") for part in parts):
         city = ""  # 元件裡已經帶了縣市，別組成「新北市新北市…」
     address = city + "".join(parts)
+    # 樓層只從門牌後面找：門牌帶子號時（「25號之二23樓」），從整串找會把
+    # 子號的「二」連同「23樓」當成樓層「二23樓」，組出「25號之二二23樓」，
+    # 每重組一次多一個「二」（2026-10-06 8d211dc0 那通）。
+    floor_source = existing or ""
+    if number and number in floor_source:
+        floor_source = floor_source.split(number, 1)[1]
     # B1/B2 等地下樓層也要保留：地標驗測回的地址常寫成「…2號B1」，
     # 舊 regex 只認「樓」字，會把地下樓層整個丟掉。
     floor_match = re.search(
         rf"((?:地下)?{_ADDRESS_NUMBER_TOKEN}樓(?:之{_ADDRESS_NUMBER_TOKEN})?"
         rf"|[Bb][0-9]+(?:[Ff])?)",
-        existing or "",
+        floor_source,
     )
     if number and floor_match and floor_match.group(1) not in address:
         address += floor_match.group(1)

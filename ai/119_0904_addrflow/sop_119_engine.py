@@ -2593,7 +2593,22 @@ class SopEngine119:
             floor_m = re.search(
                 r"(?:地下)?[零〇一二三四五六七八九十百千兩\d]+樓", addr
             )
-            if floor_m and subnum in floor_m.group(0):
+            # 答案裡自己講了樓層（「之二。13樓」）→ 以答案為準。
+            # 8d211dc0 那通：第一句「之23樓」被抽成 23 樓，追問時報案人講
+            # 13 樓，舊做法只取子號、樓層留在 23 樓。
+            answer_floor = re.search(
+                r"(?:地下)?[零〇一二三四五六七八九十百千兩\d]+樓",
+                re.sub(r"之[零〇一二三四五六七八九十百千兩\d]+", "", answer or ""),
+            )
+            if answer_floor:
+                if floor_m:
+                    addr = (
+                        addr[:floor_m.start()] + answer_floor.group(0)
+                        + addr[floor_m.end():]
+                    )
+                else:
+                    addr += answer_floor.group(0)
+            elif floor_m and subnum in floor_m.group(0):
                 # 樓層被糊成「十二三樓」→ 去掉子號前綴 → 「三樓」
                 fixed = floor_m.group(0).replace(subnum, "", 1)
                 addr = addr[:floor_m.start()] + fixed + addr[floor_m.end():]
