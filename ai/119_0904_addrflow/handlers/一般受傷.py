@@ -290,7 +290,7 @@ class GeneralInjuryHandler(SubCategoryHandler):
                 val = result.get(field)
                 if val:
                     with engine._case_lock:
-                        if not engine._is_field_filled(field):
+                        if not engine.case.is_field_filled(field):
                             setattr(engine.case, field, str(val).strip())
                     engine._notify_case_update()
                     engine._debug_print(
