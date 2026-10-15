@@ -262,12 +262,13 @@ class GenericFlowEndToEndTests(unittest.TestCase):
     """run_generic_flow：案類分析接到垂片問題，最後播安全提示。"""
 
     def test_subtype_known_from_incident_answer_skips_subtype_question(self) -> None:
-        # 「我的機車燒起來」→ B1 且次案類已知 → 不問 B1 第一題「交通工具」，直接問下一題「車種」。
-        # 只準備一句回答：問到車種時回答用完就停，這裡只檢查問了哪兩句。
+        # 「我的機車燒起來」→ B1，次案類與交通工具都已知 → 不問 B1 第一題「交通工具」，
+        # 直接問下一題「車輛動力」（機車要問油車還是電動車）。
+        # 只準備一句回答：問到車輛動力時回答用完就停，這裡只檢查問了哪兩句。
         answer = "我的機車燒起來"
         llm = FakeLLM(
             tab_answers={answer: TAB_B1},
-            extracted={answer: {"vehicle_wildfire_code": 1}},
+            extracted={answer: {"vehicle_wildfire_code": 1, "vehicle_kind": "機車(摩托車)"}},
         )
         engine, io = _make_engine([answer], llm)
         with self.assertRaises(AssertionError):  # 回答用完
@@ -275,10 +276,10 @@ class GenericFlowEndToEndTests(unittest.TestCase):
         vehicle_q = {item.element: item.question for item in TAB_B1_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_B1)
         self.assertEqual(engine.case.sub_category, "機車")
-        self.assertEqual(io.messages, [INCIDENT_Q, vehicle_q["車種"]])
+        self.assertEqual(io.messages, [INCIDENT_Q, vehicle_q["車輛動力"]])
 
     def test_tab_known_but_subtype_unknown_asks_tab_question(self) -> None:
-        # 判斷是輕微火警（C），但細類還不知道 → 案類分析之後，接著問 C 的第一題「輕微火警」。
+        # 判斷是輕微火警（C），但次案類還不知道 → 案類分析之後，接著問 C 的第一題「火警類型」。
         # 只準備一句回答：問到 C 第一題時回答用完就停，這裡只檢查問了哪兩句。
         llm = FakeLLM(tab_answers={"有東西在燒，好像是輕微的": TAB_C})
         engine, io = _make_engine(["有東西在燒，好像是輕微的"], llm)
@@ -286,7 +287,7 @@ class GenericFlowEndToEndTests(unittest.TestCase):
             HuoJingGenericHandler().run_generic_flow(engine)
         minor_q = {item.element: item.question for item in TAB_C_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_C)
-        self.assertEqual(io.messages, [INCIDENT_Q, minor_q["輕微火警"]])
+        self.assertEqual(io.messages, [INCIDENT_Q, minor_q["火警類型"]])
 
 
     def test_subtype_and_tab_mismatch_switches_to_subtype_tab(self) -> None:
@@ -299,7 +300,7 @@ class GenericFlowEndToEndTests(unittest.TestCase):
             HuoJingGenericHandler().run_generic_flow(engine)
         vehicle_q = {item.element: item.question for item in TAB_B1_QUESTIONS}
         self.assertEqual(engine.case.fire_tab, TAB_B1)
-        self.assertEqual(io.messages, [vehicle_q["車種"]])
+        self.assertEqual(io.messages, [vehicle_q["交通工具"]])
 
 
 if __name__ == "__main__":

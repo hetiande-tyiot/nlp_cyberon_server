@@ -550,8 +550,8 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "報案人沒提到交通工具或山林田野 → null。",
     ),
     "minor_fire_code": (
-        "0|1|2|3|4|null",
-        "- minor_fire_code：0垃圾；1電線桿(電纜)；2瓦斯漏氣；3警報器作響；4查看案件。",
+        "0|1|3|4|null",
+        "- minor_fire_code：0垃圾；1電線桿(電纜)；3警報器作響；4查看案件。",
     ),
     # 轉人工要看的欄位
     "trapped_status": (
@@ -637,7 +637,7 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     # 垂片 A（建築物火警）
     "place_usage": (
         "string|null",
-        "- place_usage 場所用途：參考 住家、店家、工廠、辦公室、其他。",
+        "- place_usage 場所用途：參考 住宅、店家、工廠、辦公室、其他。",
     ),
     "fire_floor": (
         "string|null",
@@ -646,7 +646,7 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "building_total_floors": (
         "string|null",
-        "- building_total_floors 建物樓層：參考 未知、1層樓、2~3層樓、4~10層樓、"
+        "- building_total_floors 建物總樓層：參考 不確定、1層樓、2~3層樓、4~10層樓、"
         "11~15層樓、16層樓以上；報案人說幾層就記幾層（例如「5層樓」）。",
     ),
     "building_construction": (
@@ -656,8 +656,8 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "hazardous_materials": (
         "string|null",
-        "- hazardous_materials 危險物品：參考 無或未知、有（瓦斯桶、化學藥品等）；"
-        "有的話記下是什麼。",
+        "- hazardous_materials 危險物品：參考 無、不確定、有（瓦斯桶、化學藥品等等）；"
+        "有的話直接寫出是什麼。",
     ),
     "explosion_status": (
         "string|null",
@@ -669,11 +669,24 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "參考 一般情況、小巷、缺水、小巷且缺水。",
     ),
     # 垂片 B1（交通工具火警）
-    "vehicle_type": (
+    "vehicle_kind": (
+        "聯結車|大客車|大貨車|小貨車|小客車(轎車)|汽車|機車(摩托車)|腳踏車(自行車)|電輔車|其他|null",
+        "- vehicle_kind 交通工具（固定說法）：只能填 聯結車、大客車、大貨車、小貨車、"
+        "小客車(轎車)、汽車、機車(摩托車)、腳踏車(自行車)、電輔車、其他；"
+        "只說「車子」填汽車；船、飛機、火車等填其他。",
+    ),
+    "vehicle_model": (
         "string|null",
-        "- vehicle_type 車種：參考 自小客車、貨車、電動車、電動機車、其他；"
-        "只要是貨車（小貨車、大貨車、貨櫃車等）一律填「貨車」，其他照報案人說的記。"
-        "只說「汽車」「機車」「車子」是交通工具，不是車種 → null。",
+        "- vehicle_model 車型：參考 不確定、小客車、休旅車、計程車、貨車、大貨車、"
+        "公車、遊覽車、油罐車、垃圾車、其他。",
+    ),
+    "vehicle_power": (
+        "string|null",
+        "- vehicle_power 車輛動力：參考 不確定、油車、油電車、電動車。",
+    ),
+    "bicycle_type": (
+        "string|null",
+        "- bicycle_type 腳踏車車型：參考 一般腳踏車、UBIKE、電輔車。",
     ),
     "fire_origin_part": (
         "string|null",
@@ -689,7 +702,7 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "injury_status": (
         "string|null",
-        "- injury_status 有無人員受傷：參考 無、有；有的話記下受傷情形。",
+        "- injury_status 有無人員受傷：參考 無、有；有的話記下幾個人受傷、受傷情形。",
     ),
     "cargo": (
         "string|null",
@@ -697,17 +710,18 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "vehicle_motion": (
         "string|null",
-        "- vehicle_motion 車輛停放或行駛中：參考 停放路邊、行駛中起火、停車場內。",
+        "- vehicle_motion 車輛行駛狀況：參考 停放路邊、行駛中起火、停車場內。",
     ),
     "plate_number": (
         "string|null",
         "- plate_number 車牌號碼：照報案人說的記。",
     ),
-    # 垂片 B2（山林田野火警）
+    # 垂片 A（工廠）、B2（山林田野）共用
     "burning_object": (
         "string|null",
-        "- burning_object 燃燒物：什麼東西在燒；參考 雜草、樹木、公墓或墳墓、"
-        "農作物、垃圾雜物、其他(不確定)；"
+        "- burning_object 燃燒物：什麼東西在燒；工廠參考 不確定、雜物、廢棄物、垃圾、"
+        "回收物、機台、電線、塑膠、木材、紙箱、化學品、鋰電池、食品、其他；"
+        "山林田野參考 雜草、樹木、公墓或墳墓、農作物、垃圾雜物、其他(不確定)；"
         "報案人說看不清楚、離太遠不知道在燒什麼 → 其他(不確定)。",
     ),
     "nearby_water_source": (
@@ -718,10 +732,6 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     "alarm_status": (
         "string|null",
         "- alarm_status 警報器狀態：參考 已停止、仍在響、疑似誤報。",
-    ),
-    "power_outage": (
-        "string|null",
-        "- power_outage 停電狀況：現在有沒有停電；參考 有停電、沒有停電。",
     ),
     "source_located": (
         "string|null",

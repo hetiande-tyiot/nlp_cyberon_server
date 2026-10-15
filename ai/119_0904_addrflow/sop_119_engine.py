@@ -617,7 +617,6 @@ class SopEngine119:
             "factory_scale_type",
             "factory_people_present",
             "hazardous_materials",
-            "vehicle_type",
             "vehicle_count",
             "vehicle_occupants",
             "vehicle_occupant_count",
@@ -662,8 +661,11 @@ class SopEngine119:
             "alarm_status",
             "source_located",
             "target_object",
-            # 垂片 C 照 1005 xlsx 新增
-            "power_outage",
+            # 垂片 B1 照 1013 xlsx 新增（建築物類型由次案類代碼換算，不在這裡）
+            "vehicle_kind",
+            "vehicle_model",
+            "vehicle_power",
+            "bicycle_type",
         }
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
@@ -822,13 +824,26 @@ class SopEngine119:
         LLM 本輪從報案人的話抽到次案類代碼 → 換算成次案類名稱寫入 sub_category
         （例如 vehicle_wildfire_code = 1 → 機車）。只看本輪抽到的代碼，不依目前垂片推算；
         換到別張垂片的次案類時，由 _maybe_reclassify_sub 的「次案類決定垂片」檢查負責換垂片。
+        建築物火警（A）和輕微火警（C）之間只看火煙狀況，LLM 的代碼不能直接換：
+        在 C 聽到建築物類（例如「住大樓」）→ 記到建築物類型，次案類不動。
         """
-        from fire_tab_map_119 import subtype_name_for_code
+        from fire_tab_map_119 import (
+            TAB_A,
+            is_between_building_and_minor,
+            subtype_name_for_code,
+            tab_for_subtype,
+        )
 
         for field, value in updates.items():
             name = subtype_name_for_code(field, value)
-            if name and name != self.case.sub_category:
-                self.case.sub_category = name
+            if not name or name == self.case.sub_category:
+                continue
+            name_tab = tab_for_subtype(name)
+            if is_between_building_and_minor(self.case.fire_tab, name_tab):
+                if name_tab == TAB_A:
+                    self.case.building_type = name
+                continue
+            self.case.sub_category = name
 
     def _apply_location_rules(self, caller_text: str) -> None:
         """以确定性规则补强本轮地点组件，并重组可显示地址。"""
@@ -1990,6 +2005,7 @@ class SopEngine119:
             FIRE_BERT_CONF_THRESHOLD,
             TAB_QUESTIONS,
             apply_bert_subtype_to_case,
+            is_between_building_and_minor,
             tab_for_subtype,
         )
         fire_tab_locked = (
@@ -2028,6 +2044,15 @@ class SopEngine119:
             return None
 
         new_label = max(all_probs, key=all_probs.get)
+        # 建築物火警（A）和輕微火警（C）之間只看火煙狀況；BERT 想在 A、C 之間換就不採用
+        if main_cat == "火警" and is_between_building_and_minor(
+            self.case.fire_tab, tab_for_subtype(new_label),
+        ):
+            self._debug_print(
+                "sub_reclassify_blocked_between_A_and_C",
+                {"目前垂片": self.case.fire_tab, "BERT": new_label},
+            )
+            return None
         p_new = float(all_probs[new_label])
         # top1−top2 margin：火警靠此判斷是否「兩類難分」，難分則不填/不切
         _ordered = sorted(all_probs.values(), reverse=True)

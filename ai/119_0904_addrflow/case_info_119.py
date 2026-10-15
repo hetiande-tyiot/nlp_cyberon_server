@@ -99,10 +99,13 @@ class CaseInfo119:
     vehicle_wildfire_code: Optional[int] = None  # 0~6交通工具；7平地；8山地
     minor_fire_code:       Optional[int] = None  # 0垃圾；1電線桿；2瓦斯；3警報；4查看
 
-    # 垂片 A（建築物火警）照 0929 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
-    # 其他 A 的關鍵要素沿用既有文字欄位：sub_category（建築物類型）、fire_or_smoke（火煙狀況）、
+    # 垂片 A（建築物火警）照 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
+    # 其他 A 的關鍵要素沿用既有文字欄位：fire_or_smoke（火煙狀況）、
     # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、fire_extent。
-    place_usage:           Optional[str] = None  # 場所用途：住家/店家/工廠/辦公室…
+    place_usage:           Optional[str] = None  # 場所用途：住宅/店家/工廠/辦公室…
+    # 建築物類型（1013 xlsx，A、C 都問）：透天厝、集合住宅、倉庫…
+    # 在 A 跟次案類相同；在 C 另外記，次案類仍是警報器作響等
+    building_type:         Optional[str] = None
     spread_status:         Optional[str] = None  # 延燒可能：延燒可能性低/極可能或已延燒…
     trapped_status:        Optional[str] = None  # 有無受困：只記 有人受困/無人受困/不確定；有人受困就轉人工
     door_response:         Optional[str] = None  # 起火戶應門：有人在或已聯絡上/敲門無回應或聯絡不上…
@@ -111,21 +114,23 @@ class CaseInfo119:
     explosion_status:      Optional[str] = None  # 有無爆炸（被動，報案人講到才記）
     access_info:           Optional[str] = None  # 其他資訊：消防車進不進得去、有沒有水源（被動）
 
-    # 垂片 B1（交通工具火警）照 0929 xlsx 新增的欄位，存文字。
-    # 車種沿用 vehicle_type、起火車輛數量沿用 vehicle_count。
-    fire_origin_part:      Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
+    # 垂片 B1（交通工具火警）照 xlsx 新增的欄位，存文字。起火車輛數量沿用 vehicle_count。
+    vehicle_kind:          Optional[str] = None  # 交通工具（1013）：聯結車/大小貨車/小客車/汽車/機車/腳踏車…
+    vehicle_model:         Optional[str] = None  # 車型（1013）：小客車/休旅車/計程車/貨車…
+    vehicle_power:         Optional[str] = None  # 車輛動力（1013）：油車/油電車/電動車
+    bicycle_type:          Optional[str] = None  # 腳踏車車型（1013）：一般腳踏車/UBIKE/電輔車
+    fire_origin_part:     Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
     engine_off_status:     Optional[str] = None  # 車輛是否已熄火：已熄火/未熄火…
     occupants_status:      Optional[str] = None  # 乘客下車狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上就轉人工
     injury_status:         Optional[str] = None  # 有無人員受傷
     cargo:                 Optional[str] = None  # 載運物：易燃物/化學品/鋰電池…
     extinguish_status:     Optional[str] = None  # 滅火狀況：無人/有人在場/已在自行滅火…（B2 也用）
-    vehicle_motion:        Optional[str] = None  # 車輛停放或行駛中（被動）
+    vehicle_motion:        Optional[str] = None  # 車輛行駛狀況：停放路邊/行駛中起火/停車場內
     plate_number:          Optional[str] = None  # 車牌號碼（被動）
 
     # 垂片 C（輕微火警）照 0929 xlsx 新增的欄位，存文字。
     # 氣味類型沿用 odor、無人應門沿用 door_response、燃燒範圍沿用 fire_extent（都跟 A 共用）。
     alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
-    power_outage:          Optional[str] = None  # 停電狀況（1005 xlsx 新增，電線桿(電纜)才問）：有停電/沒有停電
     source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
     target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
 
@@ -145,8 +150,7 @@ class CaseInfo119:
     hazardous_materials:    Optional[str] = None  # 化學品或危險物品狀況
 
     # 車輛火災
-    vehicle_type:           Optional[str] = None  # 車種
-    vehicle_count:          Optional[str] = None  # 起火車輛數
+    vehicle_count:         Optional[str] = None  # 起火車輛數
     vehicle_occupants:      Optional[bool] = None  # 車內是否有人
     vehicle_occupant_count: Optional[str] = None  # 車內人數
     road_type:              Optional[str] = None  # 一般道路/高速公路

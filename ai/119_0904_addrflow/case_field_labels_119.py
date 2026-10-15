@@ -77,7 +77,7 @@ LABELS: Dict[str, str] = {
     "caller_role": "報案人身分",
     "people_trapped": "是否有人受困",
     "trapped_count": "受困人數",
-    "building_total_floors": "建築物總樓層",
+    "building_total_floors": "建物總樓層",
     "fire_floor": "起火樓層",
     "fire_spread": "是否有延燒",
     "building_layout": "建築物形式",
@@ -86,7 +86,6 @@ LABELS: Dict[str, str] = {
     "factory_people_present": "廠內是否有人",
     "hazardous_materials": "危險物品狀況",
     # 火警 — 車輛火災
-    "vehicle_type": "車種",
     "vehicle_count": "起火車輛數",
     "vehicle_occupants": "車內是否有人",
     "vehicle_occupant_count": "車內人數",
@@ -138,6 +137,7 @@ LABELS: Dict[str, str] = {
     "minor_fire_code": "輕微火警代碼",
     # 火警垂片 A（建築物火警）照 0929 xlsx 新增的欄位（存文字）
     "place_usage": "場所用途",
+    "building_type": "建築物類型",
     "spread_status": "延燒可能",
     "trapped_status": "有無受困",
     "door_response": "應門狀況（起火戶或負責人）",
@@ -146,17 +146,20 @@ LABELS: Dict[str, str] = {
     "explosion_status": "有無爆炸",
     "access_info": "其他資訊（消防車能否進入、水源）",
     # 火警垂片 B1（交通工具火警）照 0929 xlsx 新增的欄位（存文字）
+    "vehicle_kind": "交通工具",
+    "vehicle_model": "車型",
+    "vehicle_power": "車輛動力",
+    "bicycle_type": "腳踏車車型",
     "fire_origin_part": "起火部位",
     "engine_off_status": "車輛是否已熄火",
     "occupants_status": "乘客下車狀況",
     "injury_status": "有無人員受傷",
     "cargo": "載運物",
     "extinguish_status": "滅火狀況",
-    "vehicle_motion": "車輛停放或行駛中",
+    "vehicle_motion": "車輛行駛狀況",
     "plate_number": "車牌號碼",
     # 火警垂片 C（輕微火警）照 0929 xlsx 新增的欄位（存文字）
     "alarm_status": "警報器狀態",
-    "power_outage": "停電狀況",
     "source_located": "來源確認",
     "target_object": "標的物",
     # 元資訊
