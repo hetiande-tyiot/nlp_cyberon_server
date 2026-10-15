@@ -6,6 +6,7 @@ import csv
 import json
 import time
 import os
+from datetime import datetime
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -15,6 +16,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import timing_119
+from addrcheck_log_119 import log_addrcheck
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -27,7 +29,7 @@ DEFAULT_LANDMARK_XLSX = BASE_DIR / "scripts" / "landmarks.xlsx"
 # ── addrCheck 地址驗測（地址確認全面改走 addrCheck /Verify）──
 # env：ADDRCHECK_API_URL / ADDRCHECK_API_TOKEN（Bearer，與 ACRC 共用 Ingest__Token）
 #      / ADDRCHECK_API_TIMEOUT（預設 2.5）
-DEFAULT_ADDRCHECK_BASE_URL = "http://192.168.5.120:8088"
+DEFAULT_ADDRCHECK_BASE_URL = "http://192.168.5.85:8088"
 ADDRCHECK_VERIFY_PATH = "/api/AddrCheck/Verify"
 
 # 內部地點型態 → addrCheck API 的 type（帶 type 只查該層；None 讓後端自動判斷）
@@ -100,11 +102,13 @@ def verify_address_detail(
     *,
     url: Optional[str] = None,
     timeout: Optional[float] = None,
+    call_uuid: Optional[str] = None,
 ) -> tuple[Optional[bool], Optional[str], Optional[str]]:
     """地址驗測核心：POST addrCheck /Verify，回 (status, hint, reason)。
 
     status True=有效 / False=查無 / None=網路或回應異常（API 無法使用）。
     location_type 轉成 API 的 type 只查該層；None 讓後端自動判斷。
+    每次呼叫都寫一筆到資料庫 addrcheck_log；call_uuid 是哪一通電話，引擎以外呼叫時為 None。
     """
     address = (address or "").strip()
     if not address:
@@ -130,24 +134,32 @@ def verify_address_detail(
         headers=headers,
         method="POST",
     )
+    called_at = datetime.now()
     _t0 = time.perf_counter()
     try:
         with urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
         # 逾時/連不上的耗時照樣記——外部 API 慢是常見的延遲來源
-        timing_119.emit("addrcheck", api_type or "address",
-                        (time.perf_counter() - _t0) * 1000.0, extra="error=1")
+        elapsed_ms = (time.perf_counter() - _t0) * 1000.0
+        timing_119.emit("addrcheck", api_type or "address", elapsed_ms, extra="error=1")
+        log_addrcheck(call_uuid, address, api_type, None, None, None,
+                      elapsed_ms, str(exc), called_at)
         return None, str(exc), None
-    timing_119.emit("addrcheck", api_type or "address",
-                    (time.perf_counter() - _t0) * 1000.0)
+    elapsed_ms = (time.perf_counter() - _t0) * 1000.0
+    timing_119.emit("addrcheck", api_type or "address", elapsed_ms)
     if not isinstance(payload, dict):
+        log_addrcheck(call_uuid, address, api_type, None, None, None,
+                      elapsed_ms, "回應格式非物件", called_at)
         return None, "回應格式非物件", None
-    return (
+    status, hint, reason = (
         bool(payload.get("status")),
         payload.get("hint"),
         payload.get("reason"),
     )
+    log_addrcheck(call_uuid, address, api_type, status, reason, hint,
+                  elapsed_ms, None, called_at)
+    return status, hint, reason
 
 
 def verify_address_status(
@@ -169,6 +181,7 @@ def query_jurisdiction(
     *,
     url: Optional[str] = None,
     timeout: Optional[float] = None,
+    call_uuid: Optional[str] = None,
 ) -> JurisdictionResult:
     """一般地址（address 型態）驗測 → addrCheck House。
 
@@ -176,7 +189,7 @@ def query_jurisdiction(
     （119 不需管轄分局），valid=None 表示 API 無法使用。
     """
     status, hint, reason = verify_address_detail(
-        address, "address", url=url, timeout=timeout
+        address, "address", url=url, timeout=timeout, call_uuid=call_uuid
     )
     return JurisdictionResult(
         status, office_name=None, error=hint, api_reason=reason

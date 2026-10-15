@@ -597,6 +597,8 @@ def _run_engine(sess: Session) -> None:
     # 模糊比對取樣用；讓樣本能對回 case119_*.json 這通完整對話。
     # 標籤優先用 A 側 call_uuid（與錄音/TTS 檔名尾碼一致），A 沒傳才退回 sess_id。
     engine._session_tag = (sess.call_uuid or sess.sess_id)[:8]
+    # 地址驗證紀錄寫進資料庫 addrcheck_log 時用完整 call_uuid，才對得回 cases.uuid
+    engine._call_uuid = sess.call_uuid
     sess.engine = engine
     try:
         engine.run()  # 新版 run() 無參數；內部 try/except 收斂所有終止狀態
