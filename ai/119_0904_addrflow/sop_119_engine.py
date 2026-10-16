@@ -55,6 +55,7 @@ from address_mapper_119 import get_location_mapper
 from case_info_119 import CaseInfo119
 from handlers import get_handler, sop_slots_for, SHARED_SEMANTIC_SLOTS
 from important_tags_119 import match_important_tags, merge_important_tags
+from police_notify_119 import lookup_need_police
 from llm_extractor_119 import LLMExtractor119, build_fallback_summary
 from fuzzy_match_log_119 import (
     KIND_DISTRICT,
@@ -785,6 +786,31 @@ class SopEngine119:
 
         if identity_updates and self.case.main_category == "火警":
             self._sync_fire_sub_category_from_identity_codes(identity_updates)
+
+        self._apply_police_notify_rule()
+
+    def _apply_police_notify_rule(self) -> None:
+        """
+        依案類查表決定是否通知（轉報）110，寫入 case.NeedPolice。
+
+        ⚠️ 呼叫方必須已持有 self._case_lock（本方法不自己上鎖，_case_lock 是
+        非遞迴的 threading.Lock）。
+
+        表在 police_notify_119.py，只收次類別標籤對得上 SOP 案類的部分；
+        查不到（回 None）就完全不碰 NeedPolice，維持 LLM 從報案人原話抽到的值。
+
+        和報案人明說的優先順序：
+          - 表說要 → 一律 True。SOP 明訂的義務不因報案人說「不用叫警察」而取消。
+          - 表說不要 + 報案人明說要警察（LLM 已抽出 True）→ 保持 True，報案人贏。
+          - 表說不要 + 報案人沒提 → False。
+        """
+        rule = lookup_need_police(self.case.main_category, self.case.sub_category)
+        if rule is None:
+            return
+        if rule:
+            self.case.NeedPolice = True
+        elif self.case.NeedPolice is not True:
+            self.case.NeedPolice = False
 
     def _is_same_place_as_current(self, new_addr: str) -> bool:
         """新抽到的地址是不是「同一個地方的另一種講法」。
@@ -2223,6 +2249,8 @@ class SopEngine119:
             else:
                 self.case.sub_category = new_sub
                 self.case.sub_conf = new_conf
+            # 改派後案類變了，通知110的結論要跟著重算。
+            self._apply_police_notify_rule()
 
         self._debug_print(
             "sop_remap",
@@ -3780,6 +3808,7 @@ class SopEngine119:
         with self._case_lock:
             self.case.sub_category = sub_cat
             self.case.sub_conf     = sub_conf
+            self._apply_police_notify_rule()
         self._emit({
             "type":       "classification",
             "main":       self.case.main_category,
