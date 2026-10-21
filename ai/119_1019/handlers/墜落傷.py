@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2  = "救護車已經派了。"
 _R12 = "是不是有明顯外傷、大出血？外觀是否變形？"
 
 
@@ -238,7 +237,6 @@ class ZhuiLuoShangHandler(SubCategoryHandler):
 
         if scenario_id in (1, 2):
             # 情境 1（高樓墜落）、情境 2（躺地不動）
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R12, "injury_severity",
                 schema={"injury_severity": "string|null"},

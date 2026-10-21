@@ -25,7 +25,7 @@ SAFETY_MESSAGE = (
     "消防車已經在路上了，請在安全的地方等候，看到車再幫我們引導消防隊。"
 )
 # 報案人講出有人受困時，轉接專人前說的話（火警流程任何時候都適用）
-TRAPPED_TRANSFER_MESSAGE = "消防車已經出發了，請不要掛電話，我馬上幫您轉給專人。"
+TRAPPED_TRANSFER_MESSAGE = "請不要掛斷電話，我馬上幫您轉給專人。"
 
 TAB_A = "A"
 TAB_B1 = "B1"

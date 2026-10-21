@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2 = "救護車已經派了。"
 _R6 = "幫我看他的肚子有沒有一上、一下起伏。"
 
 
@@ -207,12 +206,10 @@ class DaJiaShouShangHandler(SubCategoryHandler):
         if scenario_id in (1, 3):
             # 情境 1（打架受傷）、3（肚子起伏評估）
             engine._say(_r1(engine))
-            engine._say(_R2)
 
         elif scenario_id == 2:
             # 情境 2（清醒但意識模糊）
             engine._say(_r1(engine))
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R6, "abdomen_rise",
                 schema={"abdomen_rise": "true|false|null"},

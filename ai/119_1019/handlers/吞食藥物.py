@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2  = "救護車已經派了。"
 _R6  = "幫我看他的肚子有沒有一上、一下起伏。"
 _R13 = "服用何種藥物？大約幾顆？"
 
@@ -210,7 +209,6 @@ class TunShiYaoWuHandler(SubCategoryHandler):
         if scenario_id in (1, 2):
             # 情境 1（吞食藥物/農藥）、2（大量服藥）
             engine._say(_r1(engine))
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R13, "ingested_substance",
                 schema={"ingested_substance": "string|null"},
@@ -225,7 +223,6 @@ class TunShiYaoWuHandler(SubCategoryHandler):
         elif scenario_id == 3:
             # 情境 3（半意識/迷糊）
             engine._say(_r1(engine))
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R6, "abdomen_rise",
                 schema={"abdomen_rise": "true|false|null"},
@@ -245,7 +242,6 @@ class TunShiYaoWuHandler(SubCategoryHandler):
         elif scenario_id == 4:
             # 情境 4（腹部起伏描述）
             engine._say(_r1(engine))
-            engine._say(_R2)
 
     def _ask_trigger_question(
         self,

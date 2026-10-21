@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2  = "救護車已經派了。"
 _R3  = "請幫我將手機開擴音，我教你做急救。"
 _R4  = "請您幫我打開大門，在家休息等救護車。"
 _R5  = "你先不要緊張，先叫他咳嗽，看能不能咳出來。"
@@ -133,17 +132,16 @@ class JiBingHandler(SubCategoryHandler):
         """依情境編號發送對應回應（語句直接說出，問句詢問並抽取）。"""
 
         if scenario_id == 1:
-            # 呼吸喘
-            engine._say(_R2)
+            # 呼吸喘：原本只講「救護車已經派了」。
+            # 派車改在次案類確定時講過了，這裡不用再說話。
+            pass
 
         elif scenario_id == 2:
             # 身體不適
-            engine._say(_R2)
             engine._say(_R4)
 
         elif scenario_id == 3:
             # 胸悶、胸痛、心臟不適
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R8, "medical_history",
                 schema={"medical_history": "string|null"},
@@ -156,7 +154,6 @@ class JiBingHandler(SubCategoryHandler):
 
         elif scenario_id == 4:
             # 冒冷汗、抽搐
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R14, "seizure_info",
                 schema={"seizure_info": "string|null"},
@@ -169,14 +166,12 @@ class JiBingHandler(SubCategoryHandler):
 
         elif scenario_id == 5:
             # 昏迷
-            engine._say(_R2)
             # C：昏迷成因常是服藥/中毒，報案人未必主動說 → 主動探問，帶出訊號後
             #    由每輪 sub-reclassify 有機會切到吞食藥物。
             self._probe_cause_ingestion(engine)
 
         elif scenario_id == 6:
             # 低血糖
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R11, "blood_glucose",
                 schema={"blood_glucose": "string|null"},
@@ -188,7 +183,6 @@ class JiBingHandler(SubCategoryHandler):
 
         elif scenario_id == 7:
             # 低血壓
-            engine._say(_R2)
             engine._say(_R4)
             self._ask_trigger_question(
                 _R16, "blood_pressure",
@@ -200,17 +194,16 @@ class JiBingHandler(SubCategoryHandler):
             )
 
         elif scenario_id == 8:
-            # 流鼻血
-            engine._say(_R2)
+            # 流鼻血：原本只講「救護車已經派了」。
+            # 派車改在次案類確定時講過了，這裡不用再說話。
+            pass
 
         elif scenario_id == 9:
             # 噎到
-            engine._say(_R2)
             engine._say(_R5)
 
         elif scenario_id == 10:
             # 叫沒反應、沒有呼吸
-            engine._say(_R2)
             engine._say(_R3)
             # 回應6：問腹部起伏（skip if abdomen_rise 已填）
             if not engine._is_field_filled("abdomen_rise"):

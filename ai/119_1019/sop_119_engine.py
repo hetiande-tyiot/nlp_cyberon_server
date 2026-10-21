@@ -369,9 +369,9 @@ class SopEngine119:
         self._cause_ingestion_probed = False
         # 地址流程跑完即上鎖，之後不再讓地標/捷運/路口關鍵字覆寫已成立的地點
         self._address_locked = False
-        # 有沒有真的對報案人說過「車已派出」。轉真人的話術要看這個，
-        # 不能寫死——2026-09-06 04:46 實測，申訴案沒問到地址、
-        # 沒派任何車，卻對報案人說「救護車已派出」。
+        # 有沒有對報案人說過「車已派出」，讓派車那句整通只講一次（見 _announce_dispatch）。
+        # 2026-09-06 04:46 實測，申訴案沒問到地址、沒派任何車，卻對報案人說「救護車已派出」，
+        # 所以其他句子（轉人工、問姓名電話）都不再提派車，只有 _announce_dispatch 會講。
         self._dispatch_announced = False
         self._dropped_details_asked = False
         self._probed_result = None
@@ -507,14 +507,23 @@ class SopEngine119:
             self._notify_case_update()
             if self._bridged:
                 return
-            self._say(
-                "救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
-                if self._dispatch_announced
-                else "請不要掛斷電話，我立即為您轉接專人。"
-            )
+            self._say("請不要掛斷電話，我立即為您轉接專人。")
             raise TransferToHumanError(
                 f"OHCA detected at {slot}", result="ohca_transfer"
             )
+
+    def _announce_dispatch(self, line: str) -> None:
+        """
+        告訴報案人車已派出。承辦的受理順序：主案類、次案類都確定了才講派車，
+        所以三個大類各在自己確定次案類的地方呼叫（救護：次案類判斷完；
+        火警：案類分析完；緊急救援還不判斷次案類，在問完發生什麼事之後）。
+        - 整通只講一次：中途換次案類、換垂片再呼叫也不會重講
+        - 地址沒確認成功就不講：跟改之前一樣，地址失敗時不對報案人說車已派出
+        """
+        if self._dispatch_announced or not self.case.address_confirmed:
+            return
+        self._say(line)
+        self._dispatch_announced = True
 
     def _ask(self, question: str) -> str:
         self._say(question)
@@ -3639,8 +3648,9 @@ class SopEngine119:
                     self.case.address_suspect_error = False
                     self.case.address_error_reason = None
                 self._notify_case_update()
+                # 只講地址確認；派車改在次案類確定後講（_announce_dispatch）。
+                # 參數名稱沿用 dispatch_line，因為廠商的地址測試用這個名稱呼叫。
                 self._say(dispatch_line)
-                self._dispatch_announced = True
                 return
 
         self._mark_address_failure("報警人未能明確確認地址")
@@ -3652,12 +3662,12 @@ class SopEngine119:
         """救護類別完整對話 SOP。"""
 
         # ════════════════════════════════════════════════════════
-        # 階段 1：詢問地址 → 複讀確認 → 告知救護車已派出
+        # 階段 1：詢問地址 → 複讀確認（救護車已派出要等次案類確定後才講）
         # ════════════════════════════════════════════════════════
         self._run_address_flow(
             stage_ask="救護_location",
             stage_confirm="救護_location_confirm",
-            dispatch_line="已確認地址，救護車已派出了喔。",
+            dispatch_line="已確認地址。",
             ask_questions=build_address_ask_questions(
                 include_floor=address_ask_should_include_floor(
                     self.case.full_caller_text()
@@ -3709,7 +3719,7 @@ class SopEngine119:
 
             # 首輪且尚無任何病情描述 → 用正常語氣初問（而非「請再說一次」的重問，
             # 後者會讓還沒講過的報案人以為系統漏聽）；否則沿用換句話重問。
-            # 這句不問「需要救護車嗎」：地址確認完已經先告知「救護車已派出了喔」，
+            # 這句不問「需要救護車嗎」：報案人一開始就說要救護車了，
             # 再問要不要救護車，報案人會以為系統沒聽懂、或懷疑車到底有沒有派出去。
             # 這句問的目的只是取得病情描述給次案類分類用，不是在確認要不要派車。
             if no_symptom_yet and _reask_i == 0:
@@ -3759,6 +3769,7 @@ class SopEngine119:
         })
         self._notify_case_update()
         self._set_stage("救護_sub_classified")
+        self._announce_dispatch("救護車已派出了喔。")
 
         # ── 進入子類前：關鍵欄位若仍空，對最近一則回答再跑一次 LLM 全欄位抽取 ─
         if not self._is_field_filled("incident_description"):
@@ -3900,12 +3911,13 @@ class SopEngine119:
         from handlers.火警通用 import HuoJingGenericHandler
 
         # ════════════════════════════════════════════════════════
-        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌 → 派車
+        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌
+        #（消防車已派出要等案類分析完才講，見火警通用 run_generic_flow）
         # ════════════════════════════════════════════════════════
         self._run_address_flow(
             stage_ask="火警_location",
             stage_confirm="火警_location_confirm",
-            dispatch_line="已確認地址，消防車已派出了喔。",
+            dispatch_line="已確認地址。",
             ask_questions=build_address_ask_questions(
                 include_floor=address_ask_should_include_floor(
                     self.case.full_caller_text()
@@ -3939,12 +3951,13 @@ class SopEngine119:
         from handlers.緊急救援通用 import JinJiJiuYuanGenericHandler
 
         # ════════════════════════════════════════════════════════
-        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌 → 派員
+        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌
+        #（救援人員已派出要等問完發生什麼事才講，見緊急救援通用 run_generic_flow）
         # ════════════════════════════════════════════════════════
         self._run_address_flow(
             stage_ask="緊急救援_location",
             stage_confirm="緊急救援_location_confirm",
-            dispatch_line="已確認地址，救援人員已派出了喔。",
+            dispatch_line="已確認地址。",
             ask_questions=build_address_ask_questions(
                 include_floor=address_ask_should_include_floor(
                     self.case.full_caller_text()

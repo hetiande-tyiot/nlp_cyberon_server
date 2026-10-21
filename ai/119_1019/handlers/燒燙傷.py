@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2  = "救護車已經派了。"
 _R3  = "請幫我將手機開擴音，我教你做急救。"
 _R4  = "請您幫我打開大門，在家休息等救護車。"
 _R19 = "先到水龍頭下沖水。"
@@ -200,12 +199,10 @@ class ShaoTangShangHandler(SubCategoryHandler):
 
         if scenario_id in (1, 2):
             # 情境 1（熱水燙傷清醒）、2（工作時打翻熱湯）
-            engine._say(_R2)
             engine._say(_R19)
 
         elif scenario_id == 3:
             # 情境 3（沒有呼吸）
-            engine._say(_R2)
             engine._say(_R3)
             engine._say(_R4)
 

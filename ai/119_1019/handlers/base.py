@@ -320,7 +320,7 @@ class SubCategoryHandler:
             engine.case.is_ohca = True
         engine._notify_case_update()
         engine._say(
-            "救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
+            "請不要掛斷電話，我立即為您轉接專人。"
         )
         from sop_119_engine import TransferToHumanError
         raise TransferToHumanError("OHCA detected at S1", result="ohca_transfer")
@@ -334,7 +334,7 @@ class SubCategoryHandler:
                 engine.case.is_ohca = True
             engine._notify_case_update()
             engine._say(
-                "救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
+                "請不要掛斷電話，我立即為您轉接專人。"
             )
             from sop_119_engine import TransferToHumanError
             raise TransferToHumanError("OHCA detected at S2", result="ohca_transfer")
@@ -642,9 +642,9 @@ class SubCategoryHandler:
         engine._set_stage("救護_caller_info")
 
         if include_address:
-            question = "救護車已派出，請問你的姓名、聯繫方式與住址？"
+            question = "請問你的姓名、聯繫方式與住址？"
         else:
-            question = "救護車已派出，請問你的姓名與聯繫方式？"
+            question = "請問你的姓名與聯繫方式？"
 
         # 每則報警人回答都走通用 LLM 全欄位抽取
         caller_info_text = engine._ask_and_extract(question)

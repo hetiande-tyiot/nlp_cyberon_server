@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2 = "救護車已經派了。"
 _R6 = "幫我看他的肚子有沒有一上、一下起伏。"
 
 
@@ -233,12 +232,10 @@ class JingShenYiChangHandler(SubCategoryHandler):
         if scenario_id in (1, 2, 5):
             # 情境 1（精神異常行為）、2（強制送醫）、5（持械傷人）
             engine._say(_r1(engine))
-            engine._say(_R2)
 
         elif scenario_id in (3, 4):
             # 情境 3（叫不醒/吞藥）、4（精神科病史定期就診）
             engine._say(_r1(engine))
-            engine._say(_R2)
             # 回應6：問腹部起伏（skip if abdomen_rise 已填）
             self._ask_trigger_question(
                 _R6, "abdomen_rise",
