@@ -127,15 +127,18 @@ def _run_call(steps: list[tuple[str, dict]], sub_classifier=None) -> tuple[SopEn
     return engine, io
 
 
-# 一通燒炭電話（第一句就講出燒炭，關鍵字直接定次案類），依被問的順序排
+# 一通燒炭電話（第一句就講出燒炭，關鍵字直接定次案類），依被問的順序排。
+# 燒炭照 xlsx 題目表問（見 test_ems_shaotan_119）；第一句已經講出是朋友，報案身分不再問。
 SHAO_TAN_CALL = [
-    ("我朋友在房間燒炭，快叫救護車", {"incident_description": "朋友在房間燒炭"}),
+    ("我朋友在房間燒炭，快叫救護車",
+     {"incident_description": "朋友在房間燒炭", "caller_relation": "朋友"}),
     (ADDRESS, ADDRESS_FIELDS),
     ("對", {}),
-    ("他現在醒著，可以講話", {"consciousness": True}),
-    ("一個", {"patient_count": "1人"}),
+    ("我在現場", {"caller_location": "在現場"}),
+    ("炭盆我已經拿出去了，熄了", {"charcoal_status": "已滅火"}),
+    ("我把他拖出來了", {"patient_location": "已在外面"}),
     ("男生，大概三十歲", {"patient_gender": "男性", "patient_age": "30歲"}),
-    ("炭盆我已經拿出去了，熄了", {"current_condition": "炭盆已熄滅"}),
+    ("他現在醒著，可以講話", {"consciousness_level": "意識清醒"}),
     ("我叫王小明，0912345678", {"caller_name": "王小明", "caller_contact": "0912345678"}),
 ]
 
@@ -177,7 +180,7 @@ class RescueCallTests(unittest.TestCase):
         self.assertEqual(lines[confirmed + 1], AMBULANCE_LINE)
         # 派車整通只講一次，而且在燒炭的第一題之前
         self.assertEqual(lines.count(AMBULANCE_LINE), 1)
-        self.assertLess(lines.index(AMBULANCE_LINE), lines.index("請問患者有沒有清醒？"))
+        self.assertLess(lines.index(AMBULANCE_LINE), lines.index("您現在人還在現場嗎？"))
         # 其他句子都不再提派車
         others = [line for line in lines if line != AMBULANCE_LINE]
         self.assertFalse([line for line in others if "已派出" in line or "已經派" in line])
@@ -267,8 +270,11 @@ class NoDispatchClaimElsewhereTests(unittest.TestCase):
         self.assertEqual(io.ai_lines, ["請不要掛斷電話，我立即為您轉接專人。"])
 
     def test_trigger_responses_never_say_dispatched(self) -> None:
-        """13 支救護 handler 的每個觸發情境都跑一次，回應裡不能有派車。"""
+        """還有觸發情境的救護 handler，每個情境都跑一次，回應裡不能有派車。
+        照 OK 表重寫的次案類（例如燒炭）已經沒有觸發情境，跳過。"""
         for name, handler in _REGISTRY.items():
+            if not hasattr(handler, "_send_trigger_responses"):
+                continue
             for scenario_id in range(1, 13):
                 with self.subTest(handler=name, scenario=scenario_id):
                     io = ScriptedIO(["不知道"] * 10)

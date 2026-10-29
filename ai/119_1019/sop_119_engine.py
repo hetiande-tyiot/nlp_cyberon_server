@@ -230,6 +230,31 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "contractions": "宮縮情況",
     "prenatal_history": "產檢異常史",
     "prenatal_clinic": "產檢醫院",
+    "consciousness_level": "意識程度",
+    "caller_relation": "報案人與患者關係",
+    "caller_location": "報案人位置",
+    "drinking_status": "是否飲酒",
+    "mobility": "平常行動能力",
+    "symptom_onset": "症狀發生時間",
+    "scene_access": "現場進入條件",
+    "charcoal_status": "炭盆狀況",
+    "patient_location": "患者所在位置",
+    "fall_status": "墜落狀況",
+    "fall_height": "墜落高度",
+    "fall_position": "患者位置（墜落傷）",
+    "stuck_location": "卡住位置",
+    "hanging_status": "上吊狀況",
+    "break_in_need": "破門需求",
+    "hanging_location": "患者位置（上吊）",
+    "cutting_tool": "工具",
+    "tool_status": "工具狀況",
+    "drug_amount": "藥物數量",
+    "medicine_bag": "藥袋",
+    "aggression": "攻擊傾向",
+    "injured_count": "受傷人數",
+    "forced_admission": "強制送醫",
+    "forced_admission_reason": "強制送醫原因",
+    "family_accompany": "家屬陪同",
 }
 
 
@@ -373,6 +398,9 @@ class SopEngine119:
         # 2026-09-06 04:46 實測，申訴案沒問到地址、沒派任何車，卻對報案人說「救護車已派出」，
         # 所以其他句子（轉人工、問姓名電話）都不再提派車，只有 _announce_dispatch 會講。
         self._dispatch_announced = False
+        # 救護流程中改判緊急救援（需要破門、墜落還沒跳下…）之後，救護的題目還會繼續問，
+        # 答案仍要照救護的欄位抽取、寫入（見 _fields_category）。
+        self._escalated_from_rescue = False
         self._dropped_details_asked = False
         self._probed_result = None
         # B：同一通內已被報案人否決過的模糊地標（matched/resolved），不再重複提案。
@@ -599,6 +627,31 @@ class SopEngine119:
             "contractions",
             "prenatal_history",
             "prenatal_clinic",
+            "consciousness_level",
+            "caller_relation",
+            "caller_location",
+            "drinking_status",
+            "mobility",
+            "symptom_onset",
+            "scene_access",
+            "charcoal_status",
+            "patient_location",
+            "fall_status",
+            "fall_height",
+            "fall_position",
+            "stuck_location",
+            "hanging_status",
+            "break_in_need",
+            "hanging_location",
+            "cutting_tool",
+            "tool_status",
+            "drug_amount",
+            "medicine_bag",
+            "aggression",
+            "injured_count",
+            "forced_admission",
+            "forced_admission_reason",
+            "family_accompany",
         }
         _INTERNAL_OVERWRITE_FIELDS = {
             "report_request_type",
@@ -678,6 +731,7 @@ class SopEngine119:
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
 
         identity_updates: Dict[str, Any] = {}  # 本輪 LLM 抽到的次案類代碼
+        consciousness_level_before = self.case.consciousness_level
         for key, val in extracted.items():
             if val is None:
                 continue
@@ -687,7 +741,7 @@ class SopEngine119:
             current = getattr(self.case, key, None)
 
             # 專屬欄位只允許在對應案件流程寫入，避免 LLM 跨類型污染 JSON。
-            if key in _RESCUE_FIELDS and self.case.main_category != "救護":
+            if key in _RESCUE_FIELDS and self._fields_category() != "救護":
                 continue
             if (
                 key == "incident_description"
@@ -756,6 +810,13 @@ class SopEngine119:
                     self.case.spread_risk = 1 if val else 0
                 continue
 
+            if key in _RESCUE_FIELDS:
+                # 救護資訊跟火警一樣以報案人最新講的為準：報案人改口（例如「剛剛還醒著，現在叫不醒了」
+                # 「不是熱水，是熱油」）要跟著改。
+                # 已知限制：抽取一次只看一句話，報案人是「補充」（「還有熱油」）時前面的內容會被蓋掉。
+                setattr(self.case, key, val)
+                continue
+
             if key in _BOOL_FIELDS:
                 # 布林欄位：僅在尚未填入時寫入，後續專項問答可覆蓋
                 if current is None:
@@ -791,6 +852,16 @@ class SopEngine119:
             if not current:
                 setattr(self.case, key, val)
 
+        if self._fields_category() == "救護":
+            from ems_tab_map_119 import fill_consciousness_from_level
+
+            # 意識程度改口了、這一句沒直接講有沒有意識：「是否有意識」清掉，照新的意識程度重算
+            if (
+                self.case.consciousness_level != consciousness_level_before
+                and extracted.get("consciousness") is None
+            ):
+                self.case.consciousness = None
+            fill_consciousness_from_level(self.case)
         if identity_updates and self.case.main_category == "火警":
             self._sync_fire_sub_category_from_identity_codes(identity_updates)
         if self.case.main_category == "火警":
@@ -1308,7 +1379,7 @@ class SopEngine119:
                 extracted = self._llm.extract_general_fields(
                     caller_text,
                     question=qa_question,
-                    main_category=self.case.main_category,
+                    main_category=self._fields_category(),
                     call_type=self.case.call_type,
                     **fire_extra,
                 )
@@ -3984,14 +4055,30 @@ class SopEngine119:
         # ════════════════════════════════════════════════════════
         handler.collect_caller_info(self)
 
-    def _escalate_main_to_emergency(self, reason: str = "需破門") -> bool:
+    def _fields_category(self) -> Optional[str]:
+        """
+        抽取、寫入欄位時用哪個大類的欄位。平常就是目前的主案類；
+        救護流程中改判緊急救援之後，救護的題目還在繼續問，仍用救護的欄位，
+        不然報案人後面回答的報案身分、性別年齡、意識呼吸都會被丟掉。
+        """
+        if self._escalated_from_rescue:
+            return "救護"
+        return self.case.main_category
+
+    def _escalate_main_to_emergency(
+        self,
+        reason: str = "需破門",
+        line: Optional[str] = "這需要破門，我已為您加派消防車前往。",
+    ) -> bool:
         """
         救護流程中發現需消防物理協助（如上吊者反鎖在家、需破門）→ 改判緊急救援、加派消防車。
 
         地址與救護車已在救護流程處理，故不重跑緊急救援 SOP、不再問地址；僅：
           - 改主類為緊急救援（case 記錄→派消防車）
           - 停用救護子類自動重分類（避免改判後又被拉回救護子類）
-          - 告知報案人已加派消防車
+          - 告知報案人已加派消防車（line 是廠商原句，只用在破門）
+        不是破門的改判（墜落還沒跳下、卡住，上吊在橋墩電塔）line 傳 None，不對報案人講話：
+        轉緊急救援的銜接語還沒設計，使用者 10/28 決定先不講、照正常流程繼續問，待跟承辦討論。
         回傳是否有實際改判（已是緊急救援則 False）。
         """
         if self.case.main_category == "緊急救援":
@@ -4000,6 +4087,7 @@ class SopEngine119:
             self.case.main_category = "緊急救援"
             self.case.main_conf     = 1.0
         self._sub_reclassify_enabled = False
+        self._escalated_from_rescue = True
         self._debug_print("escalate_to_emergency", {"reason": reason,
                                                      "sub": self.case.sub_category})
         self._emit({
@@ -4008,7 +4096,8 @@ class SopEngine119:
             "sub": self.case.sub_category, "sub_conf": self.case.sub_conf,
         })
         self._notify_case_update()
-        self._say("這需要破門，我已為您加派消防車前往。")
+        if line:
+            self._say(line)
         return True
 
 

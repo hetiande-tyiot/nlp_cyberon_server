@@ -102,6 +102,98 @@ class SubCategoryHandler:
                 return  # 交給 S2 腹部起伏判定（False/None 都給第三步機會）
             engine._check_ohca_and_transfer(vital_val, slot)
 
+    # ── 照救護題目表（ems_tab_map_119）逐題問 ─────────────────────────────────
+
+    def _ask_ems_questions(self, engine: "SopEngine119", questions) -> None:
+        """
+        照 xlsx 的順序逐題處理，做法跟火警垂片一樣：
+        - 被動題：不問（報案人講到時，每一輪的欄位抽取會記下來）
+        - 條件題：前置條件確定成立才問；不確定就當作不成立，不問
+        - 主動題、條件成立的條件題：答案還不知道才問
+        - 沒有問句的題目（例如燒燙傷的年齡）跟上一題一起問：上一題的問句已經問到
+        條件在輪到那一題時才判斷，因為要用到前面剛問到的答案。
+        問完呼吸（或呼吸已經知道）就做 OHCA 判定，見 _check_ohca_after_breathing。
+        每一題之前、全部問完之後都做一次改判檢查（_check_escalation），
+        因為報案人可能在任何一句講到要改判的內容，不一定是問到那一題時才講。
+        """
+        from fire_tab_map_119 import MODE_CONDITIONAL, MODE_PASSIVE
+
+        for number, item in enumerate(questions):
+            engine._ensure_known_fields_from_history()
+            self._check_escalation(engine)
+            if item.mode == MODE_PASSIVE:
+                # 被動題不問；報案人已經講到的話，xlsx 備註的處理（例如改判）照樣要做
+                if engine._is_field_filled(item.field):
+                    self._after_ems_item(engine, item)
+                continue
+            if not item.question:
+                continue
+            if item.mode == MODE_CONDITIONAL and not item.condition(engine.case):
+                engine._debug_print(
+                    f"skip_{item.stage}", {"前置條件不成立": item.condition_text},
+                )
+                continue
+            # 後面緊接著、沒有問句的題目，答案也從這一題的問句來
+            fields = [item.field]
+            for later in questions[number + 1:]:
+                if later.question or later.mode == MODE_PASSIVE:
+                    break
+                fields.append(later.field)
+            engine._set_stage(item.stage)
+            if self._ems_question_needed(engine, item, fields):
+                answer = engine._ask_and_extract(item.question)
+                self._after_ems_answer(engine, item, answer)
+            else:
+                engine._debug_print(
+                    f"skip_{item.stage}",
+                    {field: getattr(engine.case, field) for field in fields},
+                )
+            self._after_ems_item(engine, item)
+            if item.field == "breathing":
+                self._check_ohca_after_breathing(engine)
+        self._check_escalation(engine)
+
+    def _check_escalation(self, engine: "SopEngine119") -> None:
+        """
+        xlsx 備註要「改判緊急救援」時，各次案類覆寫這裡。預設不做事。
+        只看目前記下來的答案，不管現在問到哪一題：報案人哪一句講到都要改判。
+        已經改判過就不會重複改判、不會重複講話（見 engine._escalate_main_to_emergency）。
+        """
+
+    def _after_ems_item(self, engine: "SopEngine119", item) -> None:
+        """
+        每一題處理完（剛問到答案，或報案人前面已經講過、這題跳過）之後呼叫。
+        xlsx 備註要「回答某個答案就提醒」時，各次案類覆寫這裡（改判寫在 _check_escalation）：
+        不管答案是這一題問到的、還是前面就講過，都要處理。預設不做事。
+        """
+
+    def _ems_question_needed(self, engine: "SopEngine119", item, fields) -> bool:
+        """
+        有任何一個欄位還不知道就要問。
+        意識：「意識程度」或「是否有意識」任一已經知道就不再問。
+        """
+        if item.field == "consciousness_level" and engine._is_field_filled("consciousness"):
+            return False
+        return not all(engine._is_field_filled(field) for field in fields)
+
+    def _after_ems_answer(self, engine: "SopEngine119", item, answer: str) -> None:
+        """
+        問完一題後：意識、呼吸再用專項抽取確認一次（OHCA 要靠這兩個值），
+        然後檢查觸發情境。觸發情境由各次案類自己的 _check_and_respond_to_triggers 處理。
+        """
+        if item.field in ("consciousness_level", "breathing"):
+            self._extract_s1_vitals(answer, item.question, engine)
+        self._check_and_respond_to_triggers(answer, engine)
+
+    def _check_ohca_after_breathing(self, engine: "SopEngine119") -> None:
+        """呼吸這一題處理完之後的 OHCA 判定：呼吸不是「有」就轉人工。"""
+        with engine._case_lock:
+            breathing = engine.case.breathing
+        engine._check_ohca_and_transfer(breathing, "breathing")
+
+    def _check_and_respond_to_triggers(self, caller_text: str, engine: "SopEngine119") -> None:
+        """觸發情境偵測；預設沒有，由各次案類覆寫。"""
+
     def _run_s2_response_or_abdomen(
         self,
         engine: "SopEngine119",
@@ -562,7 +654,9 @@ class SubCategoryHandler:
                     return False
             except Exception as e:
                 engine._debug_print("break_in_llm_error", e)
-        return engine._escalate_main_to_emergency(reason="上吊反鎖需破門")
+        return engine._escalate_main_to_emergency(
+            reason=f"{engine.case.sub_category or '救護'}需破門",
+        )
 
     # ── 意識異常情境：主動探問服藥/中毒（C）────────────────────────────────────
 
@@ -686,9 +780,10 @@ class SubCategoryHandler:
             parts.append(f"聯繫方式：{caller_contact}")
         if caller_address:
             parts.append(f"住址：{caller_address}")
+        # 結束語「請在現場耐心等待…」拿掉（10/29 使用者決定）：報案人常不在現場，
+        # 比照火警，覆誦完姓名、聯繫方式就結束
         engine._say("，".join(parts) + "，已為您記錄。")
 
-        engine._say("請在現場耐心等待，確認入口通暢，並引導救護人員，謝謝。")
         with engine._case_lock:
             engine.case.result = "dispatched"
         engine._set_stage("completed")

@@ -63,6 +63,38 @@ class CaseInfo119:
     medical_history:      Optional[str] = None  # 過去病史（路倒專用）
     collapse_cause:       Optional[str] = None  # 路倒原因（路倒專用）
     ingested_substance:   Optional[str] = None  # 服藥種類與數量（吞食藥物專用）
+    # 救護垂片 1018 xlsx 新增的文字欄位（急病、燒燙傷照題目表問）
+    consciousness_level:  Optional[str] = None  # 意識程度：未知/意識清醒/剛剛昏倒、現在已清醒/對聲音有反應/對疼痛有反應/昏迷
+    caller_relation:      Optional[str] = None  # 報案人與患者關係（報案身分）：本人/家人/朋友/路過/不認識…
+    caller_location:      Optional[str] = None  # 報案人位置：在現場/在患者旁邊/在遠處/不敢靠近/不在現場…
+    drinking_status:      Optional[str] = None  # 是否飲酒：有喝酒/沒有喝酒/不清楚（被動）
+    mobility:             Optional[str] = None  # 平常行動能力：平常可以自己走/平常需要人扶/長期臥床或坐輪椅（被動）
+    symptom_onset:        Optional[str] = None  # 症狀發生時間（被動）
+    scene_access:         Optional[str] = None  # 現場進入條件：有沒有人開門、管理員、電梯（被動）
+    # 救護垂片 1028 xlsx 燒炭OK 的文字欄位
+    charcoal_status:      Optional[str] = None  # 炭盆狀況：尚未熄滅/已滅火
+    patient_location:     Optional[str] = None  # 患者所在位置：還在裡面/已在外面
+    # 救護垂片 1028 xlsx 墜落傷OK
+    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/已勸導離開
+    fall_height:          Optional[str] = None  # 墜落高度：幾樓或多高
+    fall_position:        Optional[str] = None  # 患者位置：地面(一樓)/卡住/不清楚
+    stuck_location:       Optional[str] = None  # 卡住位置：遮雨棚/女兒牆/屋頂或鐵皮屋/陽台/鷹架…
+    # 救護垂片 1028 xlsx 上吊OK
+    hanging_status:       Optional[str] = None  # 上吊狀況：已解開繩子/還沒解開
+    break_in_need:        Optional[str] = None  # 破門需求：需要破門/不需要破門
+    hanging_location:     Optional[str] = None  # 患者位置：住家/橋墩/山上電塔
+    # 救護垂片 1028 xlsx 割腕OK（初步傷勢沿用 injury_severity）
+    cutting_tool:         Optional[str] = None  # 工具：美工刀/菜刀/玻璃…
+    tool_status:          Optional[str] = None  # 工具狀況：已移除/還在身上/不清楚
+    # 救護垂片 1028 xlsx 吞食藥物OK（服用藥物沿用 ingested_substance、病史沿用 medical_history）
+    drug_amount:          Optional[str] = None  # 藥物數量：一整罐、大概 20 顆…
+    medicine_bag:         Optional[str] = None  # 藥袋：有/無
+    # 救護垂片 1028 xlsx 精神異常OK（病史沿用 medical_history）
+    aggression:           Optional[str] = None  # 攻擊傾向：攻擊他人/自傷/無
+    injured_count:        Optional[str] = None  # 受傷人數
+    forced_admission:     Optional[str] = None  # 強制送醫：需要/不需要/不清楚
+    forced_admission_reason: Optional[str] = None  # 強制送醫原因：大吼罵人/摔丟東西/胡言亂語…
+    family_accompany:     Optional[str] = None  # 家屬陪同：有/沒有/家屬在路上
 
     # ── 孕婦急產專用 ─────────────────────────────────────────────────────────────
     pregnancy_week:        Optional[str] = None  # 胎次與孕週（如「第1胎32週」）

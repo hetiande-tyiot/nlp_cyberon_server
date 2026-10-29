@@ -1574,6 +1574,31 @@ class LLMExtractor119:
             "contractions":          "string|null",
             "prenatal_history":      "string|null",
             "prenatal_clinic":       "string|null",
+            "consciousness_level":   "string|null",
+            "caller_relation":       "string|null",
+            "caller_location":       "string|null",
+            "drinking_status":       "string|null",
+            "mobility":              "string|null",
+            "symptom_onset":         "string|null",
+            "scene_access":          "string|null",
+            "charcoal_status":       "string|null",
+            "patient_location":      "string|null",
+            "fall_status":           "string|null",
+            "fall_height":           "string|null",
+            "fall_position":         "string|null",
+            "stuck_location":        "string|null",
+            "hanging_status":        "string|null",
+            "break_in_need":         "string|null",
+            "hanging_location":      "string|null",
+            "cutting_tool":          "string|null",
+            "tool_status":           "string|null",
+            "drug_amount":           "string|null",
+            "medicine_bag":          "string|null",
+            "aggression":            "string|null",
+            "injured_count":         "string|null",
+            "forced_admission":      "string|null",
+            "forced_admission_reason": "string|null",
+            "family_accompany":      "string|null",
         }
         # 火警：只請 LLM 抽這一輪用得到的欄位（依目前垂片挑選，見 _build_fire_schema_and_rules）
         fire_schema, fire_rules = _build_fire_schema_and_rules(fire_tab)
@@ -1677,6 +1702,49 @@ class LLMExtractor119:
             "- blood_glucose/blood_pressure/seizure_info：血糖/血壓/抽搐。\n"
             "- pregnancy_week/due_date/multiple_pregnancy/"
             "water_broken_bleeding/contractions/prenatal_history/prenatal_clinic：孕產資訊。\n"
+            # 下面三個欄位會拿來判斷要不要問下一題，只能記成固定說法（見 ems_tab_map_119）
+            "- consciousness_level：患者意識，只能填這幾種之一："
+            "未知（報案人說不知道、看不到）、意識清醒、剛剛昏倒、現在已清醒、"
+            "對聲音有反應、對疼痛有反應（要捏、拍才有反應）、昏迷（叫不醒、沒反應）。"
+            "沒講到意識 → null。\n"
+            # 報案身分、報案人位置的選項照 1028 xlsx OK 表的參考範圍
+            "- caller_relation：報案人和患者的關係（報案身分），只能填這幾種之一："
+            "本人、家人、朋友、同事、房東、110、里長、鄰居、工人、路過、看護、管理室、警衛、不認識。"
+            "報案人自己就是患者 → 本人；爸媽、兄弟姊妹、先生太太、子女等親屬 → 家人；"
+            "工地主任 → 工人；保全 → 警衛。沒講到 → null。\n"
+            "- caller_location：報案人現在在哪裡（報案人位置），只能填這幾種之一："
+            "在現場、在遠處、不敢靠近、不在現場。在患者身邊也算在現場。沒講到 → null。\n"
+            "- drinking_status：患者有沒有喝酒（有喝酒/沒有喝酒/不清楚）。\n"
+            "- mobility：患者平常的行動能力（平常可以自己走/平常需要人扶/長期臥床或坐輪椅）；"
+            "突然走不動不算，不要填。\n"
+            "- symptom_onset：症狀什麼時候開始或什麼時候被發現。\n"
+            "- scene_access：現場有沒有人能開門、有沒有管理員或警衛、有沒有電梯、"
+            "救護人員進不進得去、需不需要破門（例：需要破門、有人可以開門、門沒鎖）。\n"
+            # 燒炭：下面兩個欄位的答案決定要不要講提醒，只能記成固定說法（見 ems_tab_map_119）
+            "- charcoal_status：燒炭的炭盆有沒有熄滅，只能填：尚未熄滅、已滅火。沒講到 → null。\n"
+            "- patient_location：燒炭的患者是不是還在燒炭的房間或車裡，只能填：還在裡面、已在外面。"
+            "沒講到 → null。\n"
+            # 下面是 1028 xlsx 墜落傷、上吊、割腕、吞食藥物、精神異常 OK 表的欄位；
+            # 寫「只能填」的會拿來判斷要不要問下一題或改判，只能記成固定說法（見 ems_tab_map_119）
+            "- fall_status：墜落的人是不是已經掉下來，只能填：尚未跳下、已跳下、已勸導離開。"
+            "已經掉下來也算已跳下。沒講到 → null。\n"
+            "- fall_height：從幾樓或多高掉下來（不是地址的樓層），例：5樓、約3公尺。\n"
+            "- fall_position：墜落的患者現在在哪裡，只能填：地面(一樓)、卡住、不清楚。\n"
+            "- stuck_location：墜落卡住的地方，例：遮雨棚、女兒牆、屋頂或鐵皮屋、陽台、鷹架、A字梯、水溝。\n"
+            "- hanging_status：上吊的繩子解開了沒，只能填：已解開繩子、還沒解開。\n"
+            "- break_in_need：上吊現場救護人員要不要破門才進得去，只能填：需要破門、不需要破門。\n"
+            "- hanging_location：上吊的患者在哪裡，例：住家、橋墩、山上電塔。\n"
+            "- cutting_tool：割腕用的工具，例：美工刀、菜刀、玻璃。\n"
+            "- tool_status：割腕的刀具移除了沒，只能填：已移除、還在身上、不清楚。\n"
+            "- drug_amount：吃了多少藥，例：一整罐、大概20顆。\n"
+            "- medicine_bag：現場有沒有藥袋，只能填：有、無。\n"
+            "- aggression：精神異常的患者有沒有攻擊或自傷，只能填：攻擊他人、自傷、無。"
+            "用頭撞牆這類自殘算自傷。\n"
+            "- injured_count：精神異常現場有幾個人受傷。\n"
+            "- forced_admission：需不需要強制送醫（強送），只能填：需要、不需要、不清楚。\n"
+            "- forced_admission_reason：為什麼要強制送醫，例：大吼罵人、摔丟東西、胡言亂語、"
+            "行為怪異、沒吃藥、不睡不吃、已有醫院或衛生局評估。\n"
+            "- family_accompany：精神異常的患者身邊有沒有家屬陪同，只能填：有、沒有、家屬在路上。\n"
         )
         # 只給 LLM 選案情標籤；系統狀態標籤（地址搜尋失敗、火災類別無法確認…）只由程式寫入
         allowed_tags = "、".join(CASE_CONTENT_TAGS)

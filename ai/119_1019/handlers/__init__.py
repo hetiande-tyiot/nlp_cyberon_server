@@ -53,6 +53,14 @@ SHARED_SEMANTIC_SLOTS = frozenset({
     "patient_count",
     "patient_gender",
     "patient_age",
+    # 救護 1018 xlsx 新增：講的是患者或報案人本身，換次案類意思不變
+    "consciousness_level",
+    "caller_relation",
+    "caller_location",
+    "drinking_status",
+    "mobility",
+    "symptom_onset",
+    "scene_access",
 })
 
 
