@@ -828,6 +828,7 @@ class SopEngine119:
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
 
         identity_updates: Dict[str, Any] = {}  # 本輪 LLM 抽到的次案類代碼
+        consciousness_level_before = self.case.consciousness_level
         for key, val in extracted.items():
             if val is None:
                 continue
@@ -906,6 +907,13 @@ class SopEngine119:
                     self.case.spread_risk = 1 if val else 0
                 continue
 
+            if key in _RESCUE_FIELDS:
+                # 救護資訊跟火警一樣以報案人最新講的為準：報案人改口（例如「剛剛還醒著，現在叫不醒了」
+                # 「不是熱水，是熱油」）要跟著改。
+                # 已知限制：抽取一次只看一句話，報案人是「補充」（「還有熱油」）時前面的內容會被蓋掉。
+                setattr(self.case, key, val)
+                continue
+
             if key in _BOOL_FIELDS:
                 # 布林欄位：僅在尚未填入時寫入，後續專項問答可覆蓋
                 if current is None:
@@ -973,6 +981,12 @@ class SopEngine119:
         if self._fields_category() == "救護":
             from ems_tab_map_119 import fill_consciousness_from_level
 
+            # 意識程度改口了、這一句沒直接講有沒有意識：「是否有意識」清掉，照新的意識程度重算
+            if (
+                self.case.consciousness_level != consciousness_level_before
+                and extracted.get("consciousness") is None
+            ):
+                self.case.consciousness = None
             fill_consciousness_from_level(self.case)
         if identity_updates and self.case.main_category == "火警":
             self._sync_fire_sub_category_from_identity_codes(identity_updates)
@@ -2445,7 +2459,10 @@ class SopEngine119:
             )
             return None
 
-        if main_cat == "火警":
+        # 救護比照火警：模型要有把握（超過 0.5、比第二名多 0.15 以上）才換次案類。
+        # 沒有這道門檻時，兩類分數接近就會每回答一句換一次（10/29 燙傷那通在燒燙傷、一般受傷之間來回換），
+        # 每換一次就從新次案類的第一題重問、前一個次案類的答案也被清掉。
+        if main_cat in ("火警", "救護"):
             if p_new <= FIRE_BERT_CONF_THRESHOLD or margin < FIRE_SUB_MARGIN_THRESHOLD:
                 self._debug_print(
                     "sub_reclassify_fire_below_threshold",

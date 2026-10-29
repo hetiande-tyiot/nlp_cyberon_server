@@ -42,12 +42,12 @@ class ShangDiaoHandler(SubCategoryHandler):
         engine._ensure_known_fields_from_history()
         self._ask_ems_questions(engine, SHANG_DIAO_QUESTIONS)
 
-    def _after_ems_item(self, engine: "SopEngine119", item) -> None:
-        """xlsx 備註：需要破門 → 緊急救援-破門；在橋墩、山上電塔 → 緊急救援-其他。"""
+    def _check_escalation(self, engine: "SopEngine119") -> None:
+        """xlsx 備註：需要破門 → 緊急救援-破門；在橋墩、山上電塔 → 緊急救援-其他。報案人哪一句講到都算。"""
         case = engine.case
-        if item.field == "break_in_need" and case.break_in_need == BREAK_IN_NEEDED:
+        if case.break_in_need == BREAK_IN_NEEDED:
             engine._escalate_main_to_emergency(reason="上吊需破門")
-        elif item.field == "hanging_location" and any(
+        elif any(
             place in (case.hanging_location or "") for place in HANGING_REMOTE_PLACES
         ):
             engine._escalate_main_to_emergency(reason="上吊在橋墩或電塔", line=None)

@@ -125,16 +125,16 @@ class ShaoTanFlowTests(unittest.TestCase):
         self.assertEqual(_asked(io)[:3], ["報案人位置", "提醒熄滅炭盆", "患者所在位置"])
 
     def test_not_on_scene_passer_by(self) -> None:
-        """不在現場、路過：問現場進入條件；不問患者位置、性別年齡、意識、呼吸。"""
-        engine, io = _run([NOT_THERE, OUT, DOOR_OPEN, PASSER])
-        self.assertEqual(_asked(io), ["報案人位置", "炭盆狀況", "現場進入條件", "報案身分"])
+        """不在現場、路過：問現場進入條件；不問炭盆、患者位置、性別年齡、意識、呼吸。"""
+        engine, io = _run([NOT_THERE, DOOR_OPEN, PASSER])
+        self.assertEqual(_asked(io), ["報案人位置", "現場進入條件", "報案身分"])
         self.assertEqual(engine.case.main_category, "救護")
 
     def test_break_in_escalates_to_emergency(self) -> None:
         """需要破門：改判緊急救援，流程繼續問完。"""
-        engine, io = _run([NOT_THERE, OUT, BREAK_IN, PASSER])
+        engine, io = _run([NOT_THERE, BREAK_IN, PASSER])
         self.assertEqual(_asked(io), [
-            "報案人位置", "炭盆狀況", "現場進入條件", "改判破門", "報案身分",
+            "報案人位置", "現場進入條件", "改判破門", "報案身分",
         ])
         self.assertEqual(engine.case.main_category, "緊急救援")
 

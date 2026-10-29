@@ -23,6 +23,23 @@ from typing import TYPE_CHECKING, Optional, Sequence
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
 
+# xlsx 用一句話問兩個關鍵要素的題目，承辦要求缺什麼問什麼：
+# 兩個都不知道就照 xlsx 整句問；只缺一個時改問下面對應的句子（10/29 確認的說法）。
+SINGLE_MISSING_QUESTIONS = {
+    ("patient_gender", "patient_age"): {
+        "patient_gender": "請問患者是男生還是女生？",
+        "patient_age": "請問患者大概幾歲？",
+    },
+    ("injury_severity", "cutting_tool"): {
+        "injury_severity": "請問是哪裡受傷？",
+        "cutting_tool": "是用什麼工具受傷的？",
+    },
+    ("ingested_substance", "drug_amount"): {
+        "ingested_substance": "請問是吃了什麼藥物？",
+        "drug_amount": "知道大概吃了幾顆嗎？",
+    },
+}
+
 
 class SubCategoryHandler:
     """通用（無次類別）Handler：三個鉤子皆為預設版。"""
@@ -113,11 +130,14 @@ class SubCategoryHandler:
         - 沒有問句的題目（例如燒燙傷的年齡）跟上一題一起問：上一題的問句已經問到
         條件在輪到那一題時才判斷，因為要用到前面剛問到的答案。
         問完呼吸（或呼吸已經知道）就做 OHCA 判定，見 _check_ohca_after_breathing。
+        每一題之前、全部問完之後都做一次改判檢查（_check_escalation），
+        因為報案人可能在任何一句講到要改判的內容，不一定是問到那一題時才講。
         """
         from fire_tab_map_119 import MODE_CONDITIONAL, MODE_PASSIVE
 
         for number, item in enumerate(questions):
             engine._ensure_known_fields_from_history()
+            self._check_escalation(engine)
             if item.mode == MODE_PASSIVE:
                 # 被動題不問；報案人已經講到的話，xlsx 備註的處理（例如改判）照樣要做
                 if engine._is_field_filled(item.field):
@@ -138,7 +158,11 @@ class SubCategoryHandler:
                 fields.append(later.field)
             engine._set_stage(item.stage)
             if self._ems_question_needed(engine, item, fields):
-                answer = engine._ask_and_extract(item.question)
+                question = item.question
+                missing = [field for field in fields if not engine._is_field_filled(field)]
+                if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
+                    question = SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]]
+                answer = engine._ask_and_extract(question)
                 self._after_ems_answer(engine, item, answer)
             else:
                 engine._debug_print(
@@ -148,11 +172,19 @@ class SubCategoryHandler:
             self._after_ems_item(engine, item)
             if item.field == "breathing":
                 self._check_ohca_after_breathing(engine)
+        self._check_escalation(engine)
+
+    def _check_escalation(self, engine: "SopEngine119") -> None:
+        """
+        xlsx 備註要「改判緊急救援」時，各次案類覆寫這裡。預設不做事。
+        只看目前記下來的答案，不管現在問到哪一題：報案人哪一句講到都要改判。
+        已經改判過就不會重複改判、不會重複講話（見 engine._escalate_main_to_emergency）。
+        """
 
     def _after_ems_item(self, engine: "SopEngine119", item) -> None:
         """
         每一題處理完（剛問到答案，或報案人前面已經講過、這題跳過）之後呼叫。
-        xlsx 備註要「回答某個答案就提醒」或「改判緊急救援」時，各次案類覆寫這裡：
+        xlsx 備註要「回答某個答案就提醒」時，各次案類覆寫這裡（改判寫在 _check_escalation）：
         不管答案是這一題問到的、還是前面就講過，都要處理。預設不做事。
         """
 
@@ -769,9 +801,10 @@ class SubCategoryHandler:
             parts.append(f"聯繫方式：{caller_contact}")
         if caller_address:
             parts.append(f"住址：{caller_address}")
+        # 結束語「請在現場耐心等待…」拿掉（10/29 使用者決定）：報案人常不在現場，
+        # 比照火警，覆誦完姓名、聯繫方式就結束
         engine._say("，".join(parts) + "，已為您記錄。")
 
-        engine._say("請在現場耐心等待，確認入口通暢，並引導救護人員，謝謝。")
         with engine._case_lock:
             engine.case.result = "dispatched"
         engine._set_stage("completed")

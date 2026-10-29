@@ -9,7 +9,8 @@ base._ask_ems_questions）。xlsx 備註另外要求：
   - 炭盆尚未熄滅 → 提醒先讓炭盆熄滅、移除，注意自己安全
   - 患者還在裡面 → 提醒把患者移到通風位置，注意自己安全
   - 現場進入條件需要破門 → 改判緊急救援（加派消防車破門）
-提醒和破門不管答案是剛問到的、還是報案人前面就講過，都會處理。
+提醒不管答案是剛問到的、還是報案人前面就講過，都會處理；
+破門則是報案人哪一句講到都會改判（每一題前後都檢查）。
 OK 表的案類不用觸發情境（每題答完判斷情境、講固定的話），所以這裡沒有。
 
 報案人訊息沿用基類預設（姓名 + 聯繫方式，無住址）。
@@ -66,14 +67,17 @@ class ShaoTanHandler(SubCategoryHandler):
         return super()._ems_question_needed(engine, item, fields)
 
     def _after_ems_item(self, engine: "SopEngine119", item) -> None:
-        """xlsx 備註：炭盆沒熄、患者還在裡面要提醒；需要破門改判緊急救援。"""
+        """xlsx 備註：炭盆沒熄、患者還在裡面要提醒（破門改判見 _check_escalation）。"""
         case = engine.case
         if item.field == "charcoal_status" and case.charcoal_status == CHARCOAL_NOT_OUT:
             engine._say(_CHARCOAL_REMINDER)
         elif item.field == "patient_location" and case.patient_location == PATIENT_STILL_INSIDE:
             engine._say(_VENTILATE_REMINDER)
-        elif item.field == "scene_access" and case.scene_access:
-            self._maybe_escalate_break_in(engine, case.scene_access)
+
+    def _check_escalation(self, engine: "SopEngine119") -> None:
+        """xlsx 備註：現場進入條件需要破門 → 改判緊急救援。報案人哪一句講到都算。"""
+        if engine.case.scene_access:
+            self._maybe_escalate_break_in(engine, engine.case.scene_access)
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """燒炭使用基類預設：詢問姓名與聯繫方式（無住址）。"""

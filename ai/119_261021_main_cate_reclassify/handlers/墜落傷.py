@@ -43,12 +43,12 @@ class ZhuiLuoShangHandler(SubCategoryHandler):
         engine._ensure_known_fields_from_history()
         self._ask_ems_questions(engine, ZHUI_LUO_QUESTIONS)
 
-    def _after_ems_item(self, engine: "SopEngine119", item) -> None:
-        """xlsx 備註：尚未跳下、跳下來卡住 → 改判緊急救援（不講話）。"""
+    def _check_escalation(self, engine: "SopEngine119") -> None:
+        """xlsx 備註：尚未跳下、跳下來卡住 → 改判緊急救援（不講話）。報案人哪一句講到都算。"""
         case = engine.case
-        if item.field == "fall_status" and case.fall_status == FALL_NOT_YET:
+        if case.fall_status == FALL_NOT_YET:
             engine._escalate_main_to_emergency(reason="墜落傷尚未跳下", line=None)
-        elif item.field == "fall_position" and case.fall_position == FALL_POSITION_STUCK:
+        elif case.fall_position == FALL_POSITION_STUCK:
             engine._escalate_main_to_emergency(reason="墜落傷卡住", line=None)
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:

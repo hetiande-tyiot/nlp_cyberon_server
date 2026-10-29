@@ -122,6 +122,14 @@ class ZhuiLuoShangTests(unittest.TestCase):
         ])
         self.assertEqual(engine.case.main_category, "緊急救援")
 
+    def test_stuck_said_before_position_question_escalates(self) -> None:
+        """問墜落高度時就講卡住：還沒輪到患者位置那題，也要改判。"""
+        engine, _ = _run("墜落傷", [
+            self.JUMPED, ("五樓，卡在雨遮上", {"fall_height": "5樓", "fall_position": "卡住"}),
+            PASSER, self.RAIN_SHELTER, self.NEAR, AWAKE,
+        ])
+        self.assertEqual(engine.case.main_category, "緊急救援")
+
     def test_unknown_position_skips_caller_location(self) -> None:
         """患者位置不清楚：報案人位置不問，所以意識、呼吸也不問（意識要報案人位置 = 在現場）。"""
         _, io = _run("墜落傷", [self.JUMPED, self.FIVE_F, FAMILY, MALE_40, self.UNKNOWN_POS])
@@ -161,10 +169,71 @@ class ShangDiaoTests(unittest.TestCase):
         self.assertEqual(_asked("上吊", io), ["上吊狀況", "破門需求", "報案身分"])
         self.assertEqual(engine.case.main_category, "緊急救援")
 
+    def test_remote_place_said_later_still_escalates(self) -> None:
+        """患者位置那題已經過了，報案人回答報案身分時才講橋墩：還是要改判。"""
+        engine, _ = _run("上吊", [
+            self.NOT_UNTIED, self.NO_BREAK,
+            ("不認識，他吊在橋墩那邊", {"caller_relation": "不認識", "hanging_location": "橋墩"}),
+        ])
+        self.assertEqual(engine.case.main_category, "緊急救援")
+
+    def test_break_in_said_later_still_escalates(self) -> None:
+        """破門需求那題沒答清楚，回答報案身分時才講要破門：還是要改判、只講一次破門那句。"""
+        engine, io = _run("上吊", [
+            self.NOT_UNTIED, ("我也不知道", {}),
+            ("我是家人，門反鎖了要破門", {"caller_relation": "家人", "break_in_need": "需要破門"}),
+            MALE_40,
+        ])
+        self.assertEqual(engine.case.main_category, "緊急救援")
+        self.assertEqual(io.messages.count(BREAK_IN_LINE), 1)
+
+    def test_break_in_changed_answer_escalates(self) -> None:
+        """破門需求那題答不用，回答報案身分時改口要破門：答案跟著改，改判、講破門那句。"""
+        engine, io = _run("上吊", [
+            self.NOT_UNTIED, self.NO_BREAK,
+            ("我是家人，門其實反鎖了要破門", {"caller_relation": "家人", "break_in_need": "需要破門"}),
+            MALE_40,
+        ])
+        self.assertEqual(engine.case.break_in_need, "需要破門")
+        self.assertEqual(engine.case.main_category, "緊急救援")
+        self.assertEqual(io.messages.count(BREAK_IN_LINE), 1)
+
     def test_untied_unresponsive_breathing(self) -> None:
         engine, io = _run("上吊", [self.UNTIED, FAMILY, MALE_40, COMA, BREATHING])
         self.assertEqual(_asked("上吊", io)[-2:], ["意識", "呼吸"])
         self.assertFalse(engine.case.is_ohca)
+
+
+class ChangedAnswerTests(unittest.TestCase):
+    """報案人改口：救護答案跟火警一樣以最新講的為準。"""
+
+    def _engine(self) -> SopEngine119:
+        engine = SopEngine119(io=ScriptedIO([]), llm_extractor=FakeLLM({}))  # type: ignore[arg-type]
+        engine.case.main_category = "救護"
+        return engine
+
+    def test_consciousness_changed_recomputes_is_conscious(self) -> None:
+        """意識先說醒著、後來說叫不醒：意識程度改成昏迷，「是否有意識」也跟著變成否。"""
+        engine = self._engine()
+        engine._apply_extracted_fields({"consciousness_level": "意識清醒"})
+        self.assertTrue(engine.case.consciousness)
+        engine._apply_extracted_fields({"consciousness_level": "昏迷"})
+        self.assertEqual(engine.case.consciousness_level, "昏迷")
+        self.assertFalse(engine.case.consciousness)
+
+    def test_free_text_field_takes_latest_answer(self) -> None:
+        """燒燙傷原因這類照報案人說的記的欄位：「不是熱水，是熱油」→ 改成熱油。"""
+        engine = self._engine()
+        engine._apply_extracted_fields({"injury_cause": "熱水"})
+        engine._apply_extracted_fields({"injury_cause": "熱油"})
+        self.assertEqual(engine.case.injury_cause, "熱油")
+
+    def test_not_mentioned_keeps_answer(self) -> None:
+        """這一句沒講到（抽出 null）不會把已經記下的答案清掉。"""
+        engine = self._engine()
+        engine._apply_extracted_fields({"injury_cause": "熱水"})
+        engine._apply_extracted_fields({"injury_cause": None})
+        self.assertEqual(engine.case.injury_cause, "熱水")
 
 
 class GeWanTests(unittest.TestCase):
