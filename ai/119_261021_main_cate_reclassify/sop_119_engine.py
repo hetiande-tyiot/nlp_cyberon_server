@@ -231,6 +231,31 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "contractions": "宮縮情況",
     "prenatal_history": "產檢異常史",
     "prenatal_clinic": "產檢醫院",
+    "consciousness_level": "意識程度",
+    "caller_relation": "報案人與患者關係",
+    "caller_location": "報案人位置",
+    "drinking_status": "是否飲酒",
+    "mobility": "平常行動能力",
+    "symptom_onset": "症狀發生時間",
+    "scene_access": "現場進入條件",
+    "charcoal_status": "炭盆狀況",
+    "patient_location": "患者所在位置",
+    "fall_status": "墜落狀況",
+    "fall_height": "墜落高度",
+    "fall_position": "患者位置（墜落傷）",
+    "stuck_location": "卡住位置",
+    "hanging_status": "上吊狀況",
+    "break_in_need": "破門需求",
+    "hanging_location": "患者位置（上吊）",
+    "cutting_tool": "工具",
+    "tool_status": "工具狀況",
+    "drug_amount": "藥物數量",
+    "medicine_bag": "藥袋",
+    "aggression": "攻擊傾向",
+    "injured_count": "受傷人數",
+    "forced_admission": "強制送醫",
+    "forced_admission_reason": "強制送醫原因",
+    "family_accompany": "家屬陪同",
 }
 
 
@@ -365,6 +390,32 @@ RESCUE_EXCLUSIVE_FIELDS = frozenset({
     "contractions",
     "prenatal_history",
     "prenatal_clinic",
+    # 以下是救護照 OK 表新增的欄位（各次案類 handler 在問）
+    "consciousness_level",
+    "caller_relation",
+    "caller_location",
+    "drinking_status",
+    "mobility",
+    "symptom_onset",
+    "scene_access",
+    "charcoal_status",
+    "patient_location",
+    "fall_status",
+    "fall_height",
+    "fall_position",
+    "stuck_location",
+    "hanging_status",
+    "break_in_need",
+    "hanging_location",
+    "cutting_tool",
+    "tool_status",
+    "drug_amount",
+    "medicine_bag",
+    "aggression",
+    "injured_count",
+    "forced_admission",
+    "forced_admission_reason",
+    "family_accompany",
 })
 FIRE_EXCLUSIVE_FIELDS = frozenset({
     "fire_or_smoke",
@@ -429,6 +480,12 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "source_located",
     "target_object",
     "power_outage",
+    # 以下是火警照 1013 xlsx 新增的欄位（火警垂片在問）
+    "building_type",
+    "vehicle_kind",
+    "vehicle_model",
+    "vehicle_power",
+    "bicycle_type",
 })
 
 
@@ -483,10 +540,13 @@ class SopEngine119:
         self._cause_ingestion_probed = False
         # 地址流程跑完即上鎖，之後不再讓地標/捷運/路口關鍵字覆寫已成立的地點
         self._address_locked = False
-        # 有沒有真的對報案人說過「車已派出」。轉真人的話術要看這個，
-        # 不能寫死——2026-09-06 04:46 實測，申訴案沒問到地址、
-        # 沒派任何車，卻對報案人說「救護車已派出」。
+        # 有沒有對報案人說過「車已派出」，讓派車那句整通只講一次（見 _announce_dispatch）。
+        # 2026-09-06 04:46 實測，申訴案沒問到地址、沒派任何車，卻對報案人說「救護車已派出」，
+        # 所以其他句子（轉人工、問姓名電話）都不再提派車，只有 _announce_dispatch 會講。
         self._dispatch_announced = False
+        # 救護流程中改判緊急救援（需要破門、墜落還沒跳下…）之後，救護的題目還會繼續問，
+        # 答案仍要照救護的欄位抽取、寫入（見 _fields_category）。
+        self._escalated_from_rescue = False
         self._dropped_details_asked = False
         self._probed_result = None
         # B：同一通內已被報案人否決過的模糊地標（matched/resolved），不再重複提案。
@@ -621,14 +681,23 @@ class SopEngine119:
             self._notify_case_update()
             if self._bridged:
                 return
-            self._say(
-                "救護車已派出，請不要掛斷電話，我立即為您轉接專人。"
-                if self._dispatch_announced
-                else "請不要掛斷電話，我立即為您轉接專人。"
-            )
+            self._say("請不要掛斷電話，我立即為您轉接專人。")
             raise TransferToHumanError(
                 f"OHCA detected at {slot}", result="ohca_transfer"
             )
+
+    def _announce_dispatch(self, line: str) -> None:
+        """
+        告訴報案人車已派出。承辦的受理順序：主案類、次案類都確定了才講派車，
+        所以三個大類各在自己確定次案類的地方呼叫（救護：次案類判斷完；
+        火警：案類分析完；緊急救援還不判斷次案類，在問完發生什麼事之後）。
+        - 整通只講一次：中途換次案類、換垂片再呼叫也不會重講
+        - 地址沒確認成功就不講：跟改之前一樣，地址失敗時不對報案人說車已派出
+        """
+        if self._dispatch_announced or not self.case.address_confirmed:
+            return
+        self._say(line)
+        self._dispatch_announced = True
 
     def _ask(self, question: str) -> str:
         self._say(question)
@@ -705,7 +774,6 @@ class SopEngine119:
             "factory_scale_type",
             "factory_people_present",
             "hazardous_materials",
-            "vehicle_type",
             "vehicle_count",
             "vehicle_occupants",
             "vehicle_occupant_count",
@@ -750,8 +818,11 @@ class SopEngine119:
             "alarm_status",
             "source_located",
             "target_object",
-            # 垂片 C 照 1005 xlsx 新增
-            "power_outage",
+            # 垂片 B1 照 1013 xlsx 新增（建築物類型由次案類代碼換算，不在這裡）
+            "vehicle_kind",
+            "vehicle_model",
+            "vehicle_power",
+            "bicycle_type",
         }
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
@@ -760,13 +831,13 @@ class SopEngine119:
         for key, val in extracted.items():
             if val is None:
                 continue
-            # 等級由語意標籤換算，不讓模型直接寫 fire_level。
-            if key in ("fire_level", "fire_level_signals"):
+            # 派遣等級由語意標籤換算，不讓模型直接寫 level。
+            if key in ("level", "fire_level_signals"):
                 continue
             current = getattr(self.case, key, None)
 
             # 專屬欄位只允許在對應案件流程寫入，避免 LLM 跨類型污染 JSON。
-            if key in _RESCUE_FIELDS and self.case.main_category != "救護":
+            if key in _RESCUE_FIELDS and self._fields_category() != "救護":
                 continue
             if (
                 key == "incident_description"
@@ -899,6 +970,10 @@ class SopEngine119:
             if not current:
                 setattr(self.case, key, val)
 
+        if self._fields_category() == "救護":
+            from ems_tab_map_119 import fill_consciousness_from_level
+
+            fill_consciousness_from_level(self.case)
         if identity_updates and self.case.main_category == "火警":
             self._sync_fire_sub_category_from_identity_codes(identity_updates)
         if self.case.main_category == "火警":
@@ -946,13 +1021,26 @@ class SopEngine119:
         LLM 本輪從報案人的話抽到次案類代碼 → 換算成次案類名稱寫入 sub_category
         （例如 vehicle_wildfire_code = 1 → 機車）。只看本輪抽到的代碼，不依目前垂片推算；
         換到別張垂片的次案類時，由 _maybe_reclassify_sub 的「次案類決定垂片」檢查負責換垂片。
+        建築物火警（A）和輕微火警（C）之間只看火煙狀況，LLM 的代碼不能直接換：
+        在 C 聽到建築物類（例如「住大樓」）→ 記到建築物類型，次案類不動。
         """
-        from fire_tab_map_119 import subtype_name_for_code
+        from fire_tab_map_119 import (
+            TAB_A,
+            is_between_building_and_minor,
+            subtype_name_for_code,
+            tab_for_subtype,
+        )
 
         for field, value in updates.items():
             name = subtype_name_for_code(field, value)
-            if name and name != self.case.sub_category:
-                self.case.sub_category = name
+            if not name or name == self.case.sub_category:
+                continue
+            name_tab = tab_for_subtype(name)
+            if is_between_building_and_minor(self.case.fire_tab, name_tab):
+                if name_tab == TAB_A:
+                    self.case.building_type = name
+                continue
+            self.case.sub_category = name
 
     def _apply_location_rules(self, caller_text: str) -> None:
         """以确定性规则补强本轮地点组件，并重组可显示地址。"""
@@ -1443,7 +1531,7 @@ class SopEngine119:
                 extracted = self._llm.extract_general_fields(
                     caller_text,
                     question=qa_question,
-                    main_category=self.case.main_category,
+                    main_category=self._fields_category(),
                     call_type=self.case.call_type,
                     **fire_extra,
                 )
@@ -1991,6 +2079,11 @@ class SopEngine119:
             self.case.sub_conf = None
             if new_cat != "火警":
                 self.case.fire_tab = None
+            # 火警的派遣等級存在 level，報案人每講一輪就可能往上升；
+            # 改判成別的大類時歸 0，不然會把火警的等級帶給新的大類。
+            # （救護的等級是輸出時依傷病患人數重算，不受影響）
+            if old_cat == "火警":
+                self.case.level = 0
 
     def _apply_main_switch(self, old_cat: Optional[str], new_cat: str, new_conf: Optional[float]) -> None:
         self._migrate_case_for_main_switch(old_cat, new_cat)
@@ -2231,6 +2324,7 @@ class SopEngine119:
             FIRE_BERT_CONF_THRESHOLD,
             TAB_QUESTIONS,
             apply_bert_subtype_to_case,
+            is_between_building_and_minor,
             tab_for_subtype,
         )
         fire_tab_locked = (
@@ -2269,6 +2363,15 @@ class SopEngine119:
             return None
 
         new_label = max(all_probs, key=all_probs.get)
+        # 建築物火警（A）和輕微火警（C）之間只看火煙狀況；BERT 想在 A、C 之間換就不採用
+        if main_cat == "火警" and is_between_building_and_minor(
+            self.case.fire_tab, tab_for_subtype(new_label),
+        ):
+            self._debug_print(
+                "sub_reclassify_blocked_between_A_and_C",
+                {"目前垂片": self.case.fire_tab, "BERT": new_label},
+            )
+            return None
         p_new = float(all_probs[new_label])
         # top1−top2 margin：火警靠此判斷是否「兩類難分」，難分則不填/不切
         _ordered = sorted(all_probs.values(), reverse=True)
@@ -3872,8 +3975,9 @@ class SopEngine119:
                     self.case.address_suspect_error = False
                     self.case.address_error_reason = None
                 self._notify_case_update()
-                self._say(self._dispatch_line_for_main())
-                self._dispatch_announced = True
+                # 只講地址確認；派車改在次案類確定後講（_announce_dispatch）。
+                # 參數名稱沿用 dispatch_line，因為廠商的地址測試用這個名稱呼叫。
+                self._say(dispatch_line)
                 return
 
         self._mark_address_failure("報警人未能明確確認地址")
@@ -3885,7 +3989,7 @@ class SopEngine119:
         """救護類別完整對話 SOP。"""
 
         # ════════════════════════════════════════════════════════
-        # 階段 1：詢問地址 → 複讀確認 → 告知救護車已派出
+        # 階段 1：詢問地址 → 複讀確認（救護車已派出要等次案類確定後才講）
         # ════════════════════════════════════════════════════════
         self._main_reclassify_enabled = True
         try:
@@ -3893,7 +3997,7 @@ class SopEngine119:
                 self._run_address_flow(
                     stage_ask="救護_location",
                     stage_confirm="救護_location_confirm",
-                    dispatch_line=self._dispatch_line_for_main(),
+                    dispatch_line="已確認地址。",
                     ask_questions=build_address_ask_questions(
                         include_floor=address_ask_should_include_floor(
                             self.case.full_caller_text()
@@ -3947,7 +4051,7 @@ class SopEngine119:
 
                 # 首輪且尚無任何病情描述 → 用正常語氣初問（而非「請再說一次」的重問，
                 # 後者會讓還沒講過的報案人以為系統漏聽）；否則沿用換句話重問。
-                # 這句不問「需要救護車嗎」：地址確認完已經先告知「救護車已派出了喔」，
+                # 這句不問「需要救護車嗎」：報案人一開始就說要救護車了，
                 # 再問要不要救護車，報案人會以為系統沒聽懂、或懷疑車到底有沒有派出去。
                 # 這句問的目的只是取得病情描述給次案類分類用，不是在確認要不要派車。
                 if no_symptom_yet and _reask_i == 0:
@@ -3997,6 +4101,7 @@ class SopEngine119:
             })
             self._notify_case_update()
             self._set_stage("救護_sub_classified")
+            self._announce_dispatch("救護車已派出了喔。")
         except MainCategorySwitched:
             raise
         finally:
@@ -4142,7 +4247,8 @@ class SopEngine119:
         from handlers.火警通用 import HuoJingGenericHandler
 
         # ════════════════════════════════════════════════════════
-        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌 → 派車
+        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌
+        #（消防車已派出要等案類分析完才講，見火警通用 run_generic_flow）
         # ════════════════════════════════════════════════════════
         self._main_reclassify_enabled = True
         try:
@@ -4150,7 +4256,7 @@ class SopEngine119:
                 self._run_address_flow(
                     stage_ask="火警_location",
                     stage_confirm="火警_location_confirm",
-                    dispatch_line=self._dispatch_line_for_main(),
+                    dispatch_line="已確認地址。",
                     ask_questions=build_address_ask_questions(
                         include_floor=address_ask_should_include_floor(
                             self.case.full_caller_text()
@@ -4188,7 +4294,8 @@ class SopEngine119:
         from handlers.緊急救援通用 import JinJiJiuYuanGenericHandler
 
         # ════════════════════════════════════════════════════════
-        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌 → 派員
+        # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌
+        #（救援人員已派出要等問完發生什麼事才講，見緊急救援通用 run_generic_flow）
         # ════════════════════════════════════════════════════════
         self._main_reclassify_enabled = True
         try:
@@ -4196,7 +4303,7 @@ class SopEngine119:
                 self._run_address_flow(
                     stage_ask="緊急救援_location",
                     stage_confirm="緊急救援_location_confirm",
-                    dispatch_line=self._dispatch_line_for_main(),
+                    dispatch_line="已確認地址。",
                     ask_questions=build_address_ask_questions(
                         include_floor=address_ask_should_include_floor(
                             self.case.full_caller_text()
@@ -4227,14 +4334,30 @@ class SopEngine119:
         # ════════════════════════════════════════════════════════
         handler.collect_caller_info(self)
 
-    def _escalate_main_to_emergency(self, reason: str = "需破門") -> bool:
+    def _fields_category(self) -> Optional[str]:
+        """
+        抽取、寫入欄位時用哪個大類的欄位。平常就是目前的主案類；
+        救護流程中改判緊急救援之後，救護的題目還在繼續問，仍用救護的欄位，
+        不然報案人後面回答的報案身分、性別年齡、意識呼吸都會被丟掉。
+        """
+        if self._escalated_from_rescue:
+            return "救護"
+        return self.case.main_category
+
+    def _escalate_main_to_emergency(
+        self,
+        reason: str = "需破門",
+        line: Optional[str] = "這需要破門，我已為您加派消防車前往。",
+    ) -> bool:
         """
         救護流程中發現需消防物理協助（如上吊者反鎖在家、需破門）→ 改判緊急救援、加派消防車。
 
         地址與救護車已在救護流程處理，故不重跑緊急救援 SOP、不再問地址；僅：
           - 改主類為緊急救援（case 記錄→派消防車）
           - 停用救護子類自動重分類（避免改判後又被拉回救護子類）
-          - 告知報案人已加派消防車
+          - 告知報案人已加派消防車（line 是廠商原句，只用在破門）
+        不是破門的改判（墜落還沒跳下、卡住，上吊在橋墩電塔）line 傳 None，不對報案人講話：
+        轉緊急救援的銜接語還沒設計，使用者 10/28 決定先不講、照正常流程繼續問，待跟承辦討論。
         回傳是否有實際改判（已是緊急救援則 False）。
         """
         if self.case.main_category == "緊急救援":
@@ -4243,6 +4366,7 @@ class SopEngine119:
             self.case.main_category = "緊急救援"
             self.case.main_conf     = 1.0
         self._sub_reclassify_enabled = False
+        self._escalated_from_rescue = True
         self._debug_print("escalate_to_emergency", {"reason": reason,
                                                      "sub": self.case.sub_category})
         self._emit({
@@ -4251,7 +4375,8 @@ class SopEngine119:
             "sub": self.case.sub_category, "sub_conf": self.case.sub_conf,
         })
         self._notify_case_update()
-        self._say("這需要破門，我已為您加派消防車前往。")
+        if line:
+            self._say(line)
         return True
 
 

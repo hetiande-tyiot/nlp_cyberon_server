@@ -1145,9 +1145,9 @@ def main():
 
             # 火煙狀況、濃煙顏色、延燒面積已列在 FIELD_LABELS_ZH，不再重複顯示舊的那三行
             _fire_level_labels = {0: "0", 1: "一級", 2: "二級", 3: "三級"}
-            fire_level = case.get("fire_level")
+            level = case.get("level")
             fire_fields = [
-                ("火災等級", _fire_level_labels.get(fire_level, fire_level)),
+                ("派遣等級", _fire_level_labels.get(level, level)),
             ] + [
                 (label, case.get(key)) for key, label in FIELD_LABELS_ZH.items()
             ] + [
@@ -1226,24 +1226,14 @@ def main():
         with st.container():
             st.markdown('<div class="panel-card">', unsafe_allow_html=True)
             st.markdown("**🔢 SOP 要素編號**")
-            from case_field_labels_119 import LABELS as _FIELD_LABELS
 
             element_ids = case.get("sop_element_ids") or {}
             if element_ids:
                 rows_html = ""
-                for field, item in element_ids.items():
-                    label = html.escape(_FIELD_LABELS.get(field, field))
-                    if isinstance(item, dict):
-                        code = item.get("id") or ""
-                        value = item.get("value")
-                    else:
-                        code, value = item, ""
-                    shown = html.escape(str(code))
-                    if value is not None and str(value).strip() != "":
-                        shown += "　" + html.escape(str(value))
+                for code, answer in element_ids.items():
                     rows_html += (
-                        f'<div class="field-label">{label}</div>'
-                        f'<div class="field-value">{shown}</div>'
+                        f'<div class="field-label">{html.escape(code)}</div>'
+                        f'<div class="field-value">{html.escape(str(answer))}</div>'
                     )
                 st.markdown(rows_html, unsafe_allow_html=True)
             else:
