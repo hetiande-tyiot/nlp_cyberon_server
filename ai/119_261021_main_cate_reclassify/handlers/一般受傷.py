@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2  = "救護車已經派了。"
 _R9  = "機器先斷電，手有被夾住嗎？"
 _R12 = "是不是有明顯外傷、大出血？外觀是否變形？"
 _R17 = "是什麼原因導致患者受傷？玻璃割傷？機器切割傷？機器壓傷？"
@@ -201,7 +200,6 @@ class GeneralInjuryHandler(SubCategoryHandler):
 
         if scenario_id == 1:
             # 跌倒受傷
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R12, "injury_severity",
                 schema={"injury_severity": "string|null"},
@@ -214,7 +212,6 @@ class GeneralInjuryHandler(SubCategoryHandler):
 
         elif scenario_id == 2:
             # 工作受傷
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R12, "injury_severity",
                 schema={"injury_severity": "string|null"},
@@ -236,7 +233,6 @@ class GeneralInjuryHandler(SubCategoryHandler):
 
         elif scenario_id == 3:
             # 斷肢/斷指
-            engine._say(_R2)
             self._ask_trigger_question(
                 _R9, "current_condition",
                 schema={"current_condition": "string|null"},

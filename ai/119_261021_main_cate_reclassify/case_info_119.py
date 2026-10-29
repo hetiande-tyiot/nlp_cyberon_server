@@ -20,6 +20,7 @@ class CaseInfo119:
     main_conf:     Optional[float] = None  # 主類置信度
     sub_category:  Optional[str]  = None   # 子類別（急病/車禍/...）
     sub_conf:      Optional[float] = None  # 子類置信度
+    level:         int            = 0      # 派遣等級：0 未分級，1 一級，2 二級，3 三級。火警依次案類與報案人描述只升不降；救護依傷病患人數（2 人以上 2，其他包含沒講人數都是 1）；其他大類目前固定 0
 
     # ── 地址 ────────────────────────────────────────────────────────────────
     address:           Optional[str]  = None  # 完整事發地址（含樓層）
@@ -63,6 +64,38 @@ class CaseInfo119:
     medical_history:      Optional[str] = None  # 過去病史（路倒專用）
     collapse_cause:       Optional[str] = None  # 路倒原因（路倒專用）
     ingested_substance:   Optional[str] = None  # 服藥種類與數量（吞食藥物專用）
+    # 救護垂片 1018 xlsx 新增的文字欄位（急病、燒燙傷照題目表問）
+    consciousness_level:  Optional[str] = None  # 意識程度：未知/意識清醒/剛剛昏倒、現在已清醒/對聲音有反應/對疼痛有反應/昏迷
+    caller_relation:      Optional[str] = None  # 報案人與患者關係（報案身分）：本人/家人/朋友/路過/不認識…
+    caller_location:      Optional[str] = None  # 報案人位置：在現場/在患者旁邊/在遠處/不敢靠近/不在現場…
+    drinking_status:      Optional[str] = None  # 是否飲酒：有喝酒/沒有喝酒/不清楚（被動）
+    mobility:             Optional[str] = None  # 平常行動能力：平常可以自己走/平常需要人扶/長期臥床或坐輪椅（被動）
+    symptom_onset:        Optional[str] = None  # 症狀發生時間（被動）
+    scene_access:         Optional[str] = None  # 現場進入條件：有沒有人開門、管理員、電梯（被動）
+    # 救護垂片 1028 xlsx 燒炭OK 的文字欄位
+    charcoal_status:      Optional[str] = None  # 炭盆狀況：尚未熄滅/已滅火
+    patient_location:     Optional[str] = None  # 患者所在位置：還在裡面/已在外面
+    # 救護垂片 1028 xlsx 墜落傷OK
+    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/已勸導離開
+    fall_height:          Optional[str] = None  # 墜落高度：幾樓或多高
+    fall_position:        Optional[str] = None  # 患者位置：地面(一樓)/卡住/不清楚
+    stuck_location:       Optional[str] = None  # 卡住位置：遮雨棚/女兒牆/屋頂或鐵皮屋/陽台/鷹架…
+    # 救護垂片 1028 xlsx 上吊OK
+    hanging_status:       Optional[str] = None  # 上吊狀況：已解開繩子/還沒解開
+    break_in_need:        Optional[str] = None  # 破門需求：需要破門/不需要破門
+    hanging_location:     Optional[str] = None  # 患者位置：住家/橋墩/山上電塔
+    # 救護垂片 1028 xlsx 割腕OK（初步傷勢沿用 injury_severity）
+    cutting_tool:         Optional[str] = None  # 工具：美工刀/菜刀/玻璃…
+    tool_status:          Optional[str] = None  # 工具狀況：已移除/還在身上/不清楚
+    # 救護垂片 1028 xlsx 吞食藥物OK（服用藥物沿用 ingested_substance、病史沿用 medical_history）
+    drug_amount:          Optional[str] = None  # 藥物數量：一整罐、大概 20 顆…
+    medicine_bag:         Optional[str] = None  # 藥袋：有/無
+    # 救護垂片 1028 xlsx 精神異常OK（病史沿用 medical_history）
+    aggression:           Optional[str] = None  # 攻擊傾向：攻擊他人/自傷/無
+    injured_count:        Optional[str] = None  # 受傷人數
+    forced_admission:     Optional[str] = None  # 強制送醫：需要/不需要/不清楚
+    forced_admission_reason: Optional[str] = None  # 強制送醫原因：大吼罵人/摔丟東西/胡言亂語…
+    family_accompany:     Optional[str] = None  # 家屬陪同：有/沒有/家屬在路上
 
     # ── 孕婦急產專用 ─────────────────────────────────────────────────────────────
     pregnancy_week:        Optional[str] = None  # 胎次與孕週（如「第1胎32週」）
@@ -80,7 +113,6 @@ class CaseInfo119:
     fire_trend:          Optional[str] = None  # 變大/消退/穩定
     fire_extent:         Optional[str] = None  # 火勢大約範圍
     fire_category:       Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
-    fire_level:          Optional[int] = None  # 火災等級：0 未分級，1 一級，2 二級，3 三級；只升不降
 
     # 火警垂片代碼（0 為合法已填值）
     fire_tab:              Optional[str] = None  # A / B1 / B2 / C
@@ -100,10 +132,13 @@ class CaseInfo119:
     vehicle_wildfire_code: Optional[int] = None  # 0~6交通工具；7平地；8山地
     minor_fire_code:       Optional[int] = None  # 0垃圾；1電線桿；2瓦斯；3警報；4查看
 
-    # 垂片 A（建築物火警）照 0929 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
-    # 其他 A 的關鍵要素沿用既有文字欄位：sub_category（建築物類型）、fire_or_smoke（火煙狀況）、
+    # 垂片 A（建築物火警）照 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
+    # 其他 A 的關鍵要素沿用既有文字欄位：fire_or_smoke（火煙狀況）、
     # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、fire_extent。
-    place_usage:           Optional[str] = None  # 場所用途：住家/店家/工廠/辦公室…
+    place_usage:           Optional[str] = None  # 場所用途：住宅/店家/工廠/辦公室…
+    # 建築物類型（1013 xlsx，A、C 都問）：透天厝、集合住宅、倉庫…
+    # 在 A 跟次案類相同；在 C 另外記，次案類仍是警報器作響等
+    building_type:         Optional[str] = None
     spread_status:         Optional[str] = None  # 延燒可能：延燒可能性低/極可能或已延燒…
     trapped_status:        Optional[str] = None  # 有無受困：只記 有人受困/無人受困/不確定；有人受困就轉人工
     door_response:         Optional[str] = None  # 起火戶應門：有人在或已聯絡上/敲門無回應或聯絡不上…
@@ -112,21 +147,23 @@ class CaseInfo119:
     explosion_status:      Optional[str] = None  # 有無爆炸（被動，報案人講到才記）
     access_info:           Optional[str] = None  # 其他資訊：消防車進不進得去、有沒有水源（被動）
 
-    # 垂片 B1（交通工具火警）照 0929 xlsx 新增的欄位，存文字。
-    # 車種沿用 vehicle_type、起火車輛數量沿用 vehicle_count。
-    fire_origin_part:      Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
+    # 垂片 B1（交通工具火警）照 xlsx 新增的欄位，存文字。起火車輛數量沿用 vehicle_count。
+    vehicle_kind:          Optional[str] = None  # 交通工具（1013）：聯結車/大小貨車/小客車/汽車/機車/腳踏車…
+    vehicle_model:         Optional[str] = None  # 車型（1013）：小客車/休旅車/計程車/貨車…
+    vehicle_power:         Optional[str] = None  # 車輛動力（1013）：油車/油電車/電動車
+    bicycle_type:          Optional[str] = None  # 腳踏車車型（1013）：一般腳踏車/UBIKE/電輔車
+    fire_origin_part:     Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
     engine_off_status:     Optional[str] = None  # 車輛是否已熄火：已熄火/未熄火…
     occupants_status:      Optional[str] = None  # 乘客下車狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上就轉人工
     injury_status:         Optional[str] = None  # 有無人員受傷
     cargo:                 Optional[str] = None  # 載運物：易燃物/化學品/鋰電池…
     extinguish_status:     Optional[str] = None  # 滅火狀況：無人/有人在場/已在自行滅火…（B2 也用）
-    vehicle_motion:        Optional[str] = None  # 車輛停放或行駛中（被動）
+    vehicle_motion:        Optional[str] = None  # 車輛行駛狀況：停放路邊/行駛中起火/停車場內
     plate_number:          Optional[str] = None  # 車牌號碼（被動）
 
     # 垂片 C（輕微火警）照 0929 xlsx 新增的欄位，存文字。
     # 氣味類型沿用 odor、無人應門沿用 door_response、燃燒範圍沿用 fire_extent（都跟 A 共用）。
     alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
-    power_outage:          Optional[str] = None  # 停電狀況（1005 xlsx 新增，電線桿(電纜)才問）：有停電/沒有停電
     source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
     target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
 
@@ -146,8 +183,7 @@ class CaseInfo119:
     hazardous_materials:    Optional[str] = None  # 化學品或危險物品狀況
 
     # 車輛火災
-    vehicle_type:           Optional[str] = None  # 車種
-    vehicle_count:          Optional[str] = None  # 起火車輛數
+    vehicle_count:         Optional[str] = None  # 起火車輛數
     vehicle_occupants:      Optional[bool] = None  # 車內是否有人
     vehicle_occupant_count: Optional[str] = None  # 車內人數
     road_type:              Optional[str] = None  # 一般道路/高速公路
@@ -232,6 +268,11 @@ class CaseInfo119:
         from sop_element_id_119 import sop_element_ids
 
         d["sop_element_ids"] = sop_element_ids(d)
+        # 救護的派遣等級跟著目前的傷病患人數算：報案人改口人數時，等級也跟著改（可以往下降）
+        if d.get("main_category") == "救護":
+            from sop_utils_119 import rescue_level
+
+            d["level"] = rescue_level(d.get("patient_count"))
         return d
 
     def caller_texts(self) -> List[str]:
@@ -295,7 +336,7 @@ class CaseInfo119:
                 continue
             if k == "ImportantCase" and v == 0:
                 continue
-            if k == "fire_level" and v == 0:
+            if k == "level" and v == 0:
                 continue
             if isinstance(v, list) and len(v) == 0:
                 continue

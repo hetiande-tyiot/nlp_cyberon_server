@@ -2,6 +2,7 @@
 
 初始等級來自 scripts/levels.xlsx「火災分級-修正」第 2–31 行（C 次分類、N 初始等級）。
 空白、資料庫、X 都是 0。升級只看 16 個固定語意，不從其他火警欄位換算。
+算出來的等級寫進案件的 level（派遣等級，各大類共用的欄位；其他大類目前固定 0）。
 """
 
 from __future__ import annotations
@@ -156,11 +157,11 @@ def highest_signal_level(raw: Any) -> int:
 
 
 def raise_fire_level(case: Any, signals: Any = None) -> None:
-    """火警案件取 max(目前, 次案類初始, 本輪語意)。非火警不寫。"""
+    """火警案件的 level 取 max(目前, 次案類初始, 本輪語意)。非火警不寫，維持 0。"""
     if getattr(case, "main_category", None) != "火警":
         return
-    current = getattr(case, "fire_level", None)
+    current = getattr(case, "level", None)
     if isinstance(current, bool) or not isinstance(current, int):
         current = 0
     updated = max(current, initial_level(getattr(case, "sub_category", None)), highest_signal_level(signals))
-    case.fire_level = updated
+    case.level = updated

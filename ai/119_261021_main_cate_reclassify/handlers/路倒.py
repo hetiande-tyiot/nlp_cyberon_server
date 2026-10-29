@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
 _R1 = "重複確認地址，這樣對嗎？"   # 重新確認地址
-_R2 = "救護車已經派了。"
 
 
 class LuDaoHandler(SubCategoryHandler):
@@ -210,10 +209,9 @@ class LuDaoHandler(SubCategoryHandler):
         """依情境編號發送對應回應。"""
 
         if scenario_id == 1:
-            # 有人倒在公共場所：重複確認地址 + 救護車已派
+            # 有人倒在公共場所：重複確認地址（派車改在次案類確定時講，這裡不重講）
             current_addr = engine.case.display_address()
             engine._say(f"{_R1}地址是：{current_addr}。")
-            engine._say(_R2)
 
     # ── 報案人訊息 ────────────────────────────────────────────────────────────
 

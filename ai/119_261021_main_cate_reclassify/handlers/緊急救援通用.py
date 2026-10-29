@@ -21,7 +21,7 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
     """緊急救援大類通用 Handler（不登記於子類 registry）。"""
 
     def run_generic_flow(self, engine: "SopEngine119") -> None:
-        """補問事件描述；已填則跳過。"""
+        """補問事件描述；已填則跳過。問完（或跳過）才講派車。"""
         engine._ensure_known_fields_from_history()
         engine._set_stage("緊急救援_incident")
 
@@ -29,16 +29,17 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
             engine._debug_print(
                 "skip_incident_description", engine.case.incident_description
             )
-            return
-
-        engine._ask_and_extract("請問發生什麼事情。")
+        else:
+            engine._ask_and_extract("請問發生什麼事情。")
+        # 緊急救援還不判斷次案類，問完發生什麼事就當作案類確定，這時才講派車
+        engine._announce_dispatch("救援人員已派出了喔。")
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """救援人員話術收集報案人姓名與聯繫方式。"""
         from sop_119_engine import TransferToHumanError
 
         engine._set_stage("緊急救援_caller_info")
-        question = "救援人員已派出，請問你的姓名與聯繫方式？"
+        question = "請問你的姓名與聯繫方式？"
         caller_info_text = engine._ask_and_extract(question)
 
         caller_name = engine.case.caller_name

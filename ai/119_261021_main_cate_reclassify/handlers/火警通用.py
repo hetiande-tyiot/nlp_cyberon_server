@@ -19,6 +19,7 @@ from fire_tab_map_119 import (
     MODE_PASSIVE,
     OCCUPANTS_STILL_INSIDE,
     SAFETY_MESSAGE,
+    TAB_A,
     TAB_C,
     TAB_QUESTIONS,
     TRAPPED_TRANSFER_MESSAGE,
@@ -26,6 +27,9 @@ from fire_tab_map_119 import (
     UNRESOLVED_TAB_TAG,
     infer_tab,
     resolve_fire_tab,
+    set_tab_and_sub_category,
+    tab_conflicts_with_fire_smoke,
+    update_sub_category_from_answers,
 )
 from important_tags_119 import merge_important_tags
 from .base import SubCategoryHandler
@@ -43,6 +47,8 @@ class HuoJingGenericHandler(SubCategoryHandler):
         # 報地址時就講出有人受困 → 不必問案類，直接轉人工
         self._transfer_if_people_trapped(engine)
         self._resolve_tab(engine)
+        # 案類分析完、次案類確定了才講派車
+        engine._announce_dispatch("消防車已派出了喔。")
         self._backfill_earlier_answers_for_tab(engine)
 
         engine._sub_reclassify_enabled = True
@@ -223,10 +229,12 @@ class HuoJingGenericHandler(SubCategoryHandler):
         - 條件題：前置條件確定成立才問；不確定就當作不成立，不問
         - 主動題、條件成立的條件題：答案還不知道才問
         條件在輪到那一題時才判斷，因為要用到前面剛問到的答案。
+        每一題問之前先看火煙狀況，需要就在建築物火警和輕微火警之間換垂片。
         """
         for item in TAB_QUESTIONS.get(tab, ()):
             engine._ensure_known_fields_from_history()
             self._transfer_if_people_trapped(engine)
+            self._check_fire_smoke_and_move_tab(engine)
             if item.mode == MODE_PASSIVE:
                 continue
             if item.mode == MODE_CONDITIONAL and not item.condition(engine.case):
@@ -235,6 +243,36 @@ class HuoJingGenericHandler(SubCategoryHandler):
                 )
                 continue
             self._ask_missing(engine, item.stage, (item.field,), item.question)
+        # 火煙狀況可能在最後一題才問到，問完再檢查一次
+        self._check_fire_smoke_and_move_tab(engine)
+
+    def _check_fire_smoke_and_move_tab(self, engine: "SopEngine119") -> None:
+        """
+        每題問之前呼叫：
+        - 建築物火警，無火無煙 → 換到輕微火警（次案類清空，由輕微火警第一題問）
+        - 輕微火警的警報器作響、查看案件，看得到火或煙 → 換到建築物火警（次案類＝建築物類型）
+        換了垂片就從新垂片第一題重新走，答過的題目會自動跳過、不重問。
+        """
+        from sop_119_engine import SubCategorySwitched
+
+        case = engine.case
+        with engine._case_lock:
+            update_sub_category_from_answers(case)
+            if not tab_conflicts_with_fire_smoke(
+                case.fire_tab, case.sub_category, case.fire_or_smoke,
+            ):
+                return  # 不用換，繼續問下一題
+            old_sub = case.sub_category
+            if case.fire_tab == TAB_A:
+                set_tab_and_sub_category(case, TAB_C, None)
+            else:
+                set_tab_and_sub_category(case, TAB_A, case.building_type)
+        engine._notify_case_update()
+        engine._debug_print(
+            "fire_tab_moved_by_fire_smoke",
+            {"火煙狀況": case.fire_or_smoke, "換到垂片": case.fire_tab, "次案類": case.sub_category},
+        )
+        raise SubCategorySwitched(old_sub, case.sub_category or case.fire_tab)
 
     def _ask_missing(
         self,

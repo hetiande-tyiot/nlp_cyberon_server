@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
 # ── 觸發情境回應文字 ──────────────────────────────────────────────────────────
 
-_R2  = "救護車已經派了。"
 _R4  = "請您幫我打開大門，在家休息等救護車。"
 _R18 = "拿毛巾先墊著。"
 
@@ -241,22 +240,17 @@ class YunFuJiChanHandler(SubCategoryHandler):
     def _send_trigger_responses(self, scenario_id: int, engine: "SopEngine119") -> None:
         """依情境編號發送對應回應（全部為陳述句，無問句）。"""
 
-        if scenario_id == 1:
-            # 她快要生了
-            engine._say(_R2)
-
-        elif scenario_id == 2:
-            # 她現在還清醒、可以說話
-            engine._say(_R2)
+        if scenario_id in (1, 2):
+            # 情境 1（她快要生了）、2（她現在還清醒、可以說話）：原本只講「救護車已經派了」。
+            # 派車改在次案類確定時講過了，這裡不用再說話。
+            pass
 
         elif scenario_id == 3:
             # 她沒有呼吸了
-            engine._say(_R2)
             engine._say(_R4)
 
         elif scenario_id == 4:
             # 羊水破了、有流血、有規則陣痛等產科症狀
-            engine._say(_R2)
             engine._say(_R18)
 
     # ── 報案人訊息 ────────────────────────────────────────────────────────────

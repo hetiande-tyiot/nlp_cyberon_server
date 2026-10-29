@@ -49,7 +49,8 @@ class FieldsPerTabTests(unittest.TestCase):
             with self.subTest(tab=tab):
                 fields = fire_fields_to_extract(tab)
                 for item in questions:
-                    if item.field != "sub_category":
+                    # 次案類、建築物類型由次案類代碼換算，不請 LLM 直接填
+                    if item.field not in ("sub_category", "building_type"):
                         self.assertIn(item.field, fields)
 
     def test_building_only_fields_not_sent_before_tab_known(self) -> None:
@@ -60,7 +61,7 @@ class FieldsPerTabTests(unittest.TestCase):
 
     def test_other_tab_fields_not_sent(self) -> None:
         fields = fire_fields_to_extract("B1")
-        self.assertIn("vehicle_type", fields)
+        self.assertIn("vehicle_kind", fields)
         self.assertNotIn("fire_floor", fields)       # A 專屬
         self.assertNotIn("alarm_status", fields)     # C 專屬
 
@@ -76,9 +77,12 @@ class ExtractorSendsOnlySelectedFieldsTests(unittest.TestCase):
     def _fire_call(self, tab):
         calls = []
         ext = object.__new__(LLMExtractor119)
+        # 跳過初始化時要自己設定 backend；設成 gguf 讓欄位一組一組依序抽，不平行抽，測試結果才固定
+        ext.backend = "gguf"
         ext.extract_slots = lambda text, schema, rules, **kw: calls.append((schema, rules)) or {}
         ext.extract_general_fields("測試", "測試", main_category="火警", fire_tab=tab)
-        return calls[-1]  # 最後一次呼叫是火警欄位那一組
+        # 火警欄位那一組一定有次案類代碼；火警等級用的欄位另外一組，不是這裡要檢查的
+        return next(call for call in calls if "building_type_code" in call[0])
 
     def test_schema_matches_selected_fields(self) -> None:
         for tab in (None, *TAB_QUESTIONS):

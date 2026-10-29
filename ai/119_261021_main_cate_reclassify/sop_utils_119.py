@@ -478,6 +478,25 @@ def parse_patient_count(value: Optional[str]) -> Optional[int]:
     return None
 
 
+# 沒講數字、但明顯不只一個人的說法。不用單字「多」，免得「差不多一個」被當成很多人；
+# 也要先比對這些詞再解析數字，parse_patient_count 會把「一群人」解析成 1。
+_MANY_PEOPLE_WORDS: tuple[str, ...] = (
+    "很多", "好多", "好幾", "幾位", "幾個", "幾人", "一群", "一些", "有些", "多人", "多位",
+)
+
+
+def rescue_level(patient_count: Optional[str]) -> int:
+    """救護案件的派遣等級：2 人以上 → 2，其他（1 人、沒填、0 或看不出人數）→ 1。
+
+    報案人沒講人數時當作 1 人：急病、燒燙傷的人數不主動問（xlsx 是被動題或沒有這題）。
+    """
+    text = str(patient_count or "").strip()
+    if any(word in text for word in _MANY_PEOPLE_WORDS):
+        return 2
+    count = parse_patient_count(text) if text else None
+    return 2 if count and count > 1 else 1
+
+
 # 去掉這些通用/填充詞後若幾乎沒有「實質病徵」殘留，視為含糊。
 # 含「請求類」詞：報案人只說「要救護車」等，是請求而非病情描述——
 # 這類值不得當成有效 incident_description，否則會讓分類閘門誤判為「已有病情」而過早定細類。
