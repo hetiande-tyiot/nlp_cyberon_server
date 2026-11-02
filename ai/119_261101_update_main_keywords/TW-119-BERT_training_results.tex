@@ -1,0 +1,336 @@
+% TW-119-BERT 分層分類模型訓練結果報告
+% 編譯方式（推薦 XeLaTeX）: xelatex TW-119-BERT_training_results.tex
+\documentclass[UTF8,a4paper,11pt]{ctexart}
+
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{hyperref}
+
+\geometry{margin=2.5cm}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{TW-119-BERT 119案件分層分類模型\\訓練結果報告}
+\author{}
+\date{2026年6月}
+
+\begin{document}
+\maketitle
+
+\section{概述}
+
+本報告彙總臺灣119報案受理語音轉寫文本（STT）的分層分類模型訓練結果。系統採用兩階段分類架構：
+\begin{itemize}
+  \item \textbf{主分類模型}（\texttt{TW-119-BERT\_main}）：將報案文本劃分為6個主類別；
+  \item \textbf{次分類模型}（\texttt{TW-119-BERT-sub\_*}）：在各主類別內部進一步細分子類別。
+\end{itemize}
+
+基座模型為 \textbf{Chinese MacBERT-Base}（\texttt{hfl/chinese-macbert-base}），採用 \texttt{BertForSequenceClassification} 進行微調。訓練腳本為 \texttt{train\_hierarchical.py}，數據按 8:1:1 分層劃分為訓練集、驗證集與測試集（\texttt{random\_state=42}）。
+
+\section{訓練配置}
+
+\begin{table}[htbp]
+  \centering
+  \caption{統一訓練超參數}
+  \label{tab:hyperparams}
+  \begin{tabular}{ll}
+    \toprule
+    參數 & 取值 \\
+    \midrule
+    基座模型 & Chinese MacBERT-Base \\
+    最大序列長度 & 128 \\
+    批大小（訓練/評估） & 64 / 128 \\
+    訓練輪數 & 5 \\
+    學習率 & $2 \times 10^{-5}$ \\
+    學習率調度 & Cosine，預熱比例 10\% \\
+    權重衰減 & 0.01 \\
+    類別權重 & Balanced（預設開啟） \\
+    早停耐心值 & 2（基於驗證集 Macro-F1） \\
+    混合精度 & FP16 \\
+    隨機種子 & 42 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{訓練數據集概況}
+
+訓練數據來源於清洗後的119報案 STT 文本，存放於 \texttt{/root/autodl-tmp/119data/all\_category\_splits\_cleaned/}，共23個子類別 JSON 檔案，合計 \textbf{303,738} 條記錄。每條記錄包含 \texttt{stt\_text}（文本）、\texttt{main\_category}（主類別）與 \texttt{sub\_category}（子類別）欄位。
+
+\subsection{主類別分佈}
+
+\begin{table}[htbp]
+  \centering
+  \caption{訓練數據集主類別樣本分佈}
+  \label{tab:main-dist}
+  \begin{tabular}{lrrr}
+    \toprule
+    主類別 & 樣本數 & 佔比 (\%) & 子類別數 \\
+    \midrule
+    救護       & 277,184 & 91.26 & 9 \\
+    火警       &  11,738 &  3.86 & 4 \\
+    緊急救援   &   8,508 &  2.80 & 5 \\
+    其他案類   &   4,438 &  1.46 & 2 \\
+    檢舉投訴   &   1,655 &  0.54 & 1 \\
+    災害       &     215 &  0.07 & 2 \\
+    \midrule
+    \textbf{合計} & \textbf{303,738} & \textbf{100.00} & \textbf{23} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{主分類模型數據劃分}
+
+\begin{table}[htbp]
+  \centering
+  \caption{主分類模型（TW-119-BERT\_main）數據集劃分}
+  \label{tab:main-split}
+  \begin{tabular}{lrr}
+    \toprule
+    數據集 & 樣本數 & 比例 \\
+    \midrule
+    訓練集 & 242,990 & 80.0\% \\
+    驗證集 &  30,374 & 10.0\% \\
+    測試集 &  30,374 & 10.0\% \\
+    \midrule
+    合計   & 303,738 & 100.0\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{各主類別子類別分佈}
+
+\begin{table}[htbp]
+  \centering
+  \caption{各主類別下子類別樣本分佈}
+  \label{tab:sub-dist}
+  \small
+  \begin{tabular}{llrr}
+    \toprule
+    主類別 & 子類別 & 樣本數 & 佔該主類比例 (\%) \\
+    \midrule
+    \multirow{2}{*}{其他案類}
+      & 轉報案件 & 3,246 & 73.14 \\
+      & 捉蛇     & 1,192 & 26.86 \\
+    \midrule
+    \multirow{9}{*}{救護}
+      & 急病     & 169,342 & 61.10 \\
+      & 車禍     &  47,438 & 17.11 \\
+      & 一般受傷 &  35,862 & 12.94 \\
+      & 路倒     &  13,270 &  4.79 \\
+      & 精神異常 &   4,608 &  1.66 \\
+      & 其它     &   3,208 &  1.16 \\
+      & 吞食藥物 &   1,772 &  0.64 \\
+      & 打架受傷 &     963 &  0.35 \\
+      & 割腕     &     721 &  0.26 \\
+    \midrule
+    檢舉投訴 & 爆竹煙火 & 1,655 & 100.00 \\
+    \midrule
+    \multirow{4}{*}{火警}
+      & 集合住宅       & 6,265 & 53.37 \\
+      & 查看案件       & 3,527 & 30.05 \\
+      & 警報器作響     & 1,219 & 10.38 \\
+      & 電線桿(電纜)   &   727 &  6.19 \\
+    \midrule
+    \multirow{2}{*}{災害}
+      & 路樹傾倒 & 140 & 65.12 \\
+      & 其他     &  75 & 34.88 \\
+    \midrule
+    \multirow{5}{*}{緊急救援}
+      & 其他             & 3,979 & 46.77 \\
+      & 車禍救助         & 1,483 & 17.43 \\
+      & 瓦斯漏氣(建築物) & 1,473 & 17.31 \\
+      & 電梯受困         &   842 &  9.90 \\
+      & 跳樓             &   731 &  8.59 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{說明：}
+\begin{itemize}
+  \item \textbf{檢舉投訴}僅含1個子類別（爆竹煙火），無需訓練次分類模型；
+  \item \textbf{災害}樣本量極少（215條），未單獨訓練次分類模型。
+\end{itemize}
+
+\subsection{次分類模型數據劃分}
+
+\begin{table}[htbp]
+  \centering
+  \caption{各次分類模型數據集劃分}
+  \label{tab:sub-split}
+  \begin{tabular}{lrrrr}
+    \toprule
+    模型 & 總樣本 & 訓練集 & 驗證集 & 測試集 \\
+    \midrule
+    TW-119-BERT-sub\_救護     & 277,184 & 221,747 & 27,718 & 27,719 \\
+    TW-119-BERT-sub\_火警     &  11,738 &   9,390 &  1,174 &  1,174 \\
+    TW-119-BERT-sub\_緊急救援 &   8,508 &   6,806 &    851 &    851 \\
+    TW-119-BERT-sub\_其他案類 &   4,438 &   3,550 &    444 &    444 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{分類模型評估結果}
+
+所有指標均在\textbf{測試集}上計算。表中準確率（Accuracy）為整體分類準確率；各類別另報告精確率（Precision）、召回率（Recall）與 F1 值。召回率亦可視為該類別內的分類命中率。
+
+\subsection{主分類模型（TW-119-BERT\_main）}
+
+\begin{table}[htbp]
+  \centering
+  \caption{主分類模型測試集評估結果（6類）}
+  \label{tab:main-results}
+  \begin{tabular}{lrrrr}
+    \toprule
+    類別 & 精確率 & 召回率 & F1值 & 測試樣本數 \\
+    \midrule
+    其他案類   & 0.7328 & 0.7905 & 0.7606 &    444 \\
+    救護       & 0.9891 & 0.9853 & 0.9872 & 27,718 \\
+    檢舉投訴   & 0.9518 & 0.9518 & 0.9518 &    166 \\
+    火警       & 0.9264 & 0.9327 & 0.9295 &  1,174 \\
+    災害       & 0.8636 & 0.9048 & 0.8837 &     21 \\
+    緊急救援   & 0.6941 & 0.7438 & 0.7181 &    851 \\
+    \midrule
+    Macro 平均 & 0.8596 & 0.8848 & 0.8718 & 30,374 \\
+    Weighted 平均 & 0.9743 & 0.9734 & 0.9738 & 30,374 \\
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{整體準確率：97.34\%} \quad 驗證集最優 Macro-F1：85.30\%
+
+\subsection{次分類模型總體對比}
+
+\begin{table}[htbp]
+  \centering
+  \caption{各次分類模型測試集整體準確率對比}
+  \label{tab:sub-summary}
+  \begin{tabular}{llrrr}
+    \toprule
+    模型目錄 & 對應主類別 & 類別數 & 測試集準確率 & 驗證集最優 Macro-F1 \\
+    \midrule
+    TW-119-BERT-sub\_其他案類   & 其他案類   & 2 & \textbf{97.52\%} & 95.87\% \\
+    TW-119-BERT-sub\_緊急救援   & 緊急救援   & 5 & 88.84\% & 89.41\% \\
+    TW-119-BERT-sub\_救護       & 救護       & 9 & 81.46\% & 61.52\% \\
+    TW-119-BERT-sub\_火警       & 火警       & 4 & 73.76\% & 74.93\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{次分類模型：TW-119-BERT-sub\_救護（9類）}
+
+\begin{table}[htbp]
+  \centering
+  \caption{救護次分類模型測試集各類別評估結果}
+  \label{tab:sub-jiuhu}
+  \small
+  \begin{tabular}{lrrrr}
+    \toprule
+    子類別 & 精確率 & 召回率 & F1值 & 測試樣本數 \\
+    \midrule
+    急病     & 0.9419 & 0.8318 & 0.8834 & 16,934 \\
+    車禍     & 0.8862 & 0.9079 & 0.8969 &  4,744 \\
+    一般受傷 & 0.6585 & 0.6985 & 0.6779 &  3,586 \\
+    路倒     & 0.4160 & 0.7649 & 0.5389 &  1,327 \\
+    精神異常 & 0.6085 & 0.7115 & 0.6560 &    461 \\
+    吞食藥物 & 0.4766 & 0.5763 & 0.5217 &    177 \\
+    其它     & 0.2027 & 0.4237 & 0.2742 &    321 \\
+    打架受傷 & 0.4204 & 0.6804 & 0.5197 &     97 \\
+    割腕     & 0.4625 & 0.5139 & 0.4868 &     72 \\
+    \midrule
+    \textbf{整體準確率} & \multicolumn{4}{c}{\textbf{81.46\%}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{次分類模型：TW-119-BERT-sub\_火警（4類）}
+
+\begin{table}[htbp]
+  \centering
+  \caption{火警次分類模型測試集各類別評估結果}
+  \label{tab:sub-huojing}
+  \begin{tabular}{lrrrr}
+    \toprule
+    子類別 & 精確率 & 召回率 & F1值 & 測試樣本數 \\
+    \midrule
+    集合住宅       & 0.8253 & 0.7620 & 0.7924 & 626 \\
+    警報器作響     & 0.7462 & 0.7951 & 0.7698 & 122 \\
+    查看案件       & 0.6042 & 0.6487 & 0.6257 & 353 \\
+    電線桿(電纜)   & 0.7241 & 0.8630 & 0.7875 &  73 \\
+    \midrule
+    \textbf{整體準確率} & \multicolumn{4}{c}{\textbf{73.76\%}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{次分類模型：TW-119-BERT-sub\_緊急救援（5類）}
+
+\begin{table}[htbp]
+  \centering
+  \caption{緊急救援次分類模型測試集各類別評估結果}
+  \label{tab:sub-jinji}
+  \begin{tabular}{lrrrr}
+    \toprule
+    子類別 & 精確率 & 召回率 & F1值 & 測試樣本數 \\
+    \midrule
+    電梯受困         & 0.9524 & 0.9524 & 0.9524 &  84 \\
+    瓦斯漏氣(建築物) & 0.9045 & 0.9595 & 0.9311 & 148 \\
+    車禍救助         & 0.9143 & 0.8649 & 0.8889 & 148 \\
+    其他             & 0.9029 & 0.8643 & 0.8832 & 398 \\
+    跳樓             & 0.6966 & 0.8493 & 0.7654 &  73 \\
+    \midrule
+    \textbf{整體準確率} & \multicolumn{4}{c}{\textbf{88.84\%}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{次分類模型：TW-119-BERT-sub\_其他案類（2類）}
+
+\begin{table}[htbp]
+  \centering
+  \caption{其他案類次分類模型測試集各類別評估結果}
+  \label{tab:sub-qita}
+  \begin{tabular}{lrrrr}
+    \toprule
+    子類別 & 精確率 & 召回率 & F1值 & 測試樣本數 \\
+    \midrule
+    轉報案件 & 1.0000 & 0.9662 & 0.9828 & 325 \\
+    捉蛇     & 0.9154 & 1.0000 & 0.9558 & 119 \\
+    \midrule
+    \textbf{整體準確率} & \multicolumn{4}{c}{\textbf{97.52\%}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{結果分析}
+
+\begin{enumerate}
+  \item \textbf{主分類表現優異}：在極度不平衡的數據分佈下（救護佔91\%），主分類模型整體準確率達 97.34\%，對救護、檢舉投訴、火警等大類識別穩定。
+  \item \textbf{少數類識別仍有挑戰}：主分類中「緊急救援」與「其他案類」的 F1 分別為 0.72 與 0.76，是主要的誤分來源；「災害」樣本極少（測試集僅21條），指標波動較大。
+  \item \textbf{次分類難度因主類而異}：救護含9個子類且部分長尾類別（其它、割腕、打架受傷）樣本稀少，整體準確率 81.46\%；火警次分類準確率 73.76\%，「查看案件」與「集合住宅」存在一定混淆。
+  \item \textbf{表現最佳的次分類模型}：其他案類（97.52\%）與緊急救援（88.84\%）次分類模型在各自測試集上表現較好。
+  \item \textbf{未訓練次分類的主類}：檢舉投訴（僅1子類）與災害（數據量不足）直接由主分類結果確定子類別。
+\end{enumerate}
+
+\section{模型檔案路徑}
+
+\begin{table}[htbp]
+  \centering
+  \caption{訓練產出模型目錄}
+  \label{tab:model-paths}
+  \small
+  \begin{tabular}{ll}
+    \toprule
+    模型 & 路徑 \\
+    \midrule
+    主分類 & \texttt{/root/autodl-tmp/models/TW-119-BERT\_main/} \\
+    救護次分類 & \texttt{/root/autodl-tmp/models/TW-119-BERT-sub\_救護/} \\
+    火警次分類 & \texttt{/root/autodl-tmp/models/TW-119-BERT-sub\_火警/} \\
+    緊急救援次分類 & \texttt{/root/autodl-tmp/models/TW-119-BERT-sub\_緊急救援/} \\
+    其他案類次分類 & \texttt{/root/autodl-tmp/models/TW-119-BERT-sub\_其他案類/} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\end{document}
