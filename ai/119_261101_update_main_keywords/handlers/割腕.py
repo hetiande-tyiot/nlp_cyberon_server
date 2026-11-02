@@ -32,14 +32,11 @@ _STOP_BLEEDING_REMINDER = "先拿乾淨的毛巾或衣服，用力壓住傷口�
 class GeWanHandler(SubCategoryHandler):
     """割腕次類別 Handler。"""
 
-    # 題目表的欄位，加上 OHCA 判定用的「是否有意識」
-    # （切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
-    SOP_SLOTS: tuple[str, ...] = tuple(
-        item.field for item in GE_WAN_QUESTIONS
-    ) + ("consciousness",)
+    # 題目表的欄位（切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
+    SOP_SLOTS: tuple[str, ...] = tuple(item.field for item in GE_WAN_QUESTIONS)
 
     def run_subtype_flow(self, engine: "SopEngine119") -> None:
-        """照題目表逐題問；問完呼吸做 OHCA 判定（見 base._ask_ems_questions）；題目問完講提醒語。"""
+        """照題目表逐題問；呼吸不正常、無呼吸轉真人（見 base._ask_ems_questions）；題目問完講提醒語。"""
         engine._ensure_known_fields_from_history()
         self._ask_ems_questions(engine, GE_WAN_QUESTIONS)
         engine._say(_STOP_BLEEDING_REMINDER)

@@ -135,15 +135,15 @@ class SubCategoryHandler:
         - 主動題、條件成立的條件題：答案還不知道才問
         - 沒有問句的題目（例如燒燙傷的年齡）跟上一題一起問：上一題的問句已經問到
         條件在輪到那一題時才判斷，因為要用到前面剛問到的答案。
-        問完呼吸（或呼吸已經知道）就做 OHCA 判定，見 _check_ohca_after_breathing。
-        每一題之前、全部問完之後都做一次改判檢查（_check_escalation），
-        因為報案人可能在任何一句講到要改判的內容，不一定是問到那一題時才講。
+        每一題之前、全部問完之後都做一次改判檢查（_check_escalation）和呼吸檢查（_check_breathing_transfer），
+        因為報案人可能在任何一句講到要改判的內容或呼吸狀況，不一定是問到那一題時才講。
         """
         from fire_tab_map_119 import MODE_CONDITIONAL, MODE_PASSIVE
 
         for number, item in enumerate(questions):
             engine._ensure_known_fields_from_history()
             self._check_escalation(engine)
+            self._check_breathing_transfer(engine)
             if item.mode == MODE_PASSIVE:
                 # 被動題不問；報案人已經講到的話，xlsx 備註的處理（例如改判）照樣要做
                 if engine._is_field_filled(item.field):
@@ -168,22 +168,19 @@ class SubCategoryHandler:
                 missing = [field for field in fields if not engine._is_field_filled(field)]
                 if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
                     question = SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]]
-                answer = engine._ask_and_extract(question)
-                self._after_ems_answer(engine, item, answer)
+                engine._ask_and_extract(question)
                 # 複合題問完還剩一個沒答到（例如只答「是女生」），用單問句再問一次
                 missing = [field for field in fields if not engine._is_field_filled(field)]
                 if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
-                    answer = engine._ask_and_extract(SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]])
-                    self._after_ems_answer(engine, item, answer)
+                    engine._ask_and_extract(SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]])
             else:
                 engine._debug_print(
                     f"skip_{item.stage}",
                     {field: getattr(engine.case, field) for field in fields},
                 )
             self._after_ems_item(engine, item)
-            if item.field == "breathing":
-                self._check_ohca_after_breathing(engine)
         self._check_escalation(engine)
+        self._check_breathing_transfer(engine)
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
         """
@@ -200,28 +197,23 @@ class SubCategoryHandler:
         """
 
     def _ems_question_needed(self, engine: "SopEngine119", item, fields) -> bool:
-        """
-        有任何一個欄位還不知道就要問。
-        意識：「意識程度」或「是否有意識」任一已經知道就不再問。
-        """
-        if item.field == "consciousness_level" and engine._is_field_filled("consciousness"):
-            return False
+        """有任何一個欄位還不知道就要問。"""
         return not all(engine._is_field_filled(field) for field in fields)
 
-    def _after_ems_answer(self, engine: "SopEngine119", item, answer: str) -> None:
+    def _check_breathing_transfer(self, engine: "SopEngine119") -> None:
         """
-        問完一題後：意識、呼吸再用專項抽取確認一次（OHCA 要靠這兩個值），
-        然後檢查觸發情境。觸發情境由各次案類自己的 _check_and_respond_to_triggers 處理。
+        呼吸 = 呼吸不正常、無呼吸 → 轉真人（使用者 11/02 決定，不再用 OHCA 判定）。
+        講原程式轉人工那句，再交給真人；已經轉過真人就不再講。
         """
-        if item.field in ("consciousness_level", "breathing"):
-            self._extract_s1_vitals(answer, item.question, engine)
-        self._check_and_respond_to_triggers(answer, engine)
+        from ems_tab_map_119 import BREATHING_TRANSFER
 
-    def _check_ohca_after_breathing(self, engine: "SopEngine119") -> None:
-        """呼吸這一題處理完之後的 OHCA 判定：呼吸不是「有」就轉人工。"""
-        with engine._case_lock:
-            breathing = engine.case.breathing
-        engine._check_ohca_and_transfer(breathing, "breathing")
+        if engine._bridged or engine.case.breathing not in BREATHING_TRANSFER:
+            return
+        from sop_119_engine import TransferToHumanError
+
+        engine._debug_print("breathing_transfer", engine.case.breathing)
+        engine._say("請不要掛斷電話，我立即為您轉接專人。")
+        raise TransferToHumanError("breathing_transfer", result="human_transfer")
 
     def _check_and_respond_to_triggers(self, caller_text: str, engine: "SopEngine119") -> None:
         """觸發情境偵測；預設沒有，由各次案類覆寫。"""

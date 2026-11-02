@@ -1489,18 +1489,15 @@ class LLMExtractor119:
             "caller_salutation":    "先生|小姐|null",
             "caller_address":       "string|null",
         }
+        # 救護照 1028 xlsx 垂片關鍵要素抽取（11/02 使用者決定）：一個關鍵要素一個欄位，
+        # 跟關鍵要素重複的廠商欄位（是否有意識、報案人是否即患者、肚子起伏、目前狀況、路倒原因）不再抽。
         rescue_core_schema = {
-            "consciousness":        "true|false|null",
-            "breathing":            "true|false|null",
-            "abdomen_rise":         "true|false|null",
+            "breathing":            "未知|有呼吸|呼吸不正常|無呼吸|null",
             "patient_count":        "string|null",
-            "patient_gender":       "string|null",
+            "patient_gender":       "男性|女性|null",
             "patient_age":          "string|null",
-            "caller_is_patient":    "true|false|null",
             "incident_description": "string|null",
-            "current_condition":    "string|null",
             "medical_history":      "string|null",
-            "collapse_cause":       "string|null",
         }
         rescue_incident_schema = {
             "incident_description": "string|null",
@@ -1525,18 +1522,12 @@ class LLMExtractor119:
             "crash_trapped":         "string|null",
             "conflict_status":       "string|null",
             "weapon_held":           "string|null",
-            "tocc":                  "string|null",
             "ingested_substance":    "string|null",
-            "blood_glucose":         "string|null",
-            "blood_pressure":        "string|null",
-            "seizure_info":          "string|null",
             "pregnancy_week":        "string|null",
             "due_date":              "string|null",
             "multiple_pregnancy":    "string|null",
-            "water_broken_bleeding": "string|null",
             "contractions":          "string|null",
             "prenatal_history":      "string|null",
-            "prenatal_clinic":       "string|null",
             "consciousness_level":   "string|null",
             "caller_relation":       "string|null",
             "caller_location":       "string|null",
@@ -1544,8 +1535,6 @@ class LLMExtractor119:
             "collapse_status":       "string|null",
             "patient_appearance":    "string|null",
             "companion_present":     "string|null",
-            "mobility":              "string|null",
-            "symptom_onset":         "string|null",
             "scene_access":          "string|null",
             "charcoal_status":       "string|null",
             "patient_location":      "string|null",
@@ -1622,22 +1611,25 @@ class LLMExtractor119:
         )
         rescue_core_rules = (
             "【抽取原則】結合問題語義，從報警人回答抽取；長答可同時填多欄；"
-            "問題主題不同也不得漏抽。\n"
-            "【示例】問「請問發生了什麼事？」"
-            "答「男生 75 歲左右，說話口語含糊、腳沒力走不了」→\n"
-            "patient_gender=男, patient_age=75歲, "
-            "incident_description=說話口語含糊、腳沒力走不了, "
-            "current_condition=口語含糊、腳沒力、走不了；其餘 null。\n"
-            "- consciousness/breathing/abdomen_rise：僅明確提及時填 true/false。\n"
-            "- patient_count/patient_gender/patient_age：提及就填；"
-            "男生→男；75歲左右→75歲；"
-            "描述他人「一位先生/女士」→ patient_gender；"
-            "「我是先生/小姐」只填 caller_salutation，不填 patient_gender。\n"
-            "- caller_is_patient：報案人描述自身症狀/自傷（我自己/我割腕/我頭痛）→ true；"
-            "代他人報案（我媽媽/一位路人/我先生）→ false；未提及 → null。\n"
-            "- incident_description：事件經過/主要病情；症狀描述也要填。\n"
-            "- current_condition：目前症狀/狀況。\n"
-            "- medical_history/collapse_cause：有才填，否則 null。"
+            "問題主題不同也不得漏抽。報案人只回「有」「沒有」「對」時，看問題問的是哪一項才填那一項。\n"
+            # 下面各欄照 1028 xlsx 垂片的參考範圍；舉的說法是廠商原本關鍵字規則裡的詞
+            "- breathing：患者呼吸，只能填這幾種之一："
+            "未知（不知道、看不到）；"
+            "有呼吸（有呼吸、還在呼吸、會呼吸、正常呼吸、胸口或肚子有起伏、肚子有在動）；"
+            "呼吸不正常；"
+            "無呼吸（沒有呼吸、停止呼吸、呼吸停止、沒在呼吸、胸口肚子沒有起伏、肚子不動）。"
+            "清醒的人喘、呼吸不順不填這裡，記在 incident_description。沒講到 → null。\n"
+            "- patient_count：需要救護的人數（例：1人、2人）。沒講到 → null。\n"
+            "- patient_gender：患者性別，只能填 男性 或 女性"
+            "（男生、男的、一位先生、阿公 → 男性；女生、女的、一位小姐、阿嬤 → 女性）。"
+            "「我是先生／小姐」講的是報案人自己，報案人不是患者時不填。沒講到 → null。\n"
+            "- patient_age：患者年齡（例：75歲左右 → 75歲）；未滿一歲記月份（例：3個月）。沒講到 → null。\n"
+            "- incident_description：病徵，記成下列一種或多種："
+            "呼吸(困難、變小、急促、不足)、胸或上腹(疼痛或壓迫)、突然劇烈身體任何部位疼痛、血流不止、"
+            "嚴重或長時間嘔吐、咳出或吐血、有自殺或想殺人的感覺、頭昏眼花虛弱或視覺變化、肢體無力、"
+            "腹痛及身體不適；不屬於這些的照報案人說的記。"
+            "清醒的人喘、呼吸不順記在這裡；突然走不動、站不起來記「肢體無力」。沒講到 → null。\n"
+            "- medical_history：患者病史，照報案人說的記。沒講到 → null。"
         )
         rescue_incident_rules = (
             "【緊急救援案情】只依報警人本輪實際回答抽取；未提及 → null。\n"
@@ -1676,9 +1668,7 @@ class LLMExtractor119:
             "- conflict_status：打架、衝突現在是不是還在打，只能填：已停止、進行中。沒講到 → null。\n"
             "- weapon_held：打架的人手上有沒有拿東西，填：沒有、不確定、刀、棍棒、酒瓶、玻璃；"
             "其他東西照報案人說的記。沒講到 → null。\n"
-            "- tocc：旅遊/職業/接觸/群聚史。\n"
             "- ingested_substance：服藥種類數量。\n"
-            "- blood_glucose/blood_pressure/seizure_info：血糖/血壓/抽搐。\n"
             # 孕婦待產題目表（1028 xlsx 12-孕婦待產）用到的孕產欄位，照 xlsx 參考範圍記
             "- contractions：孕婦陣痛狀況，只能填：沒有陣痛、不規則陣痛、規則陣痛、已經破水、落紅。"
             "沒講到 → null。\n"
@@ -1687,17 +1677,21 @@ class LLMExtractor119:
             "- multiple_pregnancy：第幾胎、單胞胎還是多胞胎（例：第2胎、單胞胎）。\n"
             "- prenatal_history：產檢狀況，只能填：產檢正常、產檢有異常、沒產檢或不知道。"
             "沒講到 → null。\n"
-            "- water_broken_bleeding/prenatal_clinic：其他孕產資訊。\n"
             # 下面三個欄位會拿來判斷要不要問下一題，只能記成固定說法（見 ems_tab_map_119）
+            # 意識、報案身分照 1028 xlsx 參考範圍；舉的說法是廠商原本關鍵字規則裡的詞
             "- consciousness_level：患者意識，只能填這幾種之一："
-            "未知（報案人說不知道、看不到）、意識清醒、剛剛昏倒、現在已清醒、"
-            "對聲音有反應、對疼痛有反應（要捏、拍才有反應）、昏迷（叫不醒、沒反應）。"
-            "沒講到意識 → null。\n"
-            # 報案身分、報案人位置的選項照 1028 xlsx OK 表的參考範圍
+            "未知（不知道、看不到）；"
+            "意識清醒（清醒、有意識、還清醒、會睜眼、睜得開、可以講話）；"
+            "對聲音有反應（叫他才有反應、叫了會回應或發出聲音）；"
+            "對疼痛有反應（要捏、拍才有反應，捏了手會動）；"
+            "昏迷（昏迷、叫不醒、沒反應、無意識、沒有意識、不清醒）。沒講到意識 → null。\n"
             "- caller_relation：報案人和患者的關係（報案身分），只能填這幾種之一："
             "本人、家人、朋友、同事、房東、110、里長、鄰居、工人、路過、看護、管理室、警衛、不認識。"
-            "報案人自己就是患者 → 本人；爸媽、兄弟姊妹、先生太太、子女等親屬 → 家人；"
-            "工地主任 → 工人；保全 → 警衛。沒講到 → null。\n"
+            "報案人講自己的狀況就是本人（我自己、我本人、我割腕、我吞藥、我受傷、我跌倒、我昏倒、"
+            "我頭痛、我胸口痛、我呼吸困難、我想不開、我羊水破了）；"
+            "爸媽、兄弟姊妹、先生太太、老公老婆、子女等親屬 → 家人（我媽、我爸、我先生、我老婆、我孩子）；"
+            "我朋友 → 朋友；我同事 → 同事；我鄰居 → 鄰居；工地主任 → 工人；保全 → 警衛；"
+            "路人、經過看到 → 路過。沒講到 → null。\n"
             "- caller_location：報案人現在在哪裡（報案人位置），只能填這幾種之一："
             "在現場、在遠處、不敢靠近、不在現場。在患者身邊也算在現場。沒講到 → null。\n"
             "- drinking_status：患者有沒有喝酒（有喝酒/沒有喝酒/不清楚）。\n"
@@ -1707,9 +1701,6 @@ class LLMExtractor119:
             "（例：穿紅色外套、戴帽子）。沒講到 → null。\n"
             "- companion_present：患者旁邊有沒有家人朋友，只能填：有家人或朋友在旁邊、只有他一個人、不清楚。"
             "沒講到 → null。\n"
-            "- mobility：患者平常的行動能力（平常可以自己走/平常需要人扶/長期臥床或坐輪椅）；"
-            "突然走不動不算，不要填。\n"
-            "- symptom_onset：症狀什麼時候開始或什麼時候被發現。\n"
             "- scene_access：現場有沒有人能開門、有沒有管理員或警衛、有沒有電梯、"
             "救護人員進不進得去、需不需要破門（例：需要破門、有人可以開門、門沒鎖）。\n"
             # 燒炭：下面兩個欄位的答案決定要不要講提醒，只能記成固定說法（見 ems_tab_map_119）

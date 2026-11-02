@@ -212,7 +212,7 @@ END_FLOW_SENTINEL = "__END_FLOW__"
 _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "incident_description": "現場發生什麼事",
     "consciousness": "是否有意識",
-    "breathing": "是否有呼吸",
+    "breathing": "呼吸",
     "abdomen_rise": "肚子是否有起伏",
     "patient_count": "傷病患人數",
     "patient_gender": "患者性別",
@@ -773,13 +773,18 @@ class SopEngine119:
             parts.append(self.case.incident_description)
         full_text = "\n".join(p for p in parts if p)
 
+        # 救護照 xlsx 垂片：性別記「男性／女性」；報案人是不是患者記在「報案身分」，
+        # 由模型照規則抽，不另外判廠商的「報案人是否即患者」（11/02 使用者決定）
+        is_rescue = self._fields_category() == "救護"
         with self._case_lock:
             if not self.case.patient_gender and full_text:
                 gender = infer_patient_gender_from_honorific(full_text)
+                if gender and is_rescue:
+                    gender = {"男": "男性", "女": "女性"}.get(gender, gender)
                 if gender:
                     self.case.patient_gender = gender
 
-            if self.case.caller_is_patient is None and full_text:
+            if not is_rescue and self.case.caller_is_patient is None and full_text:
                 is_patient = infer_caller_is_patient(full_text)
                 if is_patient is not None:
                     self.case.caller_is_patient = is_patient
@@ -962,7 +967,6 @@ class SopEngine119:
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
 
         identity_updates: Dict[str, Any] = {}  # 本輪 LLM 抽到的次案類代碼
-        consciousness_level_before = self.case.consciousness_level
         for key, val in extracted.items():
             if val is None:
                 continue
@@ -1049,6 +1053,13 @@ class SopEngine119:
                     self.case.fire_spread = bool(val)
                 elif key == "fire_spread" and isinstance(val, bool):
                     self.case.spread_risk = 1 if val else 0
+                continue
+
+            if key == "incident_description" and self._fields_category() == "救護":
+                # 病徵（xlsx 關鍵要素）也以報案人最新講的為準（11/02 使用者決定）：
+                # 原本空的才寫，判次案類前追問「發生什麼狀況」問到更清楚的病徵也寫不進來。
+                # 緊急救援也用這個欄位，維持原本的寫法。
+                setattr(self.case, key, val)
                 continue
 
             if key in _RESCUE_FIELDS:
@@ -1167,16 +1178,6 @@ class SopEngine119:
             if not current:
                 setattr(self.case, key, val)
 
-        if self._fields_category() == "救護":
-            from ems_tab_map_119 import fill_consciousness_from_level
-
-            # 意識程度改口了、這一句沒直接講有沒有意識：「是否有意識」清掉，照新的意識程度重算
-            if (
-                self.case.consciousness_level != consciousness_level_before
-                and extracted.get("consciousness") is None
-            ):
-                self.case.consciousness = None
-            fill_consciousness_from_level(self.case)
         if identity_updates and self.case.main_category == "火警":
             self._sync_fire_sub_category_from_identity_codes(identity_updates)
         if self.case.main_category == "火警":
@@ -1767,12 +1768,16 @@ class SopEngine119:
                 self._apply_extracted_fields({"ImportantTag": matched_tags})
 
         # 3) 生命征象規則校正（僅填補空值 / 校正明顯誤填風險）
-        vital_hints = extract_vital_signs_hint(caller_text)
+        # 救護照 xlsx 垂片抽取，這段關鍵字的詞已經寫進意識、呼吸的抽取規則，救護不跑（11/02 使用者決定）
+        vital_hints = (
+            extract_vital_signs_hint(caller_text) if self._fields_category() != "救護" else {}
+        )
         if vital_hints:
             with self._case_lock:
                 self._apply_extracted_fields(vital_hints)
 
-        if qa_question:
+        # 救護照 xlsx 垂片抽取，不用這段關鍵字補是／否（11/02 使用者決定）
+        if qa_question and self._fields_category() != "救護":
             for slot, keywords in (
                 ("consciousness", ("意識", "意识", "清醒", "反應", "反应", "捏", "肩膀")),
                 ("breathing", ("呼吸",)),
@@ -4679,6 +4684,11 @@ class SopEngine119:
                     setattr(self.case, slot, vital_val)
                 self._notify_case_update()
 
+            # 救護的呼吸照 xlsx 記文字（未知／有呼吸／呼吸不正常／無呼吸）：跟照題目表問的案類用同一套，
+            # 呼吸不正常、無呼吸轉真人，其他就不再往下問生命徵象（11/02 使用者決定）
+            if slot == "breathing" and isinstance(vital_val, str):
+                handler._check_breathing_transfer(self)
+                break
             # 任一項確認為有，即停止後續生命征象問題；只有明確為否才繼續。
             if vital_val is True:
                 self._debug_print("vital_confirmed", slot)

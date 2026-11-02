@@ -1,12 +1,13 @@
 """ems_tab_map_119.py — 救護垂片題目表。
 
-規格：docs/(all)救護垂片規格_關鍵要素與問句_1028.xlsx（只照標 OK 的工作表）
+規格：docs/(all)救護垂片規格_關鍵要素與問句_1028.xlsx
 目前照題目表問的次案類：OK 表 7 類（墜落傷、燒燙傷、精神異常、吞食藥物、上吊、燒炭、割腕），
-急病（01-急病），以及還沒標 OK、先照表問給承辦實測的一般受傷、路倒、車禍、打架受傷、孕婦待產
+以及還沒標 OK、先照表問給承辦實測的急病、一般受傷、路倒、車禍、打架受傷、孕婦待產
 （11/02 使用者決定）。
 其他救護次案類還是走原本的流程。
 照題目表問的案類不用觸發情境（廠商的機制：每題答完判斷情境、講固定的話），使用者 10/28 決定。
-急病不是 OK 表，是之前另外改的，等承辦確認再處理。
+欄位、抽取規則、條件都以 xlsx 關鍵要素為準，不用廠商重複概念的舊欄位（是否有意識、報案人是否即患者等）。
+呼吸 = 呼吸不正常、無呼吸 → 轉真人（使用者 11/02 決定，不再用 OHCA 判定，見 handlers/base.py）。
 
 寫法跟火警垂片表（fire_tab_map_119）一樣，每一題記下 xlsx 的「問法分類」與「前置條件」：
   主動：還不知道才問（報案人前面已經講過就跳過）
@@ -30,14 +31,15 @@ from fire_tab_map_119 import (
 
 # 條件會用到的固定說法。LLM 抽取規則（llm_extractor_119 的 rescue_ext_rules）
 # 要求這幾個欄位遇到對應情況時一定記成這些字，條件才判斷得出來。
-CONSCIOUSNESS_UNKNOWN = "未知"
-CONSCIOUSNESS_AWAKE = ("意識清醒", "剛剛昏倒、現在已清醒")
+CONSCIOUSNESS_AWAKE = "意識清醒"
 # 前置條件「意識 = 對聲音有反應、對疼痛有反應、昏迷」
 CONSCIOUSNESS_UNRESPONSIVE = ("對聲音有反應", "對疼痛有反應", "昏迷")
+# 呼吸是這兩種就轉真人（使用者 11/02 決定，不再用 OHCA 判定）
+BREATHING_TRANSFER = ("呼吸不正常", "無呼吸")
 RELATION_SELF = "本人"
 RELATION_STRANGER = ("不認識", "路過")
-# 報案人位置 = 在現場（急病的「在患者旁邊」也算在現場）
-LOCATION_ON_SCENE = ("在現場", "在患者旁邊")
+# 報案人位置 = 在現場
+LOCATION_ON_SCENE = ("在現場",)
 # 燒炭：炭盆狀況、患者所在位置（回答這兩種時要講提醒，見 handlers/燒炭.py）
 CHARCOAL_NOT_OUT = "尚未熄滅"
 PATIENT_STILL_INSIDE = "還在裡面"
@@ -71,34 +73,9 @@ CONTRACTIONS_WATER_BROKEN = "已經破水"
 CHILD_MAX_AGE = 14
 
 
-def fill_consciousness_from_level(case: Any) -> None:
-    """
-    意識程度抽到了、「是否有意識」還空著 → 補上，OHCA 判定用的是「是否有意識」。
-    清醒的兩種補「是」，對聲音有反應、對疼痛有反應、昏迷補「否」，未知不補。
-    """
-    if case.consciousness is not None:
-        return
-    level = case.consciousness_level
-    if level in CONSCIOUSNESS_AWAKE:
-        case.consciousness = True
-    elif level in CONSCIOUSNESS_UNRESPONSIVE:
-        case.consciousness = False
-
-
-def _consciousness_unknown(case: Any) -> bool:
-    """意識 = 未知：報案人說不知道、看不到。還沒問到不算。"""
-    return case.consciousness_level == CONSCIOUSNESS_UNKNOWN
-
-
 def _consciousness_unresponsive(case: Any) -> bool:
-    """
-    意識 = 對聲音有反應、對疼痛有反應、昏迷。
-    意識程度沒抽到、但「是否有意識」已經是「否」，也算成立：不能因為少了程度就不問呼吸。
-    """
-    level = case.consciousness_level
-    if level:
-        return level in CONSCIOUSNESS_UNRESPONSIVE
-    return case.consciousness is False
+    """意識 = 對聲音有反應、對疼痛有反應、昏迷。"""
+    return case.consciousness_level in CONSCIOUSNESS_UNRESPONSIVE
 
 
 def _caller_not_self(case: Any) -> bool:
@@ -191,6 +168,11 @@ def _caller_not_family(case: Any) -> bool:
     return bool(relation) and relation != RELATION_FAMILY
 
 
+def _caller_self_family_or_friend(case: Any) -> bool:
+    """報案身分 = 本人、家人、朋友（孕婦待產）。"""
+    return case.caller_relation in (RELATION_SELF, RELATION_FAMILY, RELATION_FRIEND)
+
+
 def _conflict_ongoing(case: Any) -> bool:
     """衝突狀況 = 進行中（打架受傷）。"""
     return case.conflict_status == CONFLICT_ONGOING
@@ -226,35 +208,35 @@ def is_child_age(age: Optional[str]) -> bool:
 _UNRESPONSIVE_TEXT = "意識 = 對聲音有反應、對疼痛有反應、昏迷"
 
 # ─── 01-急病 ─────────────────────────────────────────────────────────────────
+# 性別、年齡共用的前置條件（各案類第幾題不同，條件一樣）
+_GENDER_AGE_TEXT = "報案人位置 = 在現場 或 報案身分 ≠ 不認識、路過"
+
+# 第 5 題年齡沒有問句：跟第 4 題性別同一句問，前置條件也跟第 4 題一樣。
 JI_BING_QUESTIONS: Tuple[EmsQuestion, ...] = (
     EmsQuestion("病徵", "incident_description", MODE_ACTIVE,
-                "急病-病徵", "請問發生什麼事？"),
-    EmsQuestion("報案人與患者關係", "caller_relation", MODE_ACTIVE,
-                "急病-報案人與患者關係", "請問患者是您的什麼人？"),
-    EmsQuestion("意識", "consciousness_level", MODE_ACTIVE,
-                "急病-意識", "他現在人清醒嗎？叫他有沒有反應？"),
-    EmsQuestion("報案人是否在場", "caller_location", MODE_CONDITIONAL,
-                "急病-報案人是否在場", "您現在人在他旁邊嗎？可以靠近看看他嗎？",
-                _consciousness_unknown, "意識 = 未知"),
-    EmsQuestion("性別", "patient_gender", MODE_ACTIVE,
-                "急病-性別", "他是男生還是女生？"),
-    EmsQuestion("是否飲酒", "drinking_status", MODE_PASSIVE, "急病-是否飲酒"),
-    EmsQuestion("平常行動能力", "mobility", MODE_PASSIVE, "急病-平常行動能力"),
+                "急病-病徵", "請問患者是哪裡不舒服？"),
+    EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "急病-患者人數"),
+    EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
+                "急病-報案身分", "請問你認識患者嗎？"),
+    EmsQuestion("性別", "patient_gender", MODE_CONDITIONAL,
+                "急病-性別", "請問患者是男生還是女生？大概幾歲？",
+                _on_scene_or_knows_patient, _GENDER_AGE_TEXT),
+    EmsQuestion("年齡", "patient_age", MODE_CONDITIONAL,
+                "急病-年齡", "",
+                _on_scene_or_knows_patient, _GENDER_AGE_TEXT),
+    EmsQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
+                "急病-意識", "他現在人清醒嗎？叫他有沒有反應？",
+                _not_self_on_scene_or_unmentioned,
+                "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
     EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
                 "急病-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
                 _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
-    EmsQuestion("年齡", "patient_age", MODE_ACTIVE,
-                "急病-年齡", "他大概幾歲？"),
-    EmsQuestion("症狀發生時間", "symptom_onset", MODE_PASSIVE, "急病-症狀發生時間"),
-    EmsQuestion("病史", "medical_history", MODE_PASSIVE, "急病-病史"),
-    EmsQuestion("現場進入條件", "scene_access", MODE_PASSIVE, "急病-現場進入條件"),
-    EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "急病-患者人數"),
+    EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "急病-報案人位置"),
 )
 
 # ─── 08-燒燙傷OK ─────────────────────────────────────────────────────────────
 # 第 5 題年齡在 xlsx 沒有問句、前置條件也空白：第 4 題的問句同時問性別和年齡，
 # 所以年齡跟第 4 題用同一個前置條件，不另外問。
-_GENDER_AGE_TEXT = "報案人位置 = 在現場 或 報案身分 ≠ 不認識、路過"
 
 SHAO_TANG_SHANG_QUESTIONS: Tuple[EmsQuestion, ...] = (
     EmsQuestion("燒燙傷原因", "injury_cause", MODE_ACTIVE,
@@ -570,23 +552,27 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "打架受傷-報案人位置"),
     ),
     # ─── 12-孕婦待產（還沒標 OK）────────────────────────────────────────────
-    # 第 3 題懷孕週數沒有問句：跟第 2 題預產期同一句問（只缺一個時的補問句見 handlers/base.py）。
-    # 提醒語寫在 handlers/孕婦急產.py。
+    # 第 4 題懷孕週數沒有問句：跟第 3 題預產期同一句問（只缺一個時的補問句見 handlers/base.py）。
+    # 報案身分排第 1 題：第 3～6 題的條件要看報案身分。提醒語寫在 handlers/孕婦急產.py。
     "孕婦待產": (
+        EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
+                    "孕婦待產-報案身分", "請問是孕婦本人，還是家人朋友？"),
         EmsQuestion("陣痛狀況", "contractions", MODE_ACTIVE,
                     "孕婦待產-陣痛狀況", "現在有規則陣痛嗎？"),
-        EmsQuestion("預產期", "due_date", MODE_ACTIVE,
-                    "孕婦待產-預產期", "預產期是什麼時候？現在懷孕幾週了？"),
-        EmsQuestion("懷孕週數", "pregnancy_week", MODE_ACTIVE, "孕婦待產-懷孕週數", ""),
-        EmsQuestion("胎次與胎數", "multiple_pregnancy", MODE_ACTIVE,
-                    "孕婦待產-胎次與胎數", "這是第幾胎？是單胞胎還是雙胞胎？"),
-        EmsQuestion("產檢狀況", "prenatal_history", MODE_ACTIVE,
-                    "孕婦待產-產檢狀況", "之前產檢都正常嗎？"),
-        EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
-                    "孕婦待產-報案身分", "請問你認識患者嗎？"),
+        EmsQuestion("預產期", "due_date", MODE_CONDITIONAL,
+                    "孕婦待產-預產期", "預產期是什麼時候？現在懷孕幾週了？",
+                    _caller_self_family_or_friend, "報案身分 = 本人、家人、朋友"),
+        EmsQuestion("懷孕週數", "pregnancy_week", MODE_CONDITIONAL, "孕婦待產-懷孕週數", "",
+                    _caller_self_family_or_friend, "報案身分 = 本人、家人、朋友"),
+        EmsQuestion("胎次與胎數", "multiple_pregnancy", MODE_CONDITIONAL,
+                    "孕婦待產-胎次與胎數", "這是第幾胎？是單胞胎還是雙胞胎？",
+                    _caller_self_family_or_friend, "報案身分 = 本人、家人、朋友"),
+        EmsQuestion("產檢狀況", "prenatal_history", MODE_CONDITIONAL,
+                    "孕婦待產-產檢狀況", "之前產檢都正常嗎？",
+                    _caller_self_family_or_friend, "報案身分 = 本人、家人、朋友"),
         EmsQuestion("性別", "patient_gender", MODE_PASSIVE, "孕婦待產-性別"),
         EmsQuestion("年齡", "patient_age", MODE_CONDITIONAL,
-                    "孕婦待產-年齡", "請問患者大概幾歲？",
+                    "孕婦待產-年齡", "請問大概幾歲？",
                     _on_scene_or_knows_patient, _GENDER_AGE_TEXT),
         EmsQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
                     "孕婦待產-意識", "他現在人清醒嗎？叫他有沒有反應？",

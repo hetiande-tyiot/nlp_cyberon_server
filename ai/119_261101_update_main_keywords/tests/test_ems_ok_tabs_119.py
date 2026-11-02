@@ -84,8 +84,8 @@ NEIGHBOR = ("我是鄰居", {"caller_relation": "鄰居"})
 MALE_40 = ("男生，四十歲", {"patient_gender": "男性", "patient_age": "40歲"})
 AWAKE = ("他醒著", {"consciousness_level": "意識清醒"})
 COMA = ("叫不醒", {"consciousness_level": "昏迷"})
-BREATHING = ("有在呼吸", {"breathing": True})
-NO_BREATHING = ("沒有呼吸了", {"breathing": False})
+BREATHING = ("有在呼吸", {"breathing": "有呼吸"})
+NO_BREATHING = ("沒有呼吸了", {"breathing": "無呼吸"})
 
 
 class ZhuiLuoShangTests(unittest.TestCase):
@@ -139,11 +139,19 @@ class ZhuiLuoShangTests(unittest.TestCase):
             "墜落狀況", "墜落高度", "報案身分", "性別", "患者位置",
         ])
 
-    def test_unresponsive_not_breathing_is_ohca(self) -> None:
+    def test_unresponsive_not_breathing_transfers_to_human(self) -> None:
         with self.assertRaises(TransferToHumanError):
             _run("墜落傷", [
                 self.JUMPED, self.FIVE_F, FAMILY, MALE_40, self.GROUND, self.NEAR, COMA,
                 NO_BREATHING,
+            ])
+
+    def test_abnormal_breathing_transfers_to_human(self) -> None:
+        """呼吸不正常也轉真人（使用者 11/02 決定），講原程式轉人工那句。"""
+        with self.assertRaises(TransferToHumanError):
+            _run("墜落傷", [
+                self.JUMPED, self.FIVE_F, FAMILY, MALE_40, self.GROUND, self.NEAR, COMA,
+                ("呼吸很微弱、斷斷續續", {"breathing": "呼吸不正常"}),
             ])
 
 
@@ -203,7 +211,6 @@ class ShangDiaoTests(unittest.TestCase):
     def test_untied_unresponsive_breathing(self) -> None:
         engine, io = _run("上吊", [self.UNTIED, FAMILY, MALE_40, COMA, BREATHING])
         self.assertEqual(_asked("上吊", io)[-2:], ["意識", "呼吸"])
-        self.assertFalse(engine.case.is_ohca)
 
 
 class ChangedAnswerTests(unittest.TestCase):
@@ -214,14 +221,20 @@ class ChangedAnswerTests(unittest.TestCase):
         engine.case.main_category = "救護"
         return engine
 
-    def test_consciousness_changed_recomputes_is_conscious(self) -> None:
-        """意識先說醒著、後來說叫不醒：意識程度改成昏迷，「是否有意識」也跟著變成否。"""
+    def test_symptom_follows_latest(self) -> None:
+        """病徵先說「不舒服」、被追問後說肚子不舒服：病徵要更新，不能停在第一句。"""
+        engine = self._engine()
+        engine._apply_extracted_fields({"incident_description": "不舒服"})
+        engine._apply_extracted_fields({"incident_description": "腹痛及身體不適"})
+        self.assertEqual(engine.case.incident_description, "腹痛及身體不適")
+
+    def test_consciousness_changed_follows_latest(self) -> None:
+        """意識先說醒著、後來說叫不醒：意識改成昏迷；不寫廠商的「是否有意識」。"""
         engine = self._engine()
         engine._apply_extracted_fields({"consciousness_level": "意識清醒"})
-        self.assertTrue(engine.case.consciousness)
         engine._apply_extracted_fields({"consciousness_level": "昏迷"})
         self.assertEqual(engine.case.consciousness_level, "昏迷")
-        self.assertFalse(engine.case.consciousness)
+        self.assertIsNone(engine.case.consciousness)
 
     def test_free_text_field_takes_latest_answer(self) -> None:
         """燒燙傷原因這類照報案人說的記的欄位：「不是熱水，是熱油」→ 改成熱油。"""
@@ -322,6 +335,32 @@ class ShaoTangShangTests(unittest.TestCase):
             self.assertTrue(is_child_age(age), age)
         for age in ("15歲", "二十五歲", "40歲", None, "不知道"):
             self.assertFalse(is_child_age(age), age)
+
+
+class JiBingTests(unittest.TestCase):
+    """01-急病：照 1028 題目表問；沒有觸發情境、肚子起伏、服藥探問（使用者 11/02 決定）。"""
+    CHEST_PAIN = ("他胸口很痛", {"incident_description": "胸或上腹(疼痛或壓迫)"})
+
+    def test_family_awake(self) -> None:
+        _, io = _run("急病", [self.CHEST_PAIN, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("急病", io), ["病徵", "報案身分", "性別", "意識"])
+
+    def test_unresponsive_breathing_continues(self) -> None:
+        _, io = _run("急病", [self.CHEST_PAIN, FAMILY, MALE_40, COMA, BREATHING])
+        self.assertEqual(_asked("急病", io), ["病徵", "報案身分", "性別", "意識", "呼吸"])
+
+    def test_not_breathing_transfers_without_vendor_lines(self) -> None:
+        """無呼吸直接轉真人：不問肚子起伏，也不講「開擴音教你做急救」這類觸發語句。"""
+        steps = [self.CHEST_PAIN, FAMILY, MALE_40, COMA, NO_BREATHING]
+        io = ScriptedIO([answer for answer, _ in steps])
+        engine = SopEngine119(io=io, llm_extractor=FakeLLM(dict(steps)))  # type: ignore[arg-type]
+        engine.case.main_category = "救護"
+        engine.case.sub_category = "急病"
+        with self.assertRaises(TransferToHumanError):
+            get_handler("急病").run_subtype_flow(engine)
+        self.assertEqual(_asked("急病", io), [
+            "病徵", "報案身分", "性別", "意識", "呼吸", TRANSFER_LINE,
+        ])
 
 
 class GeneralInjuryTests(unittest.TestCase):
@@ -450,24 +489,33 @@ class YunFuDaiChanTests(unittest.TestCase):
     TOWEL = "如果羊水破了，請拿乾淨的毛巾墊在孕婦屁股下方。"
 
     def test_family_awake_then_lie_on_left(self) -> None:
-        """清醒才講左側躺；沒有破水不講墊毛巾。性別是被動題，不問。"""
-        _, io = _run("孕婦待產", [self.REGULAR, self.DUE, self.SECOND, self.NORMAL,
-                                  FAMILY, self.AGE_30, AWAKE])
+        """報案身分先問；清醒才講左側躺；沒有破水不講墊毛巾。性別是被動題，不問。"""
+        _, io = _run("孕婦待產", [FAMILY, self.REGULAR, self.DUE, self.SECOND, self.NORMAL,
+                                  self.AGE_30, AWAKE])
         self.assertEqual(_asked("孕婦待產", io), [
-            "陣痛狀況", "預產期", "胎次與胎數", "產檢狀況", "報案身分", "年齡", "意識",
+            "報案身分", "陣痛狀況", "預產期", "胎次與胎數", "產檢狀況", "年齡", "意識",
             self.LIE_ON_LEFT,
         ])
 
+    def test_neighbor_skips_pregnancy_details(self) -> None:
+        """預產期、週數、胎次、產檢只問本人、家人、朋友；年齡的條件不同，鄰居照問。"""
+        _, io = _run("孕婦待產", [NEIGHBOR, self.REGULAR, self.AGE_30, AWAKE])
+        self.assertEqual(_asked("孕婦待產", io), [
+            "報案身分", "陣痛狀況", "年齡", "意識", self.LIE_ON_LEFT,
+        ])
+
     def test_water_broken_then_towel(self) -> None:
-        _, io = _run("孕婦待產", [self.WATER_BROKEN, self.DUE, self.SECOND, self.NORMAL,
-                                  FAMILY, self.AGE_30, AWAKE])
+        _, io = _run("孕婦待產", [FAMILY, self.WATER_BROKEN, self.DUE, self.SECOND, self.NORMAL,
+                                  self.AGE_30, AWAKE])
         self.assertEqual(_asked("孕婦待產", io)[-2:], [self.LIE_ON_LEFT, self.TOWEL])
 
     def test_due_date_only_then_ask_week(self) -> None:
-        _, io = _run("孕婦待產", [self.REGULAR, ("下禮拜", {"due_date": "下禮拜"}),
+        _, io = _run("孕婦待產", [FAMILY, self.REGULAR, ("下禮拜", {"due_date": "下禮拜"}),
                                   ("三十九週", {"pregnancy_week": "39週"}), self.SECOND,
-                                  self.NORMAL, FAMILY, self.AGE_30, AWAKE])
-        self.assertEqual(_asked("孕婦待產", io)[:3], ["陣痛狀況", "預產期", "現在懷孕幾週了？"])
+                                  self.NORMAL, self.AGE_30, AWAKE])
+        self.assertEqual(_asked("孕婦待產", io)[:4], [
+            "報案身分", "陣痛狀況", "預產期", "現在懷孕幾週了？",
+        ])
 
     def test_caller_is_patient_also_lie_on_left(self) -> None:
         """本人報案不問意識，但能講電話就是清醒，也講左側躺。"""
@@ -523,7 +571,7 @@ class OkTablesTests(unittest.TestCase):
 
     # 7 張 OK 表，加上還沒標 OK、先照表問給承辦實測的案類
     TABLE_SUBTYPES = ("墜落傷", "燒燙傷", "精神異常", "吞食藥物", "上吊", "燒炭", "割腕",
-                      "一般受傷", "路倒", "車禍", "打架受傷", "孕婦待產")
+                      "急病", "一般受傷", "路倒", "車禍", "打架受傷", "孕婦待產")
 
     def test_tables_match_case_type_qa(self) -> None:
         """照題目表問的案類，跟程式讀的 CaseTypeQA.xlsx 逐題對得上（題號靠位置算）。"""

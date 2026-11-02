@@ -95,8 +95,8 @@ PASSER = ("我是路過的", {"caller_relation": "路過"})
 MALE_30 = ("男生，三十歲", {"patient_gender": "男性", "patient_age": "30歲"})
 AWAKE = ("他醒著", {"consciousness_level": "意識清醒"})
 COMA = ("叫不醒", {"consciousness_level": "昏迷"})
-BREATHING = ("有在呼吸", {"breathing": True})
-NO_BREATHING = ("沒有呼吸了", {"breathing": False})
+BREATHING = ("有在呼吸", {"breathing": "有呼吸"})
+NO_BREATHING = ("沒有呼吸了", {"breathing": "無呼吸"})
 DOOR_OPEN = ("門沒鎖，進得去", {"scene_access": "門沒鎖，進得去"})
 BREAK_IN = ("門反鎖了，要破門", {"scene_access": "需要破門"})
 
@@ -109,7 +109,6 @@ class ShaoTanFlowTests(unittest.TestCase):
         self.assertEqual(_asked(io), [
             "報案人位置", "炭盆狀況", "患者所在位置", "報案身分", "性別", "意識",
         ])
-        self.assertFalse(engine.case.is_ohca)
 
     def test_reminders_right_after_answers(self) -> None:
         """炭盆還在燒、患者還在裡面：答完緊接著講提醒。"""
@@ -147,9 +146,8 @@ class ShaoTanFlowTests(unittest.TestCase):
     def test_unresponsive_breathing_continues(self) -> None:
         engine, io = _run([ON_SCENE, OUT, OUTSIDE, FAMILY, MALE_30, COMA, BREATHING])
         self.assertEqual(_asked(io)[-2:], ["意識", "呼吸"])
-        self.assertFalse(engine.case.is_ohca)
 
-    def test_unresponsive_not_breathing_is_ohca(self) -> None:
+    def test_unresponsive_not_breathing_transfers_to_human(self) -> None:
         with self.assertRaises(TransferToHumanError):
             engine, _ = _run([ON_SCENE, OUT, OUTSIDE, FAMILY, MALE_30, COMA, NO_BREATHING])
 

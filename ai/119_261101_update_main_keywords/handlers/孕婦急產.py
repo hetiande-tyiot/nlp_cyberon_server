@@ -19,7 +19,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ems_tab_map_119 import CONTRACTIONS_WATER_BROKEN, EMS_QUESTIONS, RELATION_SELF
+from ems_tab_map_119 import (
+    CONSCIOUSNESS_AWAKE,
+    CONTRACTIONS_WATER_BROKEN,
+    EMS_QUESTIONS,
+    RELATION_SELF,
+)
 
 from .base import SubCategoryHandler
 
@@ -37,17 +42,17 @@ _TOWEL_REMINDER = "如果羊水破了，請拿乾淨的毛巾墊在孕婦屁股�
 class YunFuJiChanHandler(SubCategoryHandler):
     """孕婦待產次類別 Handler。"""
 
-    # 題目表的欄位，加上 OHCA 判定用的「是否有意識」
-    # （切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
-    SOP_SLOTS: tuple[str, ...] = tuple(
-        item.field for item in YUN_FU_QUESTIONS
-    ) + ("consciousness",)
+    # 題目表的欄位（切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
+    SOP_SLOTS: tuple[str, ...] = tuple(item.field for item in YUN_FU_QUESTIONS)
 
     def run_subtype_flow(self, engine: "SopEngine119") -> None:
-        """照題目表逐題問；問完呼吸做 OHCA 判定（見 base._ask_ems_questions）；題目問完講提醒語。"""
+        """照題目表逐題問；呼吸不正常、無呼吸轉真人（見 base._ask_ems_questions）；題目問完講提醒語。"""
         engine._ensure_known_fields_from_history()
         self._ask_ems_questions(engine, YUN_FU_QUESTIONS)
-        if engine.case.consciousness is True or engine.case.caller_relation == RELATION_SELF:
+        if (
+            engine.case.consciousness_level == CONSCIOUSNESS_AWAKE
+            or engine.case.caller_relation == RELATION_SELF
+        ):
             engine._say(_LIE_ON_LEFT_REMINDER)
         if engine.case.contractions == CONTRACTIONS_WATER_BROKEN:
             engine._say(_TOWEL_REMINDER)

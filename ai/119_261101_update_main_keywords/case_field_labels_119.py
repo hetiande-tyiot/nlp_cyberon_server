@@ -42,7 +42,7 @@ LABELS: Dict[str, str] = {
     "address_corrected_note": "地址讀音更正提示",
     # 生命征象（救護專用）
     "consciousness": "是否有意識",
-    "breathing": "是否有呼吸",
+    "breathing": "呼吸",
     "abdomen_rise": "肚子是否有起伏",
     "is_ohca": "是否判斷為 OHCA",
     # 患者基本資訊（救護專用）
