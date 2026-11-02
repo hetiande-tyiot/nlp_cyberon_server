@@ -24,6 +24,8 @@ from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
 BREAK_IN_LINE = "這需要破門，我已為您加派消防車前往。"
 TRANSFER_LINE = "請不要掛斷電話，我立即為您轉接專人。"
 MEDICINE_BAG_REMINDER = "如果有發現藥袋，請一併提供給救護人員帶到醫院。"
+BURN_REMINDERS = ["可以的話，請協助沖冷水到救護人員到達為止。", "燙到的地方先不要擦任何藥。"]
+STOP_BLEEDING_REMINDER = "先拿乾淨的毛巾或衣服，用力壓住傷口止血。"
 
 
 class ScriptedIO(DialogueIO):
@@ -240,13 +242,15 @@ class GeWanTests(unittest.TestCase):
     WRIST_KNIFE = ("手腕，用美工刀", {"injury_severity": "手腕割傷", "cutting_tool": "美工刀"})
     REMOVED = ("拿走了", {"tool_status": "已移除"})
 
-    def test_family_awake(self) -> None:
+    def test_family_awake_then_reminder(self) -> None:
         _, io = _run("割腕", [self.WRIST_KNIFE, self.REMOVED, FAMILY, MALE_40, AWAKE])
-        self.assertEqual(_asked("割腕", io), ["初步傷勢", "工具狀況", "報案身分", "性別", "意識"])
+        self.assertEqual(_asked("割腕", io), [
+            "初步傷勢", "工具狀況", "報案身分", "性別", "意識", STOP_BLEEDING_REMINDER,
+        ])
 
     def test_caller_is_patient_no_consciousness(self) -> None:
         _, io = _run("割腕", [self.WRIST_KNIFE, self.REMOVED, MALE_40], caller_relation="本人")
-        self.assertEqual(_asked("割腕", io), ["初步傷勢", "工具狀況", "性別"])
+        self.assertEqual(_asked("割腕", io), ["初步傷勢", "工具狀況", "性別", STOP_BLEEDING_REMINDER])
 
 
 class TunShiYaoWuTests(unittest.TestCase):
@@ -299,10 +303,10 @@ class ShaoTangShangTests(unittest.TestCase):
     HOT_WATER = ("被熱水燙到", {"injury_cause": "熱水"})
     BLISTER = ("大腿起水泡，一個手掌大", {"injury_severity": "大腿起水泡，約一個手掌大"})
 
-    def test_family_awake(self) -> None:
+    def test_family_awake_then_reminders(self) -> None:
         _, io = _run("燒燙傷", [self.HOT_WATER, self.BLISTER, FAMILY, MALE_40, AWAKE])
         self.assertEqual(_asked("燒燙傷", io), [
-            "燒燙傷原因", "燙傷傷勢", "報案身分", "性別", "意識",
+            "燒燙傷原因", "燙傷傷勢", "報案身分", "性別", "意識", *BURN_REMINDERS,
         ])
 
     def test_child_transfers_to_human(self) -> None:
