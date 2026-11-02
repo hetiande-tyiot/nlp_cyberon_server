@@ -1520,6 +1520,11 @@ class LLMExtractor119:
             "injury_cause":          "string|null",
             "injury_location":       "string|null",
             "injury_severity":       "string|null",
+            "injury_place":          "string|null",
+            "crash_vehicles":        "string|null",
+            "crash_trapped":         "string|null",
+            "conflict_status":       "string|null",
+            "weapon_held":           "string|null",
             "tocc":                  "string|null",
             "ingested_substance":    "string|null",
             "blood_glucose":         "string|null",
@@ -1536,6 +1541,9 @@ class LLMExtractor119:
             "caller_relation":       "string|null",
             "caller_location":       "string|null",
             "drinking_status":       "string|null",
+            "collapse_status":       "string|null",
+            "patient_appearance":    "string|null",
+            "companion_present":     "string|null",
             "mobility":              "string|null",
             "symptom_onset":         "string|null",
             "scene_access":          "string|null",
@@ -1659,11 +1667,27 @@ class LLMExtractor119:
             "「在右邊那一棟／那邊／對面」是事發地點，必須 null；"
             "只有「左／右邊」、沒說哪個身體部位，也填 null。\n"
             "- injury_severity：傷勢。\n"
+            "- injury_place：在什麼場所受傷，照報案人說的記（例：住家室內、戶外、樓梯、路邊）；"
+            "沒講到 → null。\n"
+            "- crash_vehicles：車禍是什麼車跟什麼車，照報案人說的記（例：汽車撞機車、機車自摔、車撞行人）；"
+            "沒講到 → null。\n"
+            "- crash_trapped：車禍有沒有人被卡在車子裡面或車子底下，只能填：未知、無人受困、有人受困。"
+            "沒講到 → null。\n"
+            "- conflict_status：打架、衝突現在是不是還在打，只能填：已停止、進行中。沒講到 → null。\n"
+            "- weapon_held：打架的人手上有沒有拿東西，填：沒有、不確定、刀、棍棒、酒瓶、玻璃；"
+            "其他東西照報案人說的記。沒講到 → null。\n"
             "- tocc：旅遊/職業/接觸/群聚史。\n"
             "- ingested_substance：服藥種類數量。\n"
             "- blood_glucose/blood_pressure/seizure_info：血糖/血壓/抽搐。\n"
-            "- pregnancy_week/due_date/multiple_pregnancy/"
-            "water_broken_bleeding/contractions/prenatal_history/prenatal_clinic：孕產資訊。\n"
+            # 孕婦待產題目表（1028 xlsx 12-孕婦待產）用到的孕產欄位，照 xlsx 參考範圍記
+            "- contractions：孕婦陣痛狀況，只能填：沒有陣痛、不規則陣痛、規則陣痛、已經破水、落紅。"
+            "沒講到 → null。\n"
+            "- due_date：預產期日期。\n"
+            "- pregnancy_week：懷孕幾週（例：39週），只記週數。\n"
+            "- multiple_pregnancy：第幾胎、單胞胎還是多胞胎（例：第2胎、單胞胎）。\n"
+            "- prenatal_history：產檢狀況，只能填：產檢正常、產檢有異常、沒產檢或不知道。"
+            "沒講到 → null。\n"
+            "- water_broken_bleeding/prenatal_clinic：其他孕產資訊。\n"
             # 下面三個欄位會拿來判斷要不要問下一題，只能記成固定說法（見 ems_tab_map_119）
             "- consciousness_level：患者意識，只能填這幾種之一："
             "未知（報案人說不知道、看不到）、意識清醒、剛剛昏倒、現在已清醒、"
@@ -1677,6 +1701,12 @@ class LLMExtractor119:
             "- caller_location：報案人現在在哪裡（報案人位置），只能填這幾種之一："
             "在現場、在遠處、不敢靠近、不在現場。在患者身邊也算在現場。沒講到 → null。\n"
             "- drinking_status：患者有沒有喝酒（有喝酒/沒有喝酒/不清楚）。\n"
+            "- collapse_status：倒在路邊的人看起來是什麼狀況，只能填：喝醉、睡著、身體不舒服、跌倒受傷、不清楚。"
+            "沒講到 → null。\n"
+            "- patient_appearance：患者的外觀特徵，讓救護人員到現場認得出來，照報案人說的記"
+            "（例：穿紅色外套、戴帽子）。沒講到 → null。\n"
+            "- companion_present：患者旁邊有沒有家人朋友，只能填：有家人或朋友在旁邊、只有他一個人、不清楚。"
+            "沒講到 → null。\n"
             "- mobility：患者平常的行動能力（平常可以自己走/平常需要人扶/長期臥床或坐輪椅）；"
             "突然走不動不算，不要填。\n"
             "- symptom_onset：症狀什麼時候開始或什麼時候被發現。\n"

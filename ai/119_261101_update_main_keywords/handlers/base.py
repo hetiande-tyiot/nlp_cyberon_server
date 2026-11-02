@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 # xlsx 用一句話問兩個關鍵要素的題目，承辦要求缺什麼問什麼：
 # 兩個都不知道就照 xlsx 整句問；只缺一個時改問下面對應的句子（10/29 確認的說法）。
+# 整句問完只答到一個時，也用下面的句子補問一次。
 SINGLE_MISSING_QUESTIONS = {
     ("patient_gender", "patient_age"): {
         "patient_gender": "請問患者是男生還是女生？",
@@ -37,6 +38,11 @@ SINGLE_MISSING_QUESTIONS = {
     ("ingested_substance", "drug_amount"): {
         "ingested_substance": "請問是吃了什麼藥物？",
         "drug_amount": "知道大概吃了幾顆嗎？",
+    },
+    # 孕婦待產：句子照 xlsx 問句欄另外寫的單問句
+    ("due_date", "pregnancy_week"): {
+        "due_date": "預產期是什麼時候？",
+        "pregnancy_week": "現在懷孕幾週了？",
     },
 }
 
@@ -164,6 +170,11 @@ class SubCategoryHandler:
                     question = SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]]
                 answer = engine._ask_and_extract(question)
                 self._after_ems_answer(engine, item, answer)
+                # 複合題問完還剩一個沒答到（例如只答「是女生」），用單問句再問一次
+                missing = [field for field in fields if not engine._is_field_filled(field)]
+                if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
+                    answer = engine._ask_and_extract(SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]])
+                    self._after_ems_answer(engine, item, answer)
             else:
                 engine._debug_print(
                     f"skip_{item.stage}",

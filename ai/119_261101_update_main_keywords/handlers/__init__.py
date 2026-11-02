@@ -34,7 +34,7 @@ _REGISTRY: dict[str, SubCategoryHandler] = {
     "打架受傷": DaJiaShouShangHandler(),
     "吞食藥物": TunShiYaoWuHandler(),
     "墜落傷":  ZhuiLuoShangHandler(),
-    "孕婦急產": YunFuJiChanHandler(),
+    "孕婦待產": YunFuJiChanHandler(),
     "燒炭":    ShaoTanHandler(),
     "燒燙傷":  ShaoTangShangHandler(),
     "割腕":    GeWanHandler(),

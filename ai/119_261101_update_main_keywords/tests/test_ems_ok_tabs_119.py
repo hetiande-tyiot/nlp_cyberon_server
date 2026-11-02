@@ -324,20 +324,219 @@ class ShaoTangShangTests(unittest.TestCase):
             self.assertFalse(is_child_age(age), age)
 
 
+class GeneralInjuryTests(unittest.TestCase):
+    """10-一般受傷：還沒標 OK，先照題目表問給承辦實測。"""
+    FELL = ("在家跌倒", {"injury_cause": "跌倒", "injury_place": "住家室內"})
+    KNEE = ("膝蓋", {"injury_location": "膝蓋"})
+    BLEEDING = ("有在流血", {"injury_severity": "流血"})
+    FINGER_CUT = ("被機器切斷手指", {"injury_cause": "機器切斷手指"})
+    SEVERED = ("手指斷掉了，一直流血", {"injury_severity": "手指斷掉、流血"})
+    SEVERED_FINGER_REMINDER = (
+        "請將斷掉的手指用乾淨的塑膠袋裝好，再放進另一個裝冰水的袋子，"
+        "不要直接碰到冰塊，等一下交給救護人員。"
+    )
+
+    def test_family_awake_then_reminder(self) -> None:
+        """發生場所是被動題，報案人講到就記、不問。"""
+        engine, io = _run("一般受傷", [self.FELL, self.KNEE, self.BLEEDING, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("一般受傷", io), [
+            "受傷原因", "受傷部位", "傷勢", "報案身分", "性別", "意識", STOP_BLEEDING_REMINDER,
+        ])
+        self.assertEqual(engine.case.injury_place, "住家室內")
+
+    def test_severed_finger_reminder(self) -> None:
+        _, io = _run("一般受傷", [self.FINGER_CUT, ("右手", {"injury_location": "右手"}),
+                                  self.SEVERED, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("一般受傷", io)[-2:], [
+            STOP_BLEEDING_REMINDER, self.SEVERED_FINGER_REMINDER,
+        ])
+
+    def test_passer_not_on_scene_skips_gender_and_consciousness(self) -> None:
+        _, io = _run("一般受傷", [self.FELL, self.KNEE, self.BLEEDING, PASSER],
+                     caller_location="不在現場")
+        self.assertEqual(_asked("一般受傷", io), [
+            "受傷原因", "受傷部位", "傷勢", "報案身分", STOP_BLEEDING_REMINDER,
+        ])
+
+
+class LuDaoTests(unittest.TestCase):
+    """14-路倒：還沒標 OK，先照題目表問給承辦實測。"""
+    DRUNK = ("看起來喝醉了", {"collapse_status": "喝醉"})
+    UNWELL = ("好像身體不舒服", {"collapse_status": "身體不舒服"})
+    ONE = ("一個", {"patient_count": "1人"})
+    RED_COAT = ("穿紅色外套", {"patient_appearance": "穿紅色外套"})
+
+    def test_family_awake(self) -> None:
+        engine, io = _run("路倒", [self.UNWELL, self.ONE, self.RED_COAT, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("路倒", io), [
+            "路倒狀況", "患者人數", "患者外觀特徵", "報案身分", "性別", "意識",
+        ])
+        self.assertIsNone(engine.case.drinking_status)
+
+    def test_drunk_also_records_drinking(self) -> None:
+        """xlsx 備註：路倒狀況回答喝醉，是否飲酒也記成有喝酒。"""
+        engine, _ = _run("路倒", [self.DRUNK, self.ONE, self.RED_COAT, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(engine.case.drinking_status, "有喝酒")
+
+    def test_passer_not_on_scene_skips_gender_and_consciousness(self) -> None:
+        _, io = _run("路倒", [self.UNWELL, self.ONE, self.RED_COAT, PASSER],
+                     caller_location="不在現場")
+        self.assertEqual(_asked("路倒", io), ["路倒狀況", "患者人數", "患者外觀特徵", "報案身分"])
+
+
+class CheHuoTests(unittest.TestCase):
+    """02-車禍：還沒標 OK，先照題目表問給承辦實測。"""
+    CAR_SCOOTER = ("汽車撞機車", {"crash_vehicles": "汽車撞機車"})
+    ONE = ("一個", {"patient_count": "1人"})
+    NOT_TRAPPED = ("沒有", {"crash_trapped": "無人受困"})
+    TRAPPED = ("有一個卡在車子底下", {"crash_trapped": "有人受困"})
+
+    def test_family_awake(self) -> None:
+        engine, io = _run("車禍", [self.CAR_SCOOTER, self.ONE, self.NOT_TRAPPED, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("車禍", io), [
+            "事故車種", "患者人數", "有無人員受困", "報案身分", "性別", "意識",
+        ])
+        self.assertEqual(engine.case.main_category, "救護")
+
+    def test_passer_not_on_scene_skips_gender_and_consciousness(self) -> None:
+        _, io = _run("車禍", [self.CAR_SCOOTER, self.ONE, self.NOT_TRAPPED, PASSER],
+                     caller_location="不在現場")
+        self.assertEqual(_asked("車禍", io), ["事故車種", "患者人數", "有無人員受困", "報案身分"])
+
+    def test_trapped_escalates_without_speaking_and_keeps_asking(self) -> None:
+        """xlsx 備註：有人受困 → 改判緊急救援；不講話，車禍題目照樣問完，次案類維持車禍。"""
+        engine, io = _run("車禍", [self.CAR_SCOOTER, self.ONE, self.TRAPPED, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(engine.case.main_category, "緊急救援")
+        self.assertEqual(engine.case.sub_category, "車禍")
+        self.assertEqual(_asked("車禍", io), [
+            "事故車種", "患者人數", "有無人員受困", "報案身分", "性別", "意識",
+        ])
+
+
+class DaJiaShouShangTests(unittest.TestCase):
+    """09-打架受傷：還沒標 OK，先照題目表問給承辦實測。"""
+    STOPPED = ("已經沒在打了", {"conflict_status": "已停止"})
+    ONGOING = ("還在打", {"conflict_status": "進行中"})
+    ONE = ("一個", {"patient_count": "1人"})
+    KNIFE = ("有拿刀", {"weapon_held": "刀"})
+
+    def test_stopped_skips_weapon(self) -> None:
+        _, io = _run("打架受傷", [self.STOPPED, self.ONE, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("打架受傷", io), [
+            "衝突狀況", "患者人數", "報案身分", "性別", "意識",
+        ])
+
+    def test_ongoing_asks_weapon(self) -> None:
+        engine, io = _run("打架受傷", [self.ONGOING, self.ONE, self.KNIFE, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("打架受傷", io), [
+            "衝突狀況", "患者人數", "持械", "報案身分", "性別", "意識",
+        ])
+        self.assertEqual(engine.case.weapon_held, "刀")
+
+    def test_passer_not_on_scene_skips_gender_and_consciousness(self) -> None:
+        _, io = _run("打架受傷", [self.STOPPED, self.ONE, PASSER], caller_location="不在現場")
+        self.assertEqual(_asked("打架受傷", io), ["衝突狀況", "患者人數", "報案身分"])
+
+
+class YunFuDaiChanTests(unittest.TestCase):
+    """12-孕婦待產：還沒標 OK，先照題目表問給承辦實測。"""
+    REGULAR = ("有規則陣痛", {"contractions": "規則陣痛"})
+    WATER_BROKEN = ("羊水已經破了", {"contractions": "已經破水"})
+    DUE = ("預產期下禮拜，三十九週", {"due_date": "下禮拜", "pregnancy_week": "39週"})
+    SECOND = ("第二胎，單胞胎", {"multiple_pregnancy": "第2胎、單胞胎"})
+    NORMAL = ("都正常", {"prenatal_history": "產檢正常"})
+    AGE_30 = ("三十歲", {"patient_age": "30歲"})
+    LIE_ON_LEFT = "請孕婦本人往左邊側躺，先不要用力。"
+    TOWEL = "如果羊水破了，請拿乾淨的毛巾墊在孕婦屁股下方。"
+
+    def test_family_awake_then_lie_on_left(self) -> None:
+        """清醒才講左側躺；沒有破水不講墊毛巾。性別是被動題，不問。"""
+        _, io = _run("孕婦待產", [self.REGULAR, self.DUE, self.SECOND, self.NORMAL,
+                                  FAMILY, self.AGE_30, AWAKE])
+        self.assertEqual(_asked("孕婦待產", io), [
+            "陣痛狀況", "預產期", "胎次與胎數", "產檢狀況", "報案身分", "年齡", "意識",
+            self.LIE_ON_LEFT,
+        ])
+
+    def test_water_broken_then_towel(self) -> None:
+        _, io = _run("孕婦待產", [self.WATER_BROKEN, self.DUE, self.SECOND, self.NORMAL,
+                                  FAMILY, self.AGE_30, AWAKE])
+        self.assertEqual(_asked("孕婦待產", io)[-2:], [self.LIE_ON_LEFT, self.TOWEL])
+
+    def test_due_date_only_then_ask_week(self) -> None:
+        _, io = _run("孕婦待產", [self.REGULAR, ("下禮拜", {"due_date": "下禮拜"}),
+                                  ("三十九週", {"pregnancy_week": "39週"}), self.SECOND,
+                                  self.NORMAL, FAMILY, self.AGE_30, AWAKE])
+        self.assertEqual(_asked("孕婦待產", io)[:3], ["陣痛狀況", "預產期", "現在懷孕幾週了？"])
+
+    def test_caller_is_patient_also_lie_on_left(self) -> None:
+        """本人報案不問意識，但能講電話就是清醒，也講左側躺。"""
+        _, io = _run("孕婦待產", [self.REGULAR, self.DUE, self.SECOND, self.NORMAL, self.AGE_30],
+                     caller_relation="本人")
+        self.assertEqual(_asked("孕婦待產", io), [
+            "陣痛狀況", "預產期", "胎次與胎數", "產檢狀況", "年齡", self.LIE_ON_LEFT,
+        ])
+
+    def test_keyword_rule_uses_name_from_xlsx(self) -> None:
+        """名稱統一用「孕婦待產」：關鍵字規則判出的名稱也要查得到孕婦的 handler。"""
+        from subcategory_keywords_119 import match_rescue_subcategory
+
+        name = match_rescue_subcategory("我老婆羊水破了要生了")[0]
+        self.assertEqual(name, "孕婦待產")
+        self.assertEqual(type(get_handler(name)).__name__, "YunFuJiChanHandler")
+
+
+class CompoundFollowUpTests(unittest.TestCase):
+    """一句問兩個關鍵要素的題目，報案人只答一個時，用單問句補問另一個。"""
+
+    def test_gender_only_then_ask_age(self) -> None:
+        _, io = _run("割腕", [
+            GeWanTests.WRIST_KNIFE, GeWanTests.REMOVED, FAMILY,
+            ("是女生", {"patient_gender": "女性"}), ("三十歲", {"patient_age": "30歲"}), AWAKE,
+        ])
+        self.assertEqual(_asked("割腕", io), [
+            "初步傷勢", "工具狀況", "報案身分", "性別", "請問患者大概幾歲？", "意識",
+            STOP_BLEEDING_REMINDER,
+        ])
+
+    def test_wrist_injury_only_then_ask_tool(self) -> None:
+        _, io = _run("割腕", [
+            ("手腕", {"injury_severity": "手腕割傷"}), ("美工刀", {"cutting_tool": "美工刀"}),
+            GeWanTests.REMOVED, FAMILY, MALE_40, AWAKE,
+        ])
+        self.assertEqual(_asked("割腕", io), [
+            "初步傷勢", "是用什麼工具受傷的？", "工具狀況", "報案身分", "性別", "意識",
+            STOP_BLEEDING_REMINDER,
+        ])
+
+    def test_medicine_only_then_ask_amount(self) -> None:
+        _, io = _run("吞食藥物", [
+            ("安眠藥", {"ingested_substance": "安眠藥"}), ("二十顆", {"drug_amount": "約20顆"}),
+            FAMILY, MALE_40, AWAKE,
+        ])
+        self.assertEqual(_asked("吞食藥物", io), [
+            "服用藥物", "知道大概吃了幾顆嗎？", "報案身分", "性別", "意識", MEDICINE_BAG_REMINDER,
+        ])
+
+
 class OkTablesTests(unittest.TestCase):
 
+    # 7 張 OK 表，加上還沒標 OK、先照表問給承辦實測的案類
+    TABLE_SUBTYPES = ("墜落傷", "燒燙傷", "精神異常", "吞食藥物", "上吊", "燒炭", "割腕",
+                      "一般受傷", "路倒", "車禍", "打架受傷", "孕婦待產")
+
     def test_tables_match_case_type_qa(self) -> None:
-        """7 張 OK 表的題目表，跟程式讀的 CaseTypeQA.xlsx 逐題對得上（題號靠位置算）。"""
+        """照題目表問的案類，跟程式讀的 CaseTypeQA.xlsx 逐題對得上（題號靠位置算）。"""
         path = Path(__file__).resolve().parents[1] / "scripts" / "CaseTypeQA.xlsx"
         ws = openpyxl.load_workbook(path, data_only=True).worksheets[0]
-        for name in ("墜落傷", "燒燙傷", "精神異常", "吞食藥物", "上吊", "燒炭", "割腕"):
+        for name in self.TABLE_SUBTYPES:
             with self.subTest(name=name):
                 rows = [r for r in ws.iter_rows(values_only=True) if r[1] == f"救護-{name}"]
                 self.assertEqual([r[5] for r in rows], [i.element for i in EMS_QUESTIONS[name]])
 
     def test_no_trigger_scenarios(self) -> None:
-        """OK 表的案類不用觸發情境（使用者 10/28 決定）。"""
-        for name in ("墜落傷", "燒燙傷", "精神異常", "吞食藥物", "上吊", "燒炭", "割腕"):
+        """照題目表問的案類不用觸發情境（使用者 10/28 決定）。"""
+        for name in self.TABLE_SUBTYPES:
             with self.subTest(name=name):
                 self.assertFalse(hasattr(get_handler(name), "_send_trigger_responses"))
 

@@ -63,6 +63,11 @@ class CaseInfo119:
     injury_cause:         Optional[str] = None  # 受傷原因（一般受傷專用）
     injury_location:      Optional[str] = None  # 受傷部位（一般受傷專用）
     injury_severity:      Optional[str] = None  # 傷勢（一般受傷專用）
+    injury_place:         Optional[str] = None  # 發生場所（一般受傷）：住家室內、戶外等，照報案人說的記
+    crash_vehicles:       Optional[str] = None  # 事故車種（救護-車禍）：照報案人說的記，例：汽車撞機車
+    crash_trapped:        Optional[str] = None  # 有無人員受困（救護-車禍）：未知/無人受困/有人受困
+    conflict_status:      Optional[str] = None  # 衝突狀況（打架受傷）：已停止/進行中
+    weapon_held:          Optional[str] = None  # 持械（打架受傷）：沒有/不確定/刀/棍棒/酒瓶/玻璃/其他照原話
     tocc:                 Optional[str] = None  # TOCC（旅遊/職業/接觸/群聚史）
     medical_history:      Optional[str] = None  # 過去病史（路倒專用）
     collapse_cause:       Optional[str] = None  # 路倒原因（路倒專用）
@@ -72,6 +77,9 @@ class CaseInfo119:
     caller_relation:      Optional[str] = None  # 報案人與患者關係（報案身分）：本人/家人/朋友/路過/不認識…
     caller_location:      Optional[str] = None  # 報案人位置：在現場/在患者旁邊/在遠處/不敢靠近/不在現場…
     drinking_status:      Optional[str] = None  # 是否飲酒：有喝酒/沒有喝酒/不清楚（被動）
+    collapse_status:      Optional[str] = None  # 路倒狀況：喝醉/睡著/身體不舒服/跌倒受傷/不清楚
+    patient_appearance:   Optional[str] = None  # 患者外觀特徵（路倒）：照報案人說的記，讓救護人員找得到人
+    companion_present:    Optional[str] = None  # 身旁親友（路倒）：有家人或朋友在旁邊/只有他一個人/不清楚
     mobility:             Optional[str] = None  # 平常行動能力：平常可以自己走/平常需要人扶/長期臥床或坐輪椅（被動）
     symptom_onset:        Optional[str] = None  # 症狀發生時間（被動）
     scene_access:         Optional[str] = None  # 現場進入條件：有沒有人開門、管理員、電梯（被動）
@@ -101,12 +109,13 @@ class CaseInfo119:
     family_accompany:     Optional[str] = None  # 家屬陪同：有/沒有/家屬在路上
 
     # ── 孕婦急產專用 ─────────────────────────────────────────────────────────────
-    pregnancy_week:        Optional[str] = None  # 胎次與孕週（如「第1胎32週」）
+    # 下面幾個欄位照 1028 xlsx「12-孕婦待產」的關鍵要素記（題目表見 ems_tab_map_119）
+    pregnancy_week:        Optional[str] = None  # 懷孕週數（如「39週」）
     due_date:              Optional[str] = None  # 預產期
-    multiple_pregnancy:    Optional[str] = None  # 單或雙胞胎
+    multiple_pregnancy:    Optional[str] = None  # 胎次與胎數（如「第2胎、單胞胎」）
     water_broken_bleeding: Optional[str] = None  # 破水/出血狀況
-    contractions:          Optional[str] = None  # 宮縮情況（如「5分鐘一次」）
-    prenatal_history:      Optional[str] = None  # 產檢異常史
+    contractions:          Optional[str] = None  # 陣痛狀況：沒有陣痛/不規則陣痛/規則陣痛/已經破水/落紅
+    prenatal_history:      Optional[str] = None  # 產檢狀況：產檢正常/產檢有異常/沒產檢或不知道
     prenatal_clinic:       Optional[str] = None  # 產檢醫院/診所
 
     # ── 火警 SOP 要素 ────────────────────────────────────────────────────────

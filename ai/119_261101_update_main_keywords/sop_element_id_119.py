@@ -17,11 +17,6 @@ from case_field_labels_119 import LABELS
 _XLSX = Path(__file__).resolve().parent / "scripts" / "CaseTypeQA.xlsx"
 _SHEET = "次案類問題"
 
-# 代碼裡的次案類名稱 → Excel「次案類」橫線後面的名稱
-_SUBCATEGORY_ALIASES = {
-    "孕婦急產": "孕婦待產",
-}
-
 # 欄位中文名（LABELS）→ Excel「關鍵要素」。用字相同的不必寫在這裡。
 _LABEL_TO_ELEMENT = {
     "是否有意識": "意識",
@@ -45,7 +40,6 @@ def case_type_key(main_category: Optional[str], sub_category: Optional[str]) -> 
     main = (main_category or "").strip()
     sub = (sub_category or "").strip()
     if sub:
-        sub = _SUBCATEGORY_ALIASES.get(sub, sub)
         if not main:
             return None
         return f"{main}-{sub}"
