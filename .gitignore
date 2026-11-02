@@ -66,7 +66,6 @@ Thumbs.db
 # ===== 測試/部署工具 =====
 deploy_nlp_model.sh
 
-*.xlsx
 # llama-server binary（258MB，從 204 rsync 過來，不進 repo）
 llama-server-sm120/
 
@@ -78,3 +77,6 @@ bench/out_*.json
 
 # 119 引擎寫資料庫用的連線設定（含密碼，不進 repo）。範本是同目錄的 db_config_119.example.py。
 db_config_119.py
+
+# 垂片清單
+/docs/*.xlsx
