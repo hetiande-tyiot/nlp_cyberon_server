@@ -1,11 +1,11 @@
 """
-派車那句（「XX 已派出了喔」）講的時間點。
+派車那句（「XX 已派出了歐」）講的時間點。
 
 承辦的受理順序：主案類、次案類都確定了才講派車。所以：
   - 地址確認後只講「已確認地址。」，不講派車
-  - 救護：次案類判斷完才講「救護車已派出了喔。」
-  - 火警：案類分析完（決定垂片）才講「消防車已派出了喔。」
-  - 緊急救援：次案類追問結束後才講「救護人員已經派出了喔。」
+  - 救護：次案類判斷完才講「救護車已派出了歐。」
+  - 火警：案類分析完（決定垂片）才講「消防車已派出了歐。」
+  - 緊急救援：次案類追問結束後才講「救護人員已經派出了歐。」
   - 派車整通只講一次；地址沒確認成功就不講（跟改之前一樣）
   - 轉人工、問姓名電話、救護次案類的觸發回應都不再提派車
 
@@ -25,9 +25,9 @@ from handlers.緊急救援通用 import JinJiJiuYuanGenericHandler
 from location_validation_119 import JurisdictionResult
 from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
 
-AMBULANCE_LINE = "救護車已派出了喔。"
-FIRE_TRUCK_LINE = "消防車已派出了喔。"
-RESCUE_LINE = "救護人員已經派出了喔。"
+AMBULANCE_LINE = "救護車已派出了歐。"
+FIRE_TRUCK_LINE = "消防車已派出了歐。"
+RESCUE_LINE = "救護人員已經派出了歐。"
 ADDRESS_CONFIRMED_LINE = "已確認地址。"
 ADDRESS = "新北市板橋區府中路32號3樓"
 ADDRESS_FIELDS = {

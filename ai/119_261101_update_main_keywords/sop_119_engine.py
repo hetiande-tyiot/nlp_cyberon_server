@@ -4600,7 +4600,7 @@ class SopEngine119:
             )
             self._notify_case_update()
             self._set_stage("救護_sub_classified")
-            self._announce_dispatch("救護車已派出了喔。")
+            self._announce_dispatch("救護車已派出了歐。")
         except MainCategorySwitched:
             raise
         finally:

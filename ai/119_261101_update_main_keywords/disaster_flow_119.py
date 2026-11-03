@@ -32,7 +32,7 @@ ROLE_OTHER = "其他"
 # 火花題的前置條件：災害類型是這三種才問。
 SPARK_SUBTYPES: Tuple[str, ...] = ("電線掉落", "招牌掉落", "電線桿傾倒")
 
-DISPATCH_LINE = "救護人員已經派出了喔。"
+DISPATCH_LINE = "救護人員已經派出了歐。"
 TRAPPED_COUNT_QUESTION = "有幾個人被困住？"
 
 MODE_ACTIVE = "主動"

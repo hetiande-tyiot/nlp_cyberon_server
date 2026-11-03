@@ -48,7 +48,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
         self._transfer_if_people_trapped(engine)
         self._resolve_tab(engine)
         # 案類分析完、次案類確定了才講派車
-        engine._announce_dispatch("消防車已派出了喔。")
+        engine._announce_dispatch("消防車已派出了歐。")
         self._backfill_earlier_answers_for_tab(engine)
 
         engine._sub_reclassify_enabled = True
