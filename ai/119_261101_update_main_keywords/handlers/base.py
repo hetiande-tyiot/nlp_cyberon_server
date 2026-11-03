@@ -630,17 +630,6 @@ class SubCategoryHandler:
         if on_answer is not None:
             on_answer(answer6)
 
-    # ── 病情含糊判定（Fix2）──────────────────────────────────────────────────
-
-    def _incident_is_vague(self, engine: "SopEngine119") -> bool:
-        """
-        incident_description 是否只是「身體不舒服」這類含糊描述、或純「要救護車」的
-        請求，缺具體病徵。判斷邏輯集中在 sop_utils_119.incident_is_vague（與
-        `_run_救護` 分類閘門共用同一套「請求非病情」詞表）。
-        """
-        from sop_utils_119 import incident_is_vague
-        return incident_is_vague(engine.case.incident_description)
-
     # ── 上吊等自傷：流程中需破門 → 改判緊急救援（加派消防車）────────────────────
 
     def _maybe_escalate_break_in(self, engine: "SopEngine119", text: str) -> bool:

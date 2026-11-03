@@ -113,7 +113,6 @@ from sop_utils_119 import (
     extract_road_section,
     extract_street_address_components,
     has_complete_street_address,
-    incident_is_vague,
     is_house_number_only,
     is_street_address,
     is_usable_address,
@@ -268,16 +267,13 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
 }
 
 
-# ─── 救護細類判定：信心度追問與選取閾值 ────────────────────────────────────────
-# 於 _run_救護() 細類定案時使用。實測期間可依誤分狀況調整。
+# ─── 緊急救援次案類判定：信心度追問閾值 ────────────────────────────────────────
+# 於 _accepted_emergency_sub()、_settle_emergency_subcategory() 使用（救護判次案類已不追問）。
 #   CONF   : top-1 置信度低於此值 → 追問（模型本身沒把握）
 #   MARGIN : top1−top2 機率差低於此值 → 追問（前兩名咬得很近、兩類難分）
-#   LATER_PREFER_DELTA : 多輪候選挑選時，晚輪信心未低於最佳超過此值就採晚輪
-#                        （晚輪文字較完整、資訊較多，避免資訊少的早輪誤勝）
 #   MAX_REASK : 最多追問次數
 SUB_CONF_THRESHOLD: float = 0.7
 SUB_MARGIN_THRESHOLD: float = 0.15
-SUB_LATER_PREFER_DELTA: float = 0.1
 MAX_SUB_REASK: int = 2
 
 # ─── 火警次案類：margin 閘門 ─────────────────────────────────────────────────────
@@ -4508,82 +4504,11 @@ class SopEngine119:
             # ════════════════════════════════════════════════════════
             # 此時：收集所有輪報警人文本 → 關鍵詞直判 / 次分類器
             # ════════════════════════════════════════════════════════
+            # 判一次就定，不追問「現場發生什麼狀況」（承辦問卷反映已經講過症狀還被重複問）。
+            # 判錯或報案人還沒講症狀也沒關係：題目表每答一題都會依新的回答重新判次案類，
+            # 急病第 1 題也會問「請問患者是哪裡不舒服？」
             all_caller_text = self.case.full_caller_text()
-            sub_cat, sub_conf, sub_source, sub_margin = self._do_sub_classify(all_caller_text, "救護")
-
-            # 關鍵詞未命中，且分類器「信心不足」或「兩類難分」時 → 最多追問兩遍。
-            # 觸發重問的兩個條件（任一成立即追問）：
-            #   1. top-1 置信度 < SUB_CONF_THRESHOLD   → 模型本身沒把握
-            #   2. top1−top2 差距 < SUB_MARGIN_THRESHOLD → 前兩名咬得很近，模稜兩可
-            # 每次分類結果都保留，最終挑選時偏好較晚輪（見下方 C）。
-            # 閾值定義於模組層級（SUB_CONF_THRESHOLD 等），實測期間集中調整。
-            # （關鍵詞命中 conf=1.0、margin=1.0，不會進入此分支）
-            # 重問時換句話問：觸發重問多半是 ASR 聽錯（例：「羊水」→「涼水」），
-            # 一字不差地再問一次，報案人會以為系統沒聽到。
-            _SUB_REASK_QUESTIONS = (
-                "不好意思，請再說一次現場發生什麼狀況？",
-                "麻煩您簡短描述一下傷病患目前的情形？",
-            )
-            candidates: List[tuple] = []
-            if sub_cat is not None:
-                candidates.append((sub_cat, sub_conf if sub_conf is not None else 0.0, sub_source))
-
-            for _reask_i in range(MAX_SUB_REASK):
-                if sub_source in ("keyword", "hard_rule"):
-                    break
-                conf_ok = sub_conf is not None and sub_conf >= SUB_CONF_THRESHOLD
-                margin_ok = sub_margin is not None and sub_margin >= SUB_MARGIN_THRESHOLD
-                # A：分類跑在「問發生什麼事」之前，此時可能只有地址/「我要救護車」而無任何
-                #    病情描述。BERT 在空症狀輸入下仍可能過度自信（例：급병→急病 4b830f85 案例，
-                #    sub_conf=0.855；4c012163「我要救護車」→急病 0.98），讓 conf/margin 閘門失效
-                #    而過早定類。故 incident_description 仍為空、或只是「要救護車」這類請求而非
-                #    病情（incident_is_vague）時，不論 conf/margin 都先追問，確保分類建立在
-                #    「有症狀文字」之上。
-                no_symptom_yet = (
-                    not self._is_field_filled("incident_description")
-                    or incident_is_vague(self.case.incident_description)
-                )
-                if conf_ok and margin_ok and not no_symptom_yet:
-                    break
-
-                # 首輪且尚無任何病情描述 → 用正常語氣初問（而非「請再說一次」的重問，
-                # 後者會讓還沒講過的報案人以為系統漏聽）；否則沿用換句話重問。
-                # 這句不問「需要救護車嗎」：報案人一開始就說要救護車了，
-                # 再問要不要救護車，報案人會以為系統沒聽懂、或懷疑車到底有沒有派出去。
-                # 這句問的目的只是取得病情描述給次案類分類用，不是在確認要不要派車。
-                if no_symptom_yet and _reask_i == 0:
-                    reask_question = "請問現場發生什麼狀況？"
-                else:
-                    reask_question = _SUB_REASK_QUESTIONS[_reask_i]
-                self._ask_and_extract(reask_question)
-                all_caller_text = self.case.full_caller_text()
-                sub_cat, sub_conf, sub_source, sub_margin = self._do_sub_classify(
-                    all_caller_text, "救護"
-                )
-                if sub_cat is not None:
-                    candidates.append(
-                        (sub_cat, sub_conf if sub_conf is not None else 0.0, sub_source)
-                    )
-
-            if candidates:
-                # C：候選依輪次由早到晚排列，越晚輪文字越完整、資訊越多。
-                # 逐一比較，只要晚輪信心未明顯低於目前最佳（差距在 delta 內）就採晚輪，
-                # 避免「資訊少的早輪」因信心稍高而壓過「已描述事件的晚輪」。
-                best = candidates[0]
-                for cand in candidates[1:]:
-                    if cand[1] >= best[1] - SUB_LATER_PREFER_DELTA:
-                        best = cand
-                sub_cat, sub_conf, sub_source = best
-                self._debug_print(
-                    "sub_classify_best",
-                    {
-                        "chosen": {"sub": sub_cat, "conf": sub_conf, "source": sub_source},
-                        "candidates": [
-                            {"sub": c, "conf": conf, "source": src}
-                            for c, conf, src in candidates
-                        ],
-                    },
-                )
+            sub_cat, sub_conf, sub_source, _margin = self._do_sub_classify(all_caller_text, "救護")
 
             with self._case_lock:
                 self.case.sub_category = sub_cat
