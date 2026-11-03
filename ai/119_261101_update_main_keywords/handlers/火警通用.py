@@ -32,7 +32,7 @@ from fire_tab_map_119 import (
     update_sub_category_from_answers,
 )
 from important_tags_119 import merge_important_tags
-from .base import SubCategoryHandler
+from .base import CLOSING_LINE, SubCategoryHandler
 
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
@@ -376,8 +376,10 @@ class HuoJingGenericHandler(SubCategoryHandler):
             recap_parts.append(f"連絡電話：{engine.case.caller_contact}")
         if engine.case.caller_salutation:
             recap_parts.append(f"稱呼：{engine.case.caller_salutation}")
-        if recap_parts:
-            engine._say("，".join(recap_parts) + "，已為您記錄。")
+        # 11/02 使用者決定暫時不唸電話、稱呼，要恢復就把下面兩行的註解拿掉
+        # if recap_parts:
+        #     engine._say("，".join(recap_parts) + "，已為您記錄。")
+        engine._say(CLOSING_LINE)
 
         with engine._case_lock:
             engine.case.result = "dispatched"

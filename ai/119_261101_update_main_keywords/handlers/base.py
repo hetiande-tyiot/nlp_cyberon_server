@@ -23,6 +23,9 @@ from typing import TYPE_CHECKING, Optional, Sequence
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
 
+# 救護、火警、緊急救援、災害收完報案人資訊後講的結尾句（11/02 使用者給的句子，四類統一）
+CLOSING_LINE = "已為您紀錄，消防車已經出勤，請保持電話暢通。如果現場狀況有變化，請立刻再撥 119 告訴我們，謝謝"
+
 # xlsx 用一句話問兩個關鍵要素的題目，承辦要求缺什麼問什麼：
 # 兩個都不知道就照 xlsx 整句問；只缺一個時改問下面對應的句子（10/29 確認的說法）。
 # 整句問完只答到一個時，也用下面的句子補問一次。
@@ -806,7 +809,9 @@ class SubCategoryHandler:
             parts.append(f"住址：{caller_address}")
         # 結束語「請在現場耐心等待…」拿掉（10/29 使用者決定）：報案人常不在現場，
         # 比照火警，覆誦完姓名、聯繫方式就結束
-        engine._say("，".join(parts) + "，已為您記錄。")
+        # 11/02 使用者決定暫時不唸姓名、聯繫方式，要恢復就把下一行的註解拿掉
+        # engine._say("，".join(parts) + "，已為您記錄。")
+        engine._say(CLOSING_LINE)
 
         with engine._case_lock:
             engine.case.result = "dispatched"

@@ -28,6 +28,7 @@ from emergency_rescue_subs_119 import (
     TRAP_QUESTIONS,
     asked_questions,
 )
+from handlers.base import CLOSING_LINE
 from handlers.緊急救援通用 import JinJiJiuYuanGenericHandler
 from sop_119_engine import DialogueIO, SopEngine119
 
@@ -86,10 +87,8 @@ def _run(sub: str, steps: list[tuple[str, dict]]) -> tuple[SopEngine119, Scripte
 
 
 def _closing(name: str, phone: str) -> list[str]:
-    return [
-        f"姓名：{name}，聯繫方式：{phone}，已為您記錄。",
-        "請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。",
-    ]
+    # 11/02 起不唸姓名、聯繫方式，只講統一的結尾句
+    return [CLOSING_LINE]
 
 
 def _expect_questions(questions, *extra: str, name: str, phone: str) -> list[str]:

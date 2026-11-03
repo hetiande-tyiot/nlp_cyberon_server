@@ -30,7 +30,7 @@ from emergency_rescue_subs_119 import (
     RescueSubQuestion,
 )
 from sop_utils_119 import parse_yes_no_for_question
-from .base import SubCategoryHandler
+from .base import CLOSING_LINE, SubCategoryHandler
 
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
@@ -215,9 +215,11 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
             parts.append(f"姓名：{caller_name}")
         if caller_contact:
             parts.append(f"聯繫方式：{caller_contact}")
-        engine._say("，".join(parts) + "，已為您記錄。")
-
-        engine._say("請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。")
+        # 11/02 使用者決定暫時不唸姓名、聯繫方式，也不講「耐心等待」那句，
+        # 要恢復就把下面兩行的註解拿掉
+        # engine._say("，".join(parts) + "，已為您記錄。")
+        # engine._say("請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。")
+        engine._say(CLOSING_LINE)
         with engine._case_lock:
             engine.case.result = "dispatched"
         engine._set_stage("completed")
