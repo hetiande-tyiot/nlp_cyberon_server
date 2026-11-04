@@ -107,6 +107,11 @@ class CaseInfo119:
     forced_admission:     Optional[str] = None  # 強制送醫：需要/不需要/不清楚
     forced_admission_reason: Optional[str] = None  # 強制送醫原因：大吼罵人/摔丟東西/胡言亂語…
     family_accompany:     Optional[str] = None  # 家屬陪同：有/沒有/家屬在路上
+    # 救護垂片 1102 xlsx 電擊傷、溺水（溺水原因沿用 injury_cause）
+    electric_type:        Optional[str] = None  # 電擊種類：高壓電/雷擊/家用電/其他
+    power_off:            Optional[str] = None  # 現場是否已斷電：已斷電/未斷電
+    patient_identity:     Optional[str] = None  # 傷患身分（電擊傷）：照報案人說的記，例：工地工人、外籍移工
+    drowning_status:      Optional[str] = None  # 溺水狀況：已拉上岸/未拉上岸
 
     # ── 孕婦急產專用 ─────────────────────────────────────────────────────────────
     # 下面幾個欄位照 1028 xlsx「12-孕婦待產」的關鍵要素記（題目表見 ems_tab_map_119）

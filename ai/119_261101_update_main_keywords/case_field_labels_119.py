@@ -92,6 +92,10 @@ LABELS: Dict[str, str] = {
     "forced_admission": "強制送醫",
     "forced_admission_reason": "強制送醫原因",
     "family_accompany": "家屬陪同",
+    "electric_type": "電擊種類",
+    "power_off": "現場是否已斷電",
+    "patient_identity": "傷患身分",
+    "drowning_status": "溺水狀況",
     # 孕婦急產專用
     "pregnancy_week": "胎次與孕週",
     "due_date": "預產期",

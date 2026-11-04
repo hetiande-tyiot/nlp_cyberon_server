@@ -25,6 +25,8 @@ from .燒燙傷 import ShaoTangShangHandler
 from .割腕 import GeWanHandler
 from .上吊 import ShangDiaoHandler
 from .車禍 import CheHuoHandler
+from .溺水 import NiShuiHandler
+from .ems_table import EmsTableHandler
 
 _REGISTRY: dict[str, SubCategoryHandler] = {
     "急病":    JiBingHandler(),
@@ -40,6 +42,14 @@ _REGISTRY: dict[str, SubCategoryHandler] = {
     "割腕":    GeWanHandler(),
     "上吊":    ShangDiaoHandler(),
     "車禍":    CheHuoHandler(),
+    "溺水":    NiShuiHandler(),
+    # 只照題目表問、沒有提醒語和改判的次案類共用一個 Handler
+    "刀傷(切割傷)": EmsTableHandler("刀傷(切割傷)"),
+    "槍傷":    EmsTableHandler("槍傷"),
+    "壓傷":    EmsTableHandler("壓傷"),
+    "電擊傷":  EmsTableHandler("電擊傷"),
+    "喝農藥":  EmsTableHandler("喝農藥"),
+    "吸入廢氣": EmsTableHandler("吸入廢氣"),
 }
 
 _DEFAULT_HANDLER = SubCategoryHandler()

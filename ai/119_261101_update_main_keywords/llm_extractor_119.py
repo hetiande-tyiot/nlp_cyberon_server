@@ -1466,11 +1466,14 @@ class LLMExtractor119:
         main_category: Optional[str] = None,
         call_type: Optional[str] = None,
         fire_tab: Optional[str] = None,
+        sub_category: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         每輪輸入後依案件類型跨欄位抽取業務欄位。
         火警時 fire_tab 是目前的垂片（A / B1 / B2 / C，還不知道就是 None），
         只抽這張垂片用得到的火警欄位。
+        救護時 sub_category 是目前的次案類（還不知道就是 None）：同一個欄位在不同次案類
+        參考範圍不同時（例如刀傷的受傷原因只能記四個選項之一），照目前次案類給規則。
 
         設計原則：
         - 每一則報警人回答都抽取通用欄位
@@ -1554,6 +1557,10 @@ class LLMExtractor119:
             "forced_admission":      "string|null",
             "forced_admission_reason": "string|null",
             "family_accompany":      "string|null",
+            "electric_type":         "string|null",
+            "power_off":             "string|null",
+            "patient_identity":      "string|null",
+            "drowning_status":       "string|null",
         }
         # 火警：只請 LLM 抽這一輪用得到的欄位（依目前垂片挑選，見 _build_fire_schema_and_rules）
         fire_schema, fire_rules = _build_fire_schema_and_rules(fire_tab)
@@ -1652,9 +1659,21 @@ class LLMExtractor119:
             "- 回答只是補充「板橋區」「文化路」「北向32.5公里」時，即使無法單獨判定"
             " location_type，也要抽取能確定的元件。"
         )
+        # 受傷原因：刀傷照 1102 xlsx 只能記四個選項之一；一般受傷、槍傷、壓傷、溺水照報案人說的記
+        if sub_category == "刀傷(切割傷)":
+            injury_cause_rule = "- injury_cause：怎麼受傷的，只能填：不小心割到、被別人砍傷、自殘、不清楚。\n"
+        else:
+            injury_cause_rule = "- injury_cause：受傷原因或機制；溺水記怎麼落水的（例：失足落水、游泳抽筋、翻船）。\n"
+        # 喝農藥的農藥種類跟吞食藥物共用欄位。只說「農藥」不算回答種類，喝農藥第 1 題才會問；
+        # 還沒判出次案類時（例如第一句「好像喝農藥」）也一樣。吞食藥物的參考範圍有「農藥」，照記。
+        if sub_category == "吞食藥物":
+            ingested_rule = "- ingested_substance：服藥種類數量。\n"
+        else:
+            ingested_rule = ("- ingested_substance：吃了什麼藥，或喝了什麼農藥、清潔劑（例：除草劑、巴拉刈、鹽酸）；"
+                             "只說農藥、沒講是哪一種 → null。\n")
         rescue_ext_rules = (
             "【抽取原則】從報警人回答抽取下列欄位；未提及 → null。\n"
-            "- injury_cause：受傷原因或機制。\n"
+            + injury_cause_rule +
             "- injury_location：只填身體受傷的位置（頭、胸、手、腳、左腿等）。"
             "「在右邊那一棟／那邊／對面」是事發地點，必須 null；"
             "只有「左／右邊」、沒說哪個身體部位，也填 null。\n"
@@ -1668,7 +1687,7 @@ class LLMExtractor119:
             "- conflict_status：打架、衝突現在是不是還在打，只能填：已停止、進行中。沒講到 → null。\n"
             "- weapon_held：打架的人手上有沒有拿東西，填：沒有、不確定、刀、棍棒、酒瓶、玻璃；"
             "其他東西照報案人說的記。沒講到 → null。\n"
-            "- ingested_substance：服藥種類數量。\n"
+            + ingested_rule +
             # 孕婦待產題目表（1028 xlsx 12-孕婦待產）用到的孕產欄位，照 xlsx 參考範圍記
             "- contractions：孕婦陣痛狀況，只能填：沒有陣痛、不規則陣痛、規則陣痛、已經破水、落紅。"
             "沒講到 → null。\n"
@@ -1718,9 +1737,9 @@ class LLMExtractor119:
             "- hanging_status：上吊的繩子解開了沒，只能填：已解開繩子、還沒解開。\n"
             "- break_in_need：上吊現場救護人員要不要破門才進得去，只能填：需要破門、不需要破門。\n"
             "- hanging_location：上吊的患者在哪裡，例：住家、橋墩、山上電塔。\n"
-            "- cutting_tool：割腕用的工具，例：美工刀、菜刀、玻璃。\n"
+            "- cutting_tool：割傷用的工具，例：刀子、菜刀、水果刀、美工刀、玻璃。\n"
             "- tool_status：割腕的刀具移除了沒，只能填：已移除、還在身上、不清楚。\n"
-            "- drug_amount：吃了多少藥，例：一整罐、大概20顆。\n"
+            "- drug_amount：吃了多少藥或喝了多少農藥，例：一整罐、大概20顆、半瓶。\n"
             "- medicine_bag：現場有沒有藥袋，只能填：有、無。\n"
             "- aggression：精神異常的患者有沒有攻擊或自傷，只能填：攻擊他人、自傷、無。"
             "用頭撞牆這類自殘算自傷。\n"
@@ -1729,6 +1748,11 @@ class LLMExtractor119:
             "- forced_admission_reason：為什麼要強制送醫，例：大吼罵人、摔丟東西、胡言亂語、"
             "行為怪異、沒吃藥、不睡不吃、已有醫院或衛生局評估。\n"
             "- family_accompany：精神異常的患者身邊有沒有家屬陪同，只能填：有、沒有、家屬在路上。\n"
+            # 1102 xlsx 電擊傷、溺水；溺水狀況會拿來判斷要不要改判緊急救援，只能記成固定說法
+            "- electric_type：被什麼電到，只能填：高壓電、雷擊、家用電、其他。\n"
+            "- power_off：電擊現場的電源關掉了沒，只能填：已斷電、未斷電。\n"
+            "- patient_identity：電擊傷的患者是什麼身分，照報案人說的記（例：工地工人、外籍移工、一般民眾）。\n"
+            "- drowning_status：溺水的人拉上岸了沒，只能填：已拉上岸、未拉上岸。還在水裡就是未拉上岸。\n"
         )
         # 只給 LLM 選案情標籤；系統狀態標籤（地址搜尋失敗、火災類別無法確認…）只由程式寫入
         allowed_tags = "、".join(CASE_CONTENT_TAGS)

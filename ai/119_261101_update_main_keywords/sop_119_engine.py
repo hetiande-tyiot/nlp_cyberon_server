@@ -264,6 +264,10 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "forced_admission": "強制送醫",
     "forced_admission_reason": "強制送醫原因",
     "family_accompany": "家屬陪同",
+    "electric_type": "電擊種類",
+    "power_off": "現場是否已斷電",
+    "patient_identity": "傷患身分",
+    "drowning_status": "溺水狀況",
 }
 
 
@@ -429,6 +433,10 @@ RESCUE_EXCLUSIVE_FIELDS = frozenset({
     "forced_admission",
     "forced_admission_reason",
     "family_accompany",
+    "electric_type",
+    "power_off",
+    "patient_identity",
+    "drowning_status",
 })
 FIRE_EXCLUSIVE_FIELDS = frozenset({
     "fire_or_smoke",
@@ -1726,16 +1734,19 @@ class SopEngine119:
         if self._llm is not None:
             try:
                 # 火警：告訴抽取器目前是哪張垂片，只抽這張垂片用得到的欄位
-                fire_extra = (
+                extra = (
                     {"fire_tab": self.case.fire_tab}
                     if self.case.main_category == "火警" else {}
                 )
+                # 救護：告訴抽取器目前是哪個次案類，同一欄位在不同次案類參考範圍不同時照次案類抽
+                if self._fields_category() == "救護":
+                    extra["sub_category"] = self.case.sub_category
                 extracted = self._llm.extract_general_fields(
                     caller_text,
                     question=qa_question,
                     main_category=self._fields_category(),
                     call_type=self.case.call_type,
-                    **fire_extra,
+                    **extra,
                 )
                 self._debug_print("general_extract", {
                     "question": qa_question,

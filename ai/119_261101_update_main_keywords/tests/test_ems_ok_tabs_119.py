@@ -109,18 +109,18 @@ class ZhuiLuoShangTests(unittest.TestCase):
 
     def test_not_yet_jumped_escalates_silently(self) -> None:
         """尚未跳下：改判緊急救援，不講話；墜落高度、患者位置等「已跳下」才問的題不問。
-        報案人位置沒問到，意識也不問（意識要報案人位置 = 在現場）。"""
-        engine, io = _run("墜落傷", [self.NOT_YET, PASSER])
-        self.assertEqual(_asked("墜落傷", io), ["墜落狀況", "報案身分"])
+        報案人位置沒提到，性別年齡照樣問；意識不問（意識要報案人位置 = 在現場）。"""
+        engine, io = _run("墜落傷", [self.NOT_YET, PASSER, MALE_40])
+        self.assertEqual(_asked("墜落傷", io), ["墜落狀況", "報案身分", "性別"])
         self.assertEqual(engine.case.main_category, "緊急救援")
         self.assertEqual(engine.case.caller_relation, "路過")  # 改判後的回答照樣記下來
 
     def test_stuck_escalates_and_asks_where(self) -> None:
         engine, io = _run("墜落傷", [
-            self.JUMPED, self.FIVE_F, PASSER, self.STUCK, self.RAIN_SHELTER, self.NEAR, AWAKE,
+            self.JUMPED, self.FIVE_F, PASSER, MALE_40, self.STUCK, self.RAIN_SHELTER, self.NEAR, AWAKE,
         ])
         self.assertEqual(_asked("墜落傷", io), [
-            "墜落狀況", "墜落高度", "報案身分", "患者位置", "卡住位置", "報案人位置", "意識",
+            "墜落狀況", "墜落高度", "報案身分", "性別", "患者位置", "卡住位置", "報案人位置", "意識",
         ])
         self.assertEqual(engine.case.main_category, "緊急救援")
 
@@ -174,9 +174,9 @@ class ShangDiaoTests(unittest.TestCase):
         self.assertEqual(engine.case.main_category, "緊急救援")
 
     def test_remote_place_escalates_silently(self) -> None:
-        engine, io = _run("上吊", [self.NOT_UNTIED, self.NO_BREAK, PASSER],
+        engine, io = _run("上吊", [self.NOT_UNTIED, self.NO_BREAK, PASSER, MALE_40],
                           hanging_location="橋墩下面")
-        self.assertEqual(_asked("上吊", io), ["上吊狀況", "破門需求", "報案身分"])
+        self.assertEqual(_asked("上吊", io), ["上吊狀況", "破門需求", "報案身分", "性別"])
         self.assertEqual(engine.case.main_category, "緊急救援")
 
     def test_remote_place_said_later_still_escalates(self) -> None:
@@ -184,6 +184,7 @@ class ShangDiaoTests(unittest.TestCase):
         engine, _ = _run("上吊", [
             self.NOT_UNTIED, self.NO_BREAK,
             ("不認識，他吊在橋墩那邊", {"caller_relation": "不認識", "hanging_location": "橋墩"}),
+            MALE_40,
         ])
         self.assertEqual(engine.case.main_category, "緊急救援")
 
@@ -567,11 +568,83 @@ class CompoundFollowUpTests(unittest.TestCase):
         ])
 
 
+class DaoShangTests(unittest.TestCase):
+    """03-刀傷(切割傷)：還沒標 OK，先照 1102 題目表問給承辦實測。"""
+    ACCIDENT = ("切菜不小心割到", {"injury_cause": "不小心割到"})
+    HAND = ("手指", {"injury_location": "手指"})
+    BLEEDING = ("一直流血", {"injury_severity": "一直流血"})
+
+    def test_family_awake(self) -> None:
+        _, io = _run("刀傷(切割傷)", [self.ACCIDENT, self.HAND, self.BLEEDING, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("刀傷(切割傷)", io), [
+            "受傷原因", "受傷部位", "傷勢", "報案身分", "性別", "意識",
+        ])
+
+
+class DianJiShangTests(unittest.TestCase):
+    """07-電擊傷：還沒標 OK，先照 1102 題目表問給承辦實測。"""
+    HIGH_VOLTAGE = ("被高壓電電到", {"electric_type": "高壓電"})
+    POWER_OFF = ("已經斷電了", {"power_off": "已斷電"})
+    ONE = ("一個", {"patient_count": "1人"})
+    WORKER = ("是工地的工人", {"patient_identity": "工地工人"})
+
+    def test_family_awake(self) -> None:
+        _, io = _run("電擊傷", [self.HIGH_VOLTAGE, self.POWER_OFF, self.ONE, self.WORKER,
+                                FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("電擊傷", io), [
+            "電擊種類", "現場是否已斷電", "患者人數", "傷患身分", "報案身分", "性別", "意識",
+        ])
+
+
+class NiShuiTests(unittest.TestCase):
+    """11-溺水：還沒標 OK，先照 1102 題目表問給承辦實測。"""
+    ASHORE = ("已經拉上來了", {"drowning_status": "已拉上岸"})
+    IN_WATER = ("還在水裡", {"drowning_status": "未拉上岸"})
+    SLIPPED = ("失足掉下去的", {"injury_cause": "失足落水"})
+    ONE = ("一個", {"patient_count": "1人"})
+
+    def test_ashore_stays_rescue(self) -> None:
+        engine, io = _run("溺水", [self.ASHORE, self.SLIPPED, self.ONE, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(_asked("溺水", io), [
+            "溺水狀況", "溺水原因", "患者人數", "報案身分", "性別", "意識",
+        ])
+        self.assertEqual(engine.case.main_category, "救護")
+
+    def test_in_water_escalates_without_speaking_and_keeps_asking(self) -> None:
+        """xlsx 備註：還在水裡 → 改判緊急救援；不講話，溺水題目照樣問完，次案類維持溺水。"""
+        engine, io = _run("溺水", [self.IN_WATER, self.SLIPPED, self.ONE, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(engine.case.main_category, "緊急救援")
+        self.assertEqual(engine.case.sub_category, "溺水")
+        self.assertEqual(_asked("溺水", io), [
+            "溺水狀況", "溺水原因", "患者人數", "報案身分", "性別", "意識",
+        ])
+
+
+class SubCategoryToExtractorTests(unittest.TestCase):
+    """救護抽取時要告訴抽取器目前次案類（刀傷的受傷原因跟其他案類的參考範圍不同）。"""
+
+    def test_engine_passes_sub_category(self) -> None:
+        seen: list = []
+
+        class RecordingLLM(FakeLLM):
+            def extract_general_fields(self, caller_text, question=None, **kwargs) -> dict:
+                seen.append(kwargs.get("sub_category"))
+                return super().extract_general_fields(caller_text, question)
+
+        io = ScriptedIO(["切菜不小心割到"])
+        engine = SopEngine119(io=io, llm_extractor=RecordingLLM({}))  # type: ignore[arg-type]
+        engine.case.main_category = "救護"
+        engine.case.sub_category = "刀傷(切割傷)"
+        engine._ask_and_extract("請問是自己不小心割到，還是被別人弄傷的？")
+        self.assertIn("刀傷(切割傷)", seen)
+
+
 class OkTablesTests(unittest.TestCase):
 
     # 7 張 OK 表，加上還沒標 OK、先照表問給承辦實測的案類
     TABLE_SUBTYPES = ("墜落傷", "燒燙傷", "精神異常", "吞食藥物", "上吊", "燒炭", "割腕",
-                      "急病", "一般受傷", "路倒", "車禍", "打架受傷", "孕婦待產")
+                      "急病", "一般受傷", "路倒", "車禍", "打架受傷", "孕婦待產",
+                      "刀傷(切割傷)", "槍傷", "壓傷", "電擊傷", "溺水", "喝農藥", "吸入廢氣")
 
     def test_tables_match_case_type_qa(self) -> None:
         """照題目表問的案類，跟程式讀的 CaseTypeQA.xlsx 逐題對得上（題號靠位置算）。"""
