@@ -177,8 +177,8 @@ class TabCQuestionOrderTests(unittest.TestCase):
             ("不知道", {"building_total_floors": "不確定"}),
             ("有看到火", {"fire_or_smoke": "有火有煙"}),
             ("黑煙", {"smoke_color": "黑色煙"}),
-            ("沒有燒到旁邊", {"spread_status": "無"}),
-            ("一小堆", {"fire_extent": "一小堆"}),
+            ("沒有燒到旁邊", {"spread_reached": "無"}),
+            ("一小堆", {"burning_range": "一小堆"}),
             ("我路過", {"caller_role": "路人"}),
             NOBODY_CALLING,
         ])

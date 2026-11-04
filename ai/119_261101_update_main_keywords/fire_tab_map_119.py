@@ -303,7 +303,7 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
     FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
                  "交通工具火警-報案人身分", "請問您是車主或駕駛嗎？還是路人呢？"),
-    FireQuestion("是否延燒", "spread_status", MODE_CONDITIONAL,
+    FireQuestion("是否延燒", "spread_reached", MODE_CONDITIONAL,
                  "交通工具火警-是否延燒", "火有沒有燒到旁邊的東西？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("起火部位", "fire_origin_part", MODE_CONDITIONAL,
@@ -348,10 +348,10 @@ TAB_B2_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
     FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
                  "山林田野火警-報案人身分", "請問您是住在附近，還是剛好經過？"),
-    FireQuestion("燃燒面積", "fire_extent", MODE_CONDITIONAL,
+    FireQuestion("燃燒面積", "burning_area", MODE_CONDITIONAL,
                  "山林田野火警-燃燒面積", "可以描述一下大概燒多大嗎？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
-    FireQuestion("是否延燒", "spread_status", MODE_CONDITIONAL,
+    FireQuestion("是否延燒", "spread_reached", MODE_CONDITIONAL,
                  "山林田野火警-是否延燒", "火有沒有燒到旁邊的東西？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     # 山地或平地不問：報案人講到才記；沒把握時次案類記平地（見 sync_sub_category）
@@ -386,10 +386,10 @@ TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("氣味類型", "odor", MODE_CONDITIONAL,
                  "輕微火警-氣味類型", "現場有聞到燒焦味嗎？",
                  _no_fire_no_smoke, "火煙狀況 = 無火無煙"),
-    FireQuestion("是否延燒", "spread_status", MODE_CONDITIONAL,
+    FireQuestion("是否延燒", "spread_reached", MODE_CONDITIONAL,
                  "輕微火警-是否延燒", "火有沒有燒到旁邊的東西？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
-    FireQuestion("燃燒範圍", "fire_extent", MODE_CONDITIONAL,
+    FireQuestion("燃燒範圍", "burning_range", MODE_CONDITIONAL,
                  "輕微火警-燃燒範圍", "燒起來的範圍大概多大？",
                  _and(_subtype_is("電線桿(電纜)", "垃圾"), _fire_visible),
                  "火警類型＝電線桿(電纜)、垃圾 且 火煙狀況 = 有火有煙、有火無煙"),
@@ -402,7 +402,7 @@ TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
                  "輕微火警-來源確認", "知道是哪一戶、哪一層傳出來的嗎？",
                  _subtype_is(*MINOR_ALARM_OR_CHECK), "火警類型＝警報器作響、查看案件"),
     FireQuestion("標的物", "target_object", MODE_PASSIVE, "輕微火警-標的物"),
-    FireQuestion("無人應門或聯絡不上", "door_response", MODE_PASSIVE,
+    FireQuestion("無人應門或聯絡不上", "door_unanswered", MODE_PASSIVE,
                  "輕微火警-無人應門或聯絡不上"),
 )
 
@@ -424,9 +424,10 @@ FIRE_IDENTITY_FIELDS: Tuple[str, ...] = (
 )
 # 轉人工要看的欄位：不管在哪張垂片，報案人講出有人出不來都要立刻轉
 FIRE_TRANSFER_FIELDS: Tuple[str, ...] = ("trapped_status", "occupants_status")
-# 還不知道是哪張垂片時（報地址、案類分析），先抽四張垂片共用的欄位
+# 還不知道是哪張垂片時（報地址、案類分析），先抽四張垂片共用的欄位。
+# 延燒、燃燒範圍各張垂片名稱和選項不同、各自一格，等判出垂片後由補抽記下（見 handlers/火警通用.py）
 FIRE_SHARED_FIELDS: Tuple[str, ...] = (
-    "fire_or_smoke", "smoke_color", "spread_status", "caller_role", "odor", "fire_extent",
+    "fire_or_smoke", "smoke_color", "caller_role", "odor",
 )
 
 
@@ -566,16 +567,21 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "fire_floor": "起火樓層",
     "spread_status": "延燒可能",
     "trapped_status": "有無受困",
-    "door_response": "應門狀況",  # A 起火戶應門、C 無人應門或聯絡不上共用
+    "door_response": "起火戶應門",
     "building_total_floors": "建物總樓層",
     "building_type": "建築物類型",  # A、C 都問；在 A 就是次案類，在 C 另外存
     "caller_role": "報案人身分",
     "building_construction": "建物構造",
     "hazardous_materials": "危險物品",
-    "odor": "氣味",
+    "odor": "氣味類型",
     "explosion_status": "有無爆炸",
     "access_info": "其他資訊",
-    "fire_extent": "燃燒範圍",  # A 延燒面積、B2 燃燒面積、C 燃燒範圍共用
+    "fire_extent": "延燒面積",
+    # 垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
+    "spread_reached": "是否延燒",
+    "burning_area": "燃燒面積",
+    "burning_range": "燃燒範圍",
+    "door_unanswered": "無人應門或聯絡不上",
     # 垂片 B1（交通工具火警）
     "vehicle_kind": "交通工具",
     "vehicle_model": "車型",

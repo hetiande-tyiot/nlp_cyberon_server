@@ -50,13 +50,14 @@ _REGISTRY: dict[str, SubCategoryHandler] = {
     "電擊傷":  EmsTableHandler("電擊傷"),
     "喝農藥":  EmsTableHandler("喝農藥"),
     "吸入廢氣": EmsTableHandler("吸入廢氣"),
+    "其它":    EmsTableHandler("其它"),
 }
 
 _DEFAULT_HANDLER = SubCategoryHandler()
 
 # 切類時可直接保留的同義槽（兩邊都用且語義相同）。同名異義槽不在此列。
 SHARED_SEMANTIC_SLOTS = frozenset({
-    "incident_description",
+    "symptoms",
     "consciousness",
     "breathing",
     "abdomen_rise",

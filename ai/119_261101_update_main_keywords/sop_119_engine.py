@@ -213,7 +213,7 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "consciousness": "是否有意識",
     "breathing": "呼吸",
     "abdomen_rise": "肚子是否有起伏",
-    "patient_count": "傷病患人數",
+    "patient_count": "患者人數",
     "patient_gender": "患者性別",
     "patient_age": "患者年齡",
     "current_condition": "目前狀況（依子類語義：傷情/現場安全/酒精/炭盆/繩子等）",
@@ -228,16 +228,16 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "conflict_status": "衝突狀況",
     "weapon_held": "持械",
     "tocc": "TOCC 旅遊職業接觸群聚史",
-    "ingested_substance": "服藥種類與數量",
-    "pregnancy_week": "胎次與孕週",
+    "ingested_substance": "服用藥物",
+    "pregnancy_week": "懷孕週數",
     "due_date": "預產期",
-    "multiple_pregnancy": "單或雙胞胎",
+    "multiple_pregnancy": "胎次與胎數",
     "water_broken_bleeding": "破水或出血",
-    "contractions": "宮縮情況",
-    "prenatal_history": "產檢異常史",
+    "contractions": "陣痛狀況",
+    "prenatal_history": "產檢狀況",
     "prenatal_clinic": "產檢醫院",
-    "consciousness_level": "意識程度",
-    "caller_relation": "報案人與患者關係",
+    "consciousness_level": "意識",
+    "caller_relation": "報案身分",
     "caller_location": "報案人位置",
     "drinking_status": "是否飲酒",
     "collapse_status": "路倒狀況",
@@ -256,7 +256,7 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "break_in_need": "破門需求",
     "hanging_location": "患者位置（上吊）",
     "cutting_tool": "工具",
-    "tool_status": "工具狀況",
+    "tool_status": "工具移除",
     "drug_amount": "藥物數量",
     "medicine_bag": "藥袋",
     "aggression": "攻擊傾向",
@@ -268,6 +268,13 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "power_off": "現場是否已斷電",
     "patient_identity": "傷患身分",
     "drowning_status": "溺水狀況",
+    "symptoms": "病徵",
+    "chief_complaint": "主訴",
+    "burn_cause": "燒燙傷原因",
+    "burn_severity": "燙傷傷勢",
+    "drowning_cause": "溺水原因",
+    "pesticide_type": "農藥種類",
+    "pesticide_amount": "農藥劑量",
 }
 
 
@@ -437,6 +444,13 @@ RESCUE_EXCLUSIVE_FIELDS = frozenset({
     "power_off",
     "patient_identity",
     "drowning_status",
+    "symptoms",
+    "chief_complaint",
+    "burn_cause",
+    "burn_severity",
+    "drowning_cause",
+    "pesticide_type",
+    "pesticide_amount",
 })
 FIRE_EXCLUSIVE_FIELDS = frozenset({
     "fire_or_smoke",
@@ -500,6 +514,11 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "alarm_status",
     "source_located",
     "target_object",
+    # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+    "spread_reached",
+    "burning_area",
+    "burning_range",
+    "door_unanswered",
     "power_outage",
     # 以下是火警照 1013 xlsx 新增的欄位（火警垂片在問）
     "building_type",
@@ -961,6 +980,11 @@ class SopEngine119:
             "alarm_status",
             "source_located",
             "target_object",
+            # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+            "spread_reached",
+            "burning_area",
+            "burning_range",
+            "door_unanswered",
             # 垂片 B1 照 1013 xlsx 新增（建築物類型由次案類代碼換算，不在這裡）
             "vehicle_kind",
             "vehicle_model",
@@ -990,10 +1014,8 @@ class SopEngine119:
                 continue
             if key in _RESCUE_FIELDS and self._fields_category() != "救護":
                 continue
-            if (
-                key == "incident_description"
-                and self.case.main_category not in {"救護", "緊急救援"}
-            ):
+            # 救護的病徵、主訴各有自己的欄位，「發生了什麼事」只給緊急救援
+            if key == "incident_description" and self.case.main_category != "緊急救援":
                 continue
             if key in _FIRE_OVERWRITE_FIELDS and self.case.main_category != "火警":
                 continue
@@ -1057,13 +1079,6 @@ class SopEngine119:
                     self.case.fire_spread = bool(val)
                 elif key == "fire_spread" and isinstance(val, bool):
                     self.case.spread_risk = 1 if val else 0
-                continue
-
-            if key == "incident_description" and self._fields_category() == "救護":
-                # 病徵（xlsx 關鍵要素）也以報案人最新講的為準（11/02 使用者決定）：
-                # 原本空的才寫，判次案類前追問「發生什麼狀況」問到更清楚的病徵也寫不進來。
-                # 緊急救援也用這個欄位，維持原本的寫法。
-                setattr(self.case, key, val)
                 continue
 
             if key in _RESCUE_FIELDS:
@@ -4543,7 +4558,7 @@ class SopEngine119:
             self._main_reclassify_enabled = False
 
         # ── 進入子類前：關鍵欄位若仍空，對最近一則回答再跑一次 LLM 全欄位抽取 ─
-        if not self._is_field_filled("incident_description"):
+        if not self._is_field_filled("symptoms"):
             pairs = self._iter_caller_qa_pairs()
             if pairs:
                 last_q, last_a = pairs[-1]

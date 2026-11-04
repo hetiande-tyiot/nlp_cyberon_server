@@ -1,12 +1,13 @@
 """ems_tab_map_119.py — 救護垂片題目表。
 
-規格：docs/(all)救護垂片規格_關鍵要素與問句_1102.xlsx
+規格：docs/(all)救護垂片規格_關鍵要素與問句_1104.xlsx
 目前照題目表問的次案類：OK 表 7 類（墜落傷、燒燙傷、精神異常、吞食藥物、上吊、燒炭、割腕），
 以及還沒標 OK、先照表問給承辦實測的急病、一般受傷、路倒、車禍、打架受傷、孕婦待產
-（11/02 使用者決定），刀傷(切割傷)、槍傷、壓傷、電擊傷、溺水、喝農藥、吸入廢氣（11/03 使用者決定）。
-「其它」還是走原本的流程。
+（11/02 使用者決定），刀傷(切割傷)、槍傷、壓傷、電擊傷、溺水、喝農藥、吸入廢氣（11/03 使用者決定），
+其它（11/04 使用者決定）。
 照題目表問的案類不用觸發情境（廠商的機制：每題答完判斷情境、講固定的話），使用者 10/28 決定。
 欄位、抽取規則、條件都以 xlsx 關鍵要素為準，不用廠商重複概念的舊欄位（是否有意識、報案人是否即患者等）。
+一個關鍵要素一個欄位：垂片名稱一樣才共用欄位，欄位的中文名稱要跟垂片一字不差（11/04 使用者決定）。
 呼吸 = 呼吸不正常、無呼吸 → 轉真人（使用者 11/02 決定，不再用 OHCA 判定，見 handlers/base.py）。
 
 寫法跟火警垂片表（fire_tab_map_119）一樣，每一題記下 xlsx 的「問法分類」與「前置條件」：
@@ -208,7 +209,7 @@ _GENDER_AGE_TEXT = "報案人位置 = 未提到、在現場 或 報案身分 = �
 
 # 第 5 題年齡沒有問句：跟第 4 題性別同一句問，前置條件也跟第 4 題一樣。
 JI_BING_QUESTIONS: Tuple[EmsQuestion, ...] = (
-    EmsQuestion("病徵", "incident_description", MODE_ACTIVE,
+    EmsQuestion("病徵", "symptoms", MODE_ACTIVE,
                 "急病-病徵", "請問患者是哪裡不舒服？"),
     EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "急病-患者人數"),
     EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
@@ -234,9 +235,9 @@ JI_BING_QUESTIONS: Tuple[EmsQuestion, ...] = (
 # 所以年齡跟第 4 題用同一個前置條件，不另外問。
 
 SHAO_TANG_SHANG_QUESTIONS: Tuple[EmsQuestion, ...] = (
-    EmsQuestion("燒燙傷原因", "injury_cause", MODE_ACTIVE,
+    EmsQuestion("燒燙傷原因", "burn_cause", MODE_ACTIVE,
                 "燒燙傷-燒燙傷原因", "請問是被什麼東西燙到？或什麼原因燙傷？"),
-    EmsQuestion("燙傷傷勢", "injury_severity", MODE_ACTIVE,
+    EmsQuestion("燙傷傷勢", "burn_severity", MODE_ACTIVE,
                 "燒燙傷-燙傷傷勢", "有無起水泡，燒燙傷部位？大概範圍多大呢?"),
     EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                 "燒燙傷-報案身分", "請問你認識患者嗎？"),
@@ -352,11 +353,11 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
     # ─── 19-割腕OK ───────────────────────────────────────────────────────────
     # 第 2 題工具沒有問句：第 1 題「哪裡受傷？用什麼工具？」一起問。
     "割腕": (
-        EmsQuestion("初步傷勢", "injury_severity", MODE_ACTIVE,
-                    "割腕-初步傷勢", "請問是哪裡受傷？用什麼工具？"),
+        EmsQuestion("傷勢", "injury_severity", MODE_ACTIVE,
+                    "割腕-傷勢", "請問是哪裡受傷？用什麼工具？"),
         EmsQuestion("工具", "cutting_tool", MODE_ACTIVE, "割腕-工具", ""),
-        EmsQuestion("工具狀況", "tool_status", MODE_ACTIVE,
-                    "割腕-工具狀況", "目前刀具移除了嗎？"),
+        EmsQuestion("工具移除", "tool_status", MODE_ACTIVE,
+                    "割腕-工具移除", "目前刀具還在患者身邊嗎？"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                     "割腕-報案身分", "請問你認識患者嗎？"),
         EmsQuestion("性別", "patient_gender", MODE_CONDITIONAL,
@@ -518,7 +519,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
     ),
     # ─── 09-打架受傷（還沒標 OK）────────────────────────────────────────────
     # 第 7 題年齡沒有問句：跟第 6 題性別同一句問，前置條件也跟第 6 題一樣。
-    # 病徵用跟急病一樣的「發生了什麼事」欄位。提醒語表的句子還沒定，不講提醒語。
+    # 提醒語表的句子還沒定，不講提醒語。
     "打架受傷": (
         EmsQuestion("衝突狀況", "conflict_status", MODE_ACTIVE,
                     "打架受傷-衝突狀況", "現在還有在打嗎？您那邊安全嗎？"),
@@ -543,7 +544,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
                     "打架受傷-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
-        EmsQuestion("病徵", "incident_description", MODE_PASSIVE, "打架受傷-病徵"),
+        EmsQuestion("病徵", "symptoms", MODE_PASSIVE, "打架受傷-病徵"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "打架受傷-報案人位置"),
     ),
     # ─── 12-孕婦待產（還沒標 OK）────────────────────────────────────────────
@@ -576,7 +577,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
                     "孕婦待產-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
-        EmsQuestion("病徵", "incident_description", MODE_PASSIVE, "孕婦待產-病徵"),
+        EmsQuestion("病徵", "symptoms", MODE_PASSIVE, "孕婦待產-病徵"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "孕婦待產-報案人位置"),
     ),
     # ─── 03-刀傷(切割傷)（還沒標 OK）────────────────────────────────────────
@@ -585,7 +586,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
     "刀傷(切割傷)": (
         EmsQuestion("受傷原因", "injury_cause", MODE_ACTIVE,
                     "刀傷(切割傷)-受傷原因", "請問是自己不小心割到，還是被別人弄傷的？"),
-        EmsQuestion("致傷工具", "cutting_tool", MODE_PASSIVE, "刀傷(切割傷)-致傷工具"),
+        EmsQuestion("工具", "cutting_tool", MODE_PASSIVE, "刀傷(切割傷)-工具"),
         EmsQuestion("受傷部位", "injury_location", MODE_ACTIVE,
                     "刀傷(切割傷)-受傷部位", "傷到哪裡？"),
         EmsQuestion("傷勢", "injury_severity", MODE_ACTIVE,
@@ -693,11 +694,11 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
     ),
     # ─── 11-溺水（還沒標 OK）────────────────────────────────────────────────
     # 第 6 題年齡沒有問句：跟第 5 題性別同一句問，前置條件也跟第 5 題一樣。
-    # 溺水原因用跟一般受傷一樣的「受傷原因」欄位。未拉上岸改判緊急救援，寫在 handlers/溺水.py。
+    # 未拉上岸改判緊急救援，寫在 handlers/溺水.py。
     "溺水": (
         EmsQuestion("溺水狀況", "drowning_status", MODE_ACTIVE,
                     "溺水-溺水狀況", "人拉上岸了嗎? 還是還在水裡?"),
-        EmsQuestion("溺水原因", "injury_cause", MODE_ACTIVE,
+        EmsQuestion("溺水原因", "drowning_cause", MODE_ACTIVE,
                     "溺水-溺水原因", "請問是怎麼落水的？"),
         EmsQuestion("患者人數", "patient_count", MODE_ACTIVE,
                     "溺水-患者人數", "現場有幾個人需要救護？"),
@@ -720,11 +721,10 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
     ),
     # ─── 18-喝農藥（還沒標 OK）──────────────────────────────────────────────
     # 第 6 題年齡沒有問句：跟第 5 題性別同一句問，前置條件也跟第 5 題一樣。
-    # 農藥種類、農藥劑量用跟吞食藥物一樣的「服用藥物」「藥物數量」欄位（兩類互相切換時答案不會掉）。
     "喝農藥": (
-        EmsQuestion("農藥種類", "ingested_substance", MODE_ACTIVE,
+        EmsQuestion("農藥種類", "pesticide_type", MODE_ACTIVE,
                     "喝農藥-農藥種類", "知道他喝的是什麼農藥嗎？瓶子還在嗎？"),
-        EmsQuestion("農藥劑量", "drug_amount", MODE_ACTIVE,
+        EmsQuestion("農藥劑量", "pesticide_amount", MODE_ACTIVE,
                     "喝農藥-農藥劑量", "大概喝了多少？"),
         EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "喝農藥-患者人數"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
@@ -742,13 +742,13 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
                     "喝農藥-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
-        EmsQuestion("病徵", "incident_description", MODE_PASSIVE, "喝農藥-病徵"),
+        EmsQuestion("病徵", "symptoms", MODE_PASSIVE, "喝農藥-病徵"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "喝農藥-報案人位置"),
     ),
     # ─── 20-吸入廢氣（還沒標 OK）────────────────────────────────────────────
     # 第 5 題年齡沒有問句：跟第 4 題性別同一句問，前置條件也跟第 4 題一樣。
     "吸入廢氣": (
-        EmsQuestion("病徵", "incident_description", MODE_ACTIVE,
+        EmsQuestion("病徵", "symptoms", MODE_ACTIVE,
                     "吸入廢氣-病徵", "請問患者是哪裡不舒服？"),
         EmsQuestion("患者人數", "patient_count", MODE_ACTIVE,
                     "吸入廢氣-患者人數", "現場有幾個人需要救護？"),
@@ -768,6 +768,33 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     "吸入廢氣-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "吸入廢氣-報案人位置"),
+    ),
+    # ─── 21-其它（還沒標 OK）────────────────────────────────────────────────
+    # 第 5 題年齡沒有問句：跟第 4 題性別同一句問，前置條件也跟第 4 題一樣。
+    "其它": (
+        EmsQuestion("主訴", "chief_complaint", MODE_ACTIVE,
+                    "其它-主訴", "請問患者是身體不舒服，還是受傷？"),
+        EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "其它-患者人數"),
+        EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
+                    "其它-報案身分", "請問你認識患者嗎？"),
+        EmsQuestion("性別", "patient_gender", MODE_CONDITIONAL,
+                    "其它-性別", "請問患者是男生還是女生？大概幾歲？",
+                    _on_scene_or_family_friend, _GENDER_AGE_TEXT),
+        EmsQuestion("年齡", "patient_age", MODE_CONDITIONAL,
+                    "其它-年齡", "",
+                    _on_scene_or_family_friend, _GENDER_AGE_TEXT),
+        EmsQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
+                    "其它-意識", "他現在人清醒嗎？叫他有沒有反應？",
+                    _not_self_on_scene_or_unmentioned,
+                    "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
+        EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
+                    "其它-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
+        EmsQuestion("病史", "medical_history", MODE_PASSIVE, "其它-病史"),
+        EmsQuestion("現場進入條件", "scene_access", MODE_PASSIVE, "其它-現場進入條件"),
+        EmsQuestion("是否飲酒", "drinking_status", MODE_PASSIVE, "其它-是否飲酒"),
+        EmsQuestion("平常行動能力", "mobility", MODE_PASSIVE, "其它-平常行動能力"),
+        EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "其它-報案人位置"),
     ),
 }
 

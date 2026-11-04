@@ -225,9 +225,9 @@ class ChangedAnswerTests(unittest.TestCase):
     def test_symptom_follows_latest(self) -> None:
         """病徵先說「不舒服」、被追問後說肚子不舒服：病徵要更新，不能停在第一句。"""
         engine = self._engine()
-        engine._apply_extracted_fields({"incident_description": "不舒服"})
-        engine._apply_extracted_fields({"incident_description": "腹痛及身體不適"})
-        self.assertEqual(engine.case.incident_description, "腹痛及身體不適")
+        engine._apply_extracted_fields({"symptoms": "不舒服"})
+        engine._apply_extracted_fields({"symptoms": "腹痛及身體不適"})
+        self.assertEqual(engine.case.symptoms, "腹痛及身體不適")
 
     def test_consciousness_changed_follows_latest(self) -> None:
         """意識先說醒著、後來說叫不醒：意識改成昏迷；不寫廠商的「是否有意識」。"""
@@ -240,16 +240,16 @@ class ChangedAnswerTests(unittest.TestCase):
     def test_free_text_field_takes_latest_answer(self) -> None:
         """燒燙傷原因這類照報案人說的記的欄位：「不是熱水，是熱油」→ 改成熱油。"""
         engine = self._engine()
-        engine._apply_extracted_fields({"injury_cause": "熱水"})
-        engine._apply_extracted_fields({"injury_cause": "熱油"})
-        self.assertEqual(engine.case.injury_cause, "熱油")
+        engine._apply_extracted_fields({"burn_cause": "熱水"})
+        engine._apply_extracted_fields({"burn_cause": "熱油"})
+        self.assertEqual(engine.case.burn_cause, "熱油")
 
     def test_not_mentioned_keeps_answer(self) -> None:
         """這一句沒講到（抽出 null）不會把已經記下的答案清掉。"""
         engine = self._engine()
-        engine._apply_extracted_fields({"injury_cause": "熱水"})
-        engine._apply_extracted_fields({"injury_cause": None})
-        self.assertEqual(engine.case.injury_cause, "熱水")
+        engine._apply_extracted_fields({"burn_cause": "熱水"})
+        engine._apply_extracted_fields({"burn_cause": None})
+        self.assertEqual(engine.case.burn_cause, "熱水")
 
 
 class GeWanTests(unittest.TestCase):
@@ -259,12 +259,12 @@ class GeWanTests(unittest.TestCase):
     def test_family_awake_then_reminder(self) -> None:
         _, io = _run("割腕", [self.WRIST_KNIFE, self.REMOVED, FAMILY, MALE_40, AWAKE])
         self.assertEqual(_asked("割腕", io), [
-            "初步傷勢", "工具狀況", "報案身分", "性別", "意識", STOP_BLEEDING_REMINDER,
+            "傷勢", "工具移除", "報案身分", "性別", "意識", STOP_BLEEDING_REMINDER,
         ])
 
     def test_caller_is_patient_no_consciousness(self) -> None:
         _, io = _run("割腕", [self.WRIST_KNIFE, self.REMOVED, MALE_40], caller_relation="本人")
-        self.assertEqual(_asked("割腕", io), ["初步傷勢", "工具狀況", "性別", STOP_BLEEDING_REMINDER])
+        self.assertEqual(_asked("割腕", io), ["傷勢", "工具移除", "性別", STOP_BLEEDING_REMINDER])
 
 
 class TunShiYaoWuTests(unittest.TestCase):
@@ -314,7 +314,7 @@ class JingShenYiChangTests(unittest.TestCase):
 
 
 class ShaoTangShangTests(unittest.TestCase):
-    HOT_WATER = ("被熱水燙到", {"injury_cause": "熱水"})
+    HOT_WATER = ("被熱水燙到", {"burn_cause": "熱水"})
     BLISTER = ("大腿起水泡，一個手掌大", {"injury_severity": "大腿起水泡，約一個手掌大"})
 
     def test_family_awake_then_reminders(self) -> None:
@@ -340,7 +340,7 @@ class ShaoTangShangTests(unittest.TestCase):
 
 class JiBingTests(unittest.TestCase):
     """01-急病：照 1028 題目表問；沒有觸發情境、肚子起伏、服藥探問（使用者 11/02 決定）。"""
-    CHEST_PAIN = ("他胸口很痛", {"incident_description": "胸或上腹(疼痛或壓迫)"})
+    CHEST_PAIN = ("他胸口很痛", {"symptoms": "胸或上腹(疼痛或壓迫)"})
 
     def test_family_awake(self) -> None:
         _, io = _run("急病", [self.CHEST_PAIN, FAMILY, MALE_40, AWAKE])
@@ -544,7 +544,7 @@ class CompoundFollowUpTests(unittest.TestCase):
             ("是女生", {"patient_gender": "女性"}), ("三十歲", {"patient_age": "30歲"}), AWAKE,
         ])
         self.assertEqual(_asked("割腕", io), [
-            "初步傷勢", "工具狀況", "報案身分", "性別", "請問患者大概幾歲？", "意識",
+            "傷勢", "工具移除", "報案身分", "性別", "請問患者大概幾歲？", "意識",
             STOP_BLEEDING_REMINDER,
         ])
 
@@ -554,7 +554,7 @@ class CompoundFollowUpTests(unittest.TestCase):
             GeWanTests.REMOVED, FAMILY, MALE_40, AWAKE,
         ])
         self.assertEqual(_asked("割腕", io), [
-            "初步傷勢", "是用什麼工具受傷的？", "工具狀況", "報案身分", "性別", "意識",
+            "傷勢", "是用什麼工具受傷的？", "工具移除", "報案身分", "性別", "意識",
             STOP_BLEEDING_REMINDER,
         ])
 
@@ -600,7 +600,7 @@ class NiShuiTests(unittest.TestCase):
     """11-溺水：還沒標 OK，先照 1102 題目表問給承辦實測。"""
     ASHORE = ("已經拉上來了", {"drowning_status": "已拉上岸"})
     IN_WATER = ("還在水裡", {"drowning_status": "未拉上岸"})
-    SLIPPED = ("失足掉下去的", {"injury_cause": "失足落水"})
+    SLIPPED = ("失足掉下去的", {"drowning_cause": "失足落水"})
     ONE = ("一個", {"patient_count": "1人"})
 
     def test_ashore_stays_rescue(self) -> None:
@@ -644,7 +644,7 @@ class OkTablesTests(unittest.TestCase):
     # 7 張 OK 表，加上還沒標 OK、先照表問給承辦實測的案類
     TABLE_SUBTYPES = ("墜落傷", "燒燙傷", "精神異常", "吞食藥物", "上吊", "燒炭", "割腕",
                       "急病", "一般受傷", "路倒", "車禍", "打架受傷", "孕婦待產",
-                      "刀傷(切割傷)", "槍傷", "壓傷", "電擊傷", "溺水", "喝農藥", "吸入廢氣")
+                      "刀傷(切割傷)", "槍傷", "壓傷", "電擊傷", "溺水", "喝農藥", "吸入廢氣", "其它")
 
     def test_tables_match_case_type_qa(self) -> None:
         """照題目表問的案類，跟程式讀的 CaseTypeQA.xlsx 逐題對得上（題號靠位置算）。"""

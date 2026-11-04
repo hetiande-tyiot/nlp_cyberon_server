@@ -98,8 +98,8 @@ WEEDS = ("雜草在燒", {"burning_object": "雜草"})
 FIRE = ("有看到火，也有白煙", {"fire_or_smoke": "有火有煙"})
 WHITE = ("白煙", {"smoke_color": "白色煙"})
 PASSERBY = ("我開車經過", {"caller_role": "路過"})
-BIG = ("比籃球場還大", {"fire_extent": "一個籃球場以上"})
-SPREADING = ("快燒到旁邊的樹林了", {"spread_status": "是"})
+BIG = ("比籃球場還大", {"burning_area": "一個籃球場以上"})
+SPREADING = ("快燒到旁邊的樹林了", {"spread_reached": "是"})
 
 
 class TabB2QuestionOrderTests(unittest.TestCase):
@@ -162,7 +162,7 @@ class PassiveAndFreeTextTests(unittest.TestCase):
         engine, io = _run_wildfire([
             WEEDS, FIRE, WHITE, PASSERBY,
             ("大概一個籃球場，旁邊有條溪，地主在拿水管澆",
-             {"fire_extent": "一個籃球場以上", "nearby_water_source": "有（溪）",
+             {"burning_area": "一個籃球場以上", "nearby_water_source": "有（溪）",
               "extinguish_status": "已在自行滅火"}),
             SPREADING,
         ])

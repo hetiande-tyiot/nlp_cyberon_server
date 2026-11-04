@@ -108,7 +108,7 @@ def _kind(answer: str, kind: str) -> tuple[str, dict]:
 FIRE = ("火很大，煙也很多", {"fire_or_smoke": "有火有煙"})
 BLACK = ("黑煙", {"smoke_color": "黑色煙"})
 PASSERBY = ("我是路過的", {"caller_role": "後方或路過駕駛"})
-NO_SPREAD = ("沒有燒到旁邊", {"spread_status": "無"})
+NO_SPREAD = ("沒有燒到旁邊", {"spread_reached": "無"})
 FRONT = ("引擎蓋那邊", {"fire_origin_part": "車頭或引擎"})
 ONE_CAR = ("一台", {"vehicle_count": "一台"})
 ENGINE_OFF = ("已經熄火了", {"engine_off_status": "已熄火"})
