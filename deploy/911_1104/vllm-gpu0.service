@@ -1,0 +1,34 @@
+# 911 正式環境的模型服務：vLLM 跑 Qwen3.6-35B-A3B-FP8，綁 GPU0、port 8001，給 119_261104 用。
+# 照 912 的 vllm-gpu1.service 複製，只改顯卡、port 和日誌名稱。GPU0 原本的 llama-server 要先停掉、取消開機啟動，
+# 不然兩個一起開會搶 GPU0 的記憶體。
+# VLLM_USE_DEEP_GEMM=0：本機 CUDA 編譯器版本跟 DeepGEMM 要的不合，開著會在啟動時編譯失敗；關掉改用 vLLM 內建的 FP8 運算。
+# vLLM 裝在 /mnt/D/vllm-env、模型在 /mnt/D/models（系統碟空間不夠）。啟動要 2～3 分鐘。
+[Unit]
+Description=vLLM 正式環境（GPU0 / port 8001，Qwen3.6-35B-A3B-FP8）— sop119 後端
+After=network-online.target
+Wants=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
+[Service]
+Type=simple
+User=taiyan
+Group=taiyan
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=VLLM_USE_DEEP_GEMM=0
+ExecStart=/mnt/D/vllm-env/bin/vllm serve /mnt/D/models/Qwen3.6-35B-A3B-FP8 \
+  --host 127.0.0.1 --port 8001 \
+  --tensor-parallel-size 1 \
+  --max-model-len 4096 \
+  --language-model-only \
+  --reasoning-parser qwen3 \
+  --gpu-memory-utilization 0.70
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vllm-gpu0
+
+[Install]
+WantedBy=multi-user.target
