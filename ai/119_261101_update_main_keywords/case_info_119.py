@@ -174,12 +174,13 @@ class CaseInfo119:
 
     # 垂片 B1（交通工具火警）照 xlsx 新增的欄位，存文字。起火車輛數量沿用 vehicle_count。
     vehicle_kind:          Optional[str] = None  # 交通工具（1013）：聯結車/大小貨車/小客車/汽車/機車/腳踏車…
-    vehicle_model:         Optional[str] = None  # 車型（1013）：小客車/休旅車/計程車/貨車…
-    vehicle_power:         Optional[str] = None  # 車輛動力（1013）：油車/油電車/電動車
+    vehicle_model:         Optional[str] = None  # 車型（1013）：1104 xlsx 拿掉，不問也不抽
+    vehicle_power:         Optional[str] = None  # 車輛動力(汽車)：不確定/油車/油電車/電動車(Tesla)
+    vehicle_power_motorcycle: Optional[str] = None  # 車輛動力(機車)：不確定/油車/電動車(GOGORO)
     bicycle_type:          Optional[str] = None  # 腳踏車車型（1013）：一般腳踏車/UBIKE/電輔車
     fire_origin_part:     Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
-    engine_off_status:     Optional[str] = None  # 車輛是否已熄火：已熄火/未熄火…
-    occupants_status:      Optional[str] = None  # 乘客下車狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上就轉人工
+    engine_off_status:     Optional[str] = None  # 熄火狀態：已熄火/未熄火
+    occupants_status:      Optional[str] = None  # 受困狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上：有火轉人工、沒有火改判緊急救援
     injury_status:         Optional[str] = None  # 有無人員受傷
     cargo:                 Optional[str] = None  # 載運物：易燃物/化學品/鋰電池…
     extinguish_status:     Optional[str] = None  # 滅火狀況：無人/有人在場/已在自行滅火…（B2 也用）

@@ -588,7 +588,7 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "occupants_status": (
         "人已全部下車|仍有人在車上|不確定|null",
-        "- occupants_status 乘客下車狀況（固定說法）：只能填 人已全部下車、仍有人在車上、不確定。"
+        "- occupants_status 受困狀況（固定說法）：只能填 人已全部下車、仍有人在車上、不確定。"
         "仍有人在車上＝車上還有人沒下來或出不來。",
     ),
     # 多張垂片共用
@@ -711,19 +711,18 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     # 垂片 B1（交通工具火警）
     "vehicle_kind": (
-        "聯結車|大客車|大貨車|小貨車|小客車(轎車)|汽車|機車(摩托車)|腳踏車(自行車)|電輔車|其他|null",
-        "- vehicle_kind 交通工具（固定說法）：只能填 聯結車、大客車、大貨車、小貨車、"
-        "小客車(轎車)、汽車、機車(摩托車)、腳踏車(自行車)、電輔車、其他；"
-        "只說「車子」填汽車；船、飛機、火車等填其他。",
-    ),
-    "vehicle_model": (
-        "string|null",
-        "- vehicle_model 車型：參考 不確定、小客車、休旅車、計程車、貨車、大貨車、"
-        "公車、遊覽車、油罐車、垃圾車、其他。",
+        "聯結車|大客車(公車、遊覽車)|大貨車|小貨車(發財車)|汽車(轎車)|機車(摩托車)|腳踏車(自行車)|其他|null",
+        "- vehicle_kind 交通工具（固定說法）：只能填 聯結車、大客車(公車、遊覽車)、大貨車、"
+        "小貨車(發財車)、汽車(轎車)、機車(摩托車)、腳踏車(自行車)、其他；"
+        "只說「車子」填汽車(轎車)；電輔車填腳踏車(自行車)；船、飛機、火車等填其他。",
     ),
     "vehicle_power": (
         "string|null",
-        "- vehicle_power 車輛動力：參考 不確定、油車、油電車、電動車。",
+        "- vehicle_power 車輛動力(汽車)：參考 不確定、油車、油電車、電動車(Tesla)。",
+    ),
+    "vehicle_power_motorcycle": (
+        "string|null",
+        "- vehicle_power_motorcycle 車輛動力(機車)：參考 不確定、油車、電動車(GOGORO)。",
     ),
     "bicycle_type": (
         "string|null",
@@ -739,7 +738,7 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "engine_off_status": (
         "string|null",
-        "- engine_off_status 車輛是否已熄火：參考 已熄火、未熄火。",
+        "- engine_off_status 熄火狀態：參考 已熄火、未熄火。",
     ),
     "injury_status": (
         "string|null",

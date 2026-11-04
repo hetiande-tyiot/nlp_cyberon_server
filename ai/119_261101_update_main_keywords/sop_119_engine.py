@@ -525,6 +525,7 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "vehicle_kind",
     "vehicle_model",
     "vehicle_power",
+    "vehicle_power_motorcycle",
     "bicycle_type",
 })
 # 災害通用流程的五個欄位。切離災害時清空，不跟火警的受傷／受困／身分欄共用。
@@ -989,6 +990,7 @@ class SopEngine119:
             "vehicle_kind",
             "vehicle_model",
             "vehicle_power",
+            "vehicle_power_motorcycle",
             "bicycle_type",
         }
 
@@ -4888,6 +4890,27 @@ class SopEngine119:
         if self._escalated_from_rescue:
             return "救護"
         return self.case.main_category
+
+    def _switch_fire_to_vehicle_rescue(self) -> None:
+        """
+        火警 1104 xlsx 交通工具備註：沒有火、車上有人出不來 → 改判緊急救援-車禍救助（使用者 11/04 決定）。
+        中斷火警，改走緊急救援車禍救助的題目，跟一般換主案類一樣（清掉火警欄位、用新大類重抽報案人講過的話）。
+        地址已確認過不重問；派車整通只講一次，火警講過就不再講。
+        """
+        from emergency_accident_119 import SUBCATEGORY
+
+        self._debug_print("fire_to_vehicle_rescue", {
+            "火煙狀況": self.case.fire_or_smoke, "受困狀況": self.case.occupants_status,
+        })
+        self._apply_main_switch("火警", "緊急救援", 1.0)
+        with self._case_lock:
+            self.case.sub_category = SUBCATEGORY
+            self.case.sub_conf = 1.0
+        self._emit_classification(
+            main="緊急救援", main_conf=1.0, sub=SUBCATEGORY, sub_conf=1.0, sub_source="hard_rule",
+        )
+        self._notify_case_update()
+        raise MainCategorySwitched("火警", "緊急救援")
 
     def _escalate_main_to_emergency(
         self,
