@@ -45,6 +45,7 @@ vendor/
 # ===== Log / 暫存 =====
 *.log
 log_119/
+log_119_history/
 *.zip
 *.tmp
 
