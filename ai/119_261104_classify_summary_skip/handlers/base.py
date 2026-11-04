@@ -23,8 +23,12 @@ from typing import TYPE_CHECKING, Optional, Sequence
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
 
+# 救護、火警、緊急救援、災害收完報案人資訊後講的結尾句（11/02 使用者給的句子，四類統一）
+CLOSING_LINE = "已為您紀錄，消防車已經出勤，請保持電話暢通。如果現場狀況有變化，請立刻再撥 119 告訴我們，謝謝"
+
 # xlsx 用一句話問兩個關鍵要素的題目，承辦要求缺什麼問什麼：
 # 兩個都不知道就照 xlsx 整句問；只缺一個時改問下面對應的句子（10/29 確認的說法）。
+# 整句問完只答到一個時，也用下面的句子補問一次。
 SINGLE_MISSING_QUESTIONS = {
     ("patient_gender", "patient_age"): {
         "patient_gender": "請問患者是男生還是女生？",
@@ -37,6 +41,11 @@ SINGLE_MISSING_QUESTIONS = {
     ("ingested_substance", "drug_amount"): {
         "ingested_substance": "請問是吃了什麼藥物？",
         "drug_amount": "知道大概吃了幾顆嗎？",
+    },
+    # 孕婦待產：句子照 xlsx 問句欄另外寫的單問句
+    ("due_date", "pregnancy_week"): {
+        "due_date": "預產期是什麼時候？",
+        "pregnancy_week": "現在懷孕幾週了？",
     },
 }
 
@@ -129,15 +138,15 @@ class SubCategoryHandler:
         - 主動題、條件成立的條件題：答案還不知道才問
         - 沒有問句的題目（例如燒燙傷的年齡）跟上一題一起問：上一題的問句已經問到
         條件在輪到那一題時才判斷，因為要用到前面剛問到的答案。
-        問完呼吸（或呼吸已經知道）就做 OHCA 判定，見 _check_ohca_after_breathing。
-        每一題之前、全部問完之後都做一次改判檢查（_check_escalation），
-        因為報案人可能在任何一句講到要改判的內容，不一定是問到那一題時才講。
+        每一題之前、全部問完之後都做一次改判檢查（_check_escalation）和呼吸檢查（_check_breathing_transfer），
+        因為報案人可能在任何一句講到要改判的內容或呼吸狀況，不一定是問到那一題時才講。
         """
         from fire_tab_map_119 import MODE_CONDITIONAL, MODE_PASSIVE
 
         for number, item in enumerate(questions):
             engine._ensure_known_fields_from_history()
             self._check_escalation(engine)
+            self._check_breathing_transfer(engine)
             if item.mode == MODE_PASSIVE:
                 # 被動題不問；報案人已經講到的話，xlsx 備註的處理（例如改判）照樣要做
                 if engine._is_field_filled(item.field):
@@ -162,17 +171,19 @@ class SubCategoryHandler:
                 missing = [field for field in fields if not engine._is_field_filled(field)]
                 if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
                     question = SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]]
-                answer = engine._ask_and_extract(question)
-                self._after_ems_answer(engine, item, answer)
+                engine._ask_and_extract(question)
+                # 複合題問完還剩一個沒答到（例如只答「是女生」），用單問句再問一次
+                missing = [field for field in fields if not engine._is_field_filled(field)]
+                if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
+                    engine._ask_and_extract(SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]])
             else:
                 engine._debug_print(
                     f"skip_{item.stage}",
                     {field: getattr(engine.case, field) for field in fields},
                 )
             self._after_ems_item(engine, item)
-            if item.field == "breathing":
-                self._check_ohca_after_breathing(engine)
         self._check_escalation(engine)
+        self._check_breathing_transfer(engine)
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
         """
@@ -189,28 +200,23 @@ class SubCategoryHandler:
         """
 
     def _ems_question_needed(self, engine: "SopEngine119", item, fields) -> bool:
-        """
-        有任何一個欄位還不知道就要問。
-        意識：「意識程度」或「是否有意識」任一已經知道就不再問。
-        """
-        if item.field == "consciousness_level" and engine._is_field_filled("consciousness"):
-            return False
+        """有任何一個欄位還不知道就要問。"""
         return not all(engine._is_field_filled(field) for field in fields)
 
-    def _after_ems_answer(self, engine: "SopEngine119", item, answer: str) -> None:
+    def _check_breathing_transfer(self, engine: "SopEngine119") -> None:
         """
-        問完一題後：意識、呼吸再用專項抽取確認一次（OHCA 要靠這兩個值），
-        然後檢查觸發情境。觸發情境由各次案類自己的 _check_and_respond_to_triggers 處理。
+        呼吸 = 呼吸不正常、無呼吸 → 轉真人（使用者 11/02 決定，不再用 OHCA 判定）。
+        講原程式轉人工那句，再交給真人；已經轉過真人就不再講。
         """
-        if item.field in ("consciousness_level", "breathing"):
-            self._extract_s1_vitals(answer, item.question, engine)
-        self._check_and_respond_to_triggers(answer, engine)
+        from ems_tab_map_119 import BREATHING_TRANSFER
 
-    def _check_ohca_after_breathing(self, engine: "SopEngine119") -> None:
-        """呼吸這一題處理完之後的 OHCA 判定：呼吸不是「有」就轉人工。"""
-        with engine._case_lock:
-            breathing = engine.case.breathing
-        engine._check_ohca_and_transfer(breathing, "breathing")
+        if engine._bridged or engine.case.breathing not in BREATHING_TRANSFER:
+            return
+        from sop_119_engine import TransferToHumanError
+
+        engine._debug_print("breathing_transfer", engine.case.breathing)
+        engine._say("請不要掛斷電話，我立即為您轉接專人。")
+        raise TransferToHumanError("breathing_transfer", result="human_transfer")
 
     def _check_and_respond_to_triggers(self, caller_text: str, engine: "SopEngine119") -> None:
         """觸發情境偵測；預設沒有，由各次案類覆寫。"""
@@ -624,17 +630,6 @@ class SubCategoryHandler:
         if on_answer is not None:
             on_answer(answer6)
 
-    # ── 病情含糊判定（Fix2）──────────────────────────────────────────────────
-
-    def _incident_is_vague(self, engine: "SopEngine119") -> bool:
-        """
-        incident_description 是否只是「身體不舒服」這類含糊描述、或純「要救護車」的
-        請求，缺具體病徵。判斷邏輯集中在 sop_utils_119.incident_is_vague（與
-        `_run_救護` 分類閘門共用同一套「請求非病情」詞表）。
-        """
-        from sop_utils_119 import incident_is_vague
-        return incident_is_vague(engine.case.incident_description)
-
     # ── 上吊等自傷：流程中需破門 → 改判緊急救援（加派消防車）────────────────────
 
     def _maybe_escalate_break_in(self, engine: "SopEngine119", text: str) -> bool:
@@ -803,7 +798,9 @@ class SubCategoryHandler:
             parts.append(f"住址：{caller_address}")
         # 結束語「請在現場耐心等待…」拿掉（10/29 使用者決定）：報案人常不在現場，
         # 比照火警，覆誦完姓名、聯繫方式就結束
-        engine._say("，".join(parts) + "，已為您記錄。")
+        # 11/02 使用者決定暫時不唸姓名、聯繫方式，要恢復就把下一行的註解拿掉
+        # engine._say("，".join(parts) + "，已為您記錄。")
+        engine._say(CLOSING_LINE)
 
         with engine._case_lock:
             engine.case.result = "dispatched"

@@ -127,6 +127,8 @@ FIRE_SMOKE_UNSURE = "不確定"
 # 前置條件「看得到煙」「看得到火」各包含哪幾種火煙狀況（照 xlsx 的前置條件欄）
 FIRE_SMOKE_SMOKE_VISIBLE = (FIRE_SMOKE_FIRE_AND_SMOKE, FIRE_SMOKE_SMOKE_NO_FIRE)
 FIRE_SMOKE_FIRE_VISIBLE = (FIRE_SMOKE_FIRE_AND_SMOKE, FIRE_SMOKE_FIRE_NO_SMOKE)
+# 沒有火：交通工具車上有人出不來時，改判緊急救援-車禍救助（1104 xlsx 備註）
+FIRE_SMOKE_NO_FIRE = (FIRE_SMOKE_SMOKE_NO_FIRE, FIRE_SMOKE_NONE)
 # 看得到火或煙（只有火花、不確定都不算）：警報器作響、查看案件遇到這些要換到建築物火警
 FIRE_SMOKE_FIRE_OR_SMOKE_VISIBLE = (
     FIRE_SMOKE_FIRE_AND_SMOKE, FIRE_SMOKE_FIRE_NO_SMOKE, FIRE_SMOKE_SMOKE_NO_FIRE,
@@ -142,26 +144,29 @@ OCCUPANTS_UNSURE = "不確定"
 PLACE_FACTORY = "工廠"
 # 建築物類型＝大型違章建築區與傳統市場(含工廠)：才問建物構造、危險物品
 BUILDING_ILLEGAL_OR_MARKET = "大型違章建築區與傳統市場(含工廠)"
-# B1 交通工具（1013 xlsx 起是車的種類，不是次案類）
-VEHICLE_KIND_CAR = "汽車"
+# B1 交通工具（1013 xlsx 起是車的種類，不是次案類；選項照 1104 xlsx）
+VEHICLE_KIND_TRAILER = "聯結車"
+VEHICLE_KIND_BUS = "大客車(公車、遊覽車)"
+VEHICLE_KIND_CAR = "汽車(轎車)"
 VEHICLE_KIND_MOTORCYCLE = "機車(摩托車)"
 VEHICLE_KIND_BICYCLE = "腳踏車(自行車)"
 VEHICLE_KINDS: Tuple[str, ...] = (
-    "聯結車", "大客車", "大貨車", "小貨車", "小客車(轎車)", VEHICLE_KIND_CAR,
-    VEHICLE_KIND_MOTORCYCLE, VEHICLE_KIND_BICYCLE, "電輔車", "其他",
+    VEHICLE_KIND_TRAILER, VEHICLE_KIND_BUS, "大貨車", "小貨車(發財車)", VEHICLE_KIND_CAR,
+    VEHICLE_KIND_MOTORCYCLE, VEHICLE_KIND_BICYCLE, "其他",
 )
-# 前置條件「交通工具＝汽車」包含整組汽車類（使用者 10/13 確認）；車型例外，只看「汽車」
+# 前置條件「交通工具＝汽車」包含整組汽車類（使用者 10/13 確認）
 VEHICLE_KINDS_CAR_GROUP: Tuple[str, ...] = (
-    "聯結車", "大客車", "大貨車", "小貨車", "小客車(轎車)", VEHICLE_KIND_CAR,
+    VEHICLE_KIND_TRAILER, VEHICLE_KIND_BUS, "大貨車", "小貨車(發財車)", VEHICLE_KIND_CAR,
 )
 # 載運物：貨車、特殊車輛才問
-VEHICLE_KINDS_CARGO: Tuple[str, ...] = ("聯結車", "大客車", "大貨車", "小貨車")
-# 交通工具 → 次案類（使用者 10/13 確認：汽車類都是汽車；機車、腳踏車、電輔車都是機車）
+VEHICLE_KINDS_CARGO: Tuple[str, ...] = (VEHICLE_KIND_TRAILER, VEHICLE_KIND_BUS, "大貨車", "小貨車(發財車)")
+# xlsx 備註：聯結車、公車、遊覽車 → 轉人工（使用者 11/04 決定：大貨車、小貨車不轉）
+VEHICLE_KINDS_TRANSFER: Tuple[str, ...] = (VEHICLE_KIND_TRAILER, VEHICLE_KIND_BUS)
+# 交通工具 → 次案類（使用者 10/13 確認：汽車類都是汽車；機車、腳踏車都是機車）
 VEHICLE_KIND_TO_SUBTYPE: Dict[str, str] = {
     **{kind: "汽車" for kind in VEHICLE_KINDS_CAR_GROUP},
     VEHICLE_KIND_MOTORCYCLE: "機車",
     VEHICLE_KIND_BICYCLE: "機車",
-    "電輔車": "機車",
 }
 # B2 次案類沒把握時一律記平地（承辦備註：基本上都直接判平地）
 WILDFIRE_DEFAULT_SUBTYPE = "山林田野(平地)"
@@ -234,10 +239,10 @@ def _and(*conditions: Callable[[Any], bool]) -> Callable[[Any], bool]:
 
 TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("場所用途", "place_usage", MODE_ACTIVE,
-                 "建築物火警-場所用途", "請問是住宅還是工廠呢？"),
+                 "建築物火警-場所用途", "請問是哪一種建築物？住宅還是工廠呢？"),
     # 建築物類型就是建築物火警的次案類；依是不是工廠分兩種問法
     FireQuestion("建築物類型", "building_type", MODE_CONDITIONAL,
-                 "建築物火警-建築物類型", "是公寓還是大樓？總共有幾層樓？",
+                 "建築物火警-建築物類型", "是公寓、透天還是大樓？總共有幾層樓？",
                  _not_factory, "場所用途 ≠ 工廠"),
     FireQuestion("建築物類型", "building_type", MODE_CONDITIONAL,
                  "建築物火警-建築物類型", "現場是什麼用途？總共有幾層樓？",
@@ -284,15 +289,13 @@ TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
 
 TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("交通工具", "vehicle_kind", MODE_ACTIVE,
-                 "交通工具火警-交通工具", "是什麼車在燒？汽車或機車嗎？"),
-    # 車型只在報案人只說「汽車」、還不知道是哪一種時才問
-    FireQuestion("車型", "vehicle_model", MODE_CONDITIONAL,
-                 "交通工具火警-車型", "請問是自小客車還是貨車？",
-                 _vehicle_kind_in(VEHICLE_KIND_CAR), "交通工具＝汽車"),
-    FireQuestion("車輛動力", "vehicle_power", MODE_CONDITIONAL,
-                 "交通工具火警-車輛動力", "是油車還是電動車呢？",
-                 _vehicle_kind_in(*VEHICLE_KINDS_CAR_GROUP, VEHICLE_KIND_MOTORCYCLE),
-                 "交通工具＝汽車、機車(摩托車)"),
+                 "交通工具火警-交通工具", "請問是什麼車燒起來？"),
+    FireQuestion("車輛動力(汽車)", "vehicle_power", MODE_CONDITIONAL,
+                 "交通工具火警-車輛動力(汽車)", "請問是油車、油電車還是電動車呢？",
+                 _vehicle_kind_in(*VEHICLE_KINDS_CAR_GROUP), "交通工具＝汽車"),
+    FireQuestion("車輛動力(機車)", "vehicle_power_motorcycle", MODE_CONDITIONAL,
+                 "交通工具火警-車輛動力(機車)", "請問是油車還是電動車呢？",
+                 _vehicle_kind_in(VEHICLE_KIND_MOTORCYCLE), "交通工具＝機車(摩托車)"),
     FireQuestion("腳踏車車型", "bicycle_type", MODE_CONDITIONAL,
                  "交通工具火警-腳踏車車型", "請問是一般腳踏車、U bike 還是電輔車？",
                  _vehicle_kind_in(VEHICLE_KIND_BICYCLE), "交通工具＝腳踏車(自行車)"),
@@ -303,7 +306,7 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
     FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
                  "交通工具火警-報案人身分", "請問您是車主或駕駛嗎？還是路人呢？"),
-    FireQuestion("是否延燒", "spread_status", MODE_CONDITIONAL,
+    FireQuestion("是否延燒", "spread_reached", MODE_CONDITIONAL,
                  "交通工具火警-是否延燒", "火有沒有燒到旁邊的東西？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("起火部位", "fire_origin_part", MODE_CONDITIONAL,
@@ -313,12 +316,12 @@ TAB_B1_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("起火車輛數量", "vehicle_count", MODE_CONDITIONAL,
                  "交通工具火警-起火車輛數量", "現場有幾台在燒呢？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
-    FireQuestion("車輛是否已熄火", "engine_off_status", MODE_CONDITIONAL,
-                 "交通工具火警-車輛是否已熄火", "車子熄火了嗎？",
+    FireQuestion("熄火狀態", "engine_off_status", MODE_CONDITIONAL,
+                 "交通工具火警-熄火狀態", "車子引擎關掉了嗎？",
                  _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
-    # 答「仍有人在車上」會立刻轉人工（跟有人受困一樣）
-    FireQuestion("乘客下車狀況", "occupants_status", MODE_CONDITIONAL,
-                 "交通工具火警-乘客下車狀況", "車上的人都出來了嗎？",
+    # 答「仍有人在車上」：有火轉人工、無火改判緊急救援-車禍救助（見 handlers/火警通用.py）
+    FireQuestion("受困狀況", "occupants_status", MODE_CONDITIONAL,
+                 "交通工具火警-受困狀況", "車上的人都出來了嗎？",
                  _and(_vehicle_kind_in(*VEHICLE_KINDS_CAR_GROUP), _fire_visible),
                  "交通工具＝汽車 且 火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("有無人員受傷", "injury_status", MODE_CONDITIONAL,
@@ -348,10 +351,10 @@ TAB_B2_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _smoke_visible, "火煙狀況 = 有火有煙、無火有煙"),
     FireQuestion("報案人身分", "caller_role", MODE_ACTIVE,
                  "山林田野火警-報案人身分", "請問您是住在附近，還是剛好經過？"),
-    FireQuestion("燃燒面積", "fire_extent", MODE_CONDITIONAL,
+    FireQuestion("燃燒面積", "burning_area", MODE_CONDITIONAL,
                  "山林田野火警-燃燒面積", "可以描述一下大概燒多大嗎？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
-    FireQuestion("是否延燒", "spread_status", MODE_CONDITIONAL,
+    FireQuestion("是否延燒", "spread_reached", MODE_CONDITIONAL,
                  "山林田野火警-是否延燒", "火有沒有燒到旁邊的東西？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
     # 山地或平地不問：報案人講到才記；沒把握時次案類記平地（見 sync_sub_category）
@@ -386,10 +389,10 @@ TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("氣味類型", "odor", MODE_CONDITIONAL,
                  "輕微火警-氣味類型", "現場有聞到燒焦味嗎？",
                  _no_fire_no_smoke, "火煙狀況 = 無火無煙"),
-    FireQuestion("是否延燒", "spread_status", MODE_CONDITIONAL,
+    FireQuestion("是否延燒", "spread_reached", MODE_CONDITIONAL,
                  "輕微火警-是否延燒", "火有沒有燒到旁邊的東西？",
                  _fire_visible, "火煙狀況 = 有火有煙、有火無煙"),
-    FireQuestion("燃燒範圍", "fire_extent", MODE_CONDITIONAL,
+    FireQuestion("燃燒範圍", "burning_range", MODE_CONDITIONAL,
                  "輕微火警-燃燒範圍", "燒起來的範圍大概多大？",
                  _and(_subtype_is("電線桿(電纜)", "垃圾"), _fire_visible),
                  "火警類型＝電線桿(電纜)、垃圾 且 火煙狀況 = 有火有煙、有火無煙"),
@@ -402,7 +405,7 @@ TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
                  "輕微火警-來源確認", "知道是哪一戶、哪一層傳出來的嗎？",
                  _subtype_is(*MINOR_ALARM_OR_CHECK), "火警類型＝警報器作響、查看案件"),
     FireQuestion("標的物", "target_object", MODE_PASSIVE, "輕微火警-標的物"),
-    FireQuestion("無人應門或聯絡不上", "door_response", MODE_PASSIVE,
+    FireQuestion("無人應門或聯絡不上", "door_unanswered", MODE_PASSIVE,
                  "輕微火警-無人應門或聯絡不上"),
 )
 
@@ -424,9 +427,10 @@ FIRE_IDENTITY_FIELDS: Tuple[str, ...] = (
 )
 # 轉人工要看的欄位：不管在哪張垂片，報案人講出有人出不來都要立刻轉
 FIRE_TRANSFER_FIELDS: Tuple[str, ...] = ("trapped_status", "occupants_status")
-# 還不知道是哪張垂片時（報地址、案類分析），先抽四張垂片共用的欄位
+# 還不知道是哪張垂片時（報地址、案類分析），先抽四張垂片共用的欄位。
+# 延燒、燃燒範圍各張垂片名稱和選項不同、各自一格，等判出垂片後由補抽記下（見 handlers/火警通用.py）
 FIRE_SHARED_FIELDS: Tuple[str, ...] = (
-    "fire_or_smoke", "smoke_color", "spread_status", "caller_role", "odor", "fire_extent",
+    "fire_or_smoke", "smoke_color", "caller_role", "odor",
 )
 
 
@@ -566,25 +570,31 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "fire_floor": "起火樓層",
     "spread_status": "延燒可能",
     "trapped_status": "有無受困",
-    "door_response": "應門狀況",  # A 起火戶應門、C 無人應門或聯絡不上共用
+    "door_response": "起火戶應門",
     "building_total_floors": "建物總樓層",
     "building_type": "建築物類型",  # A、C 都問；在 A 就是次案類，在 C 另外存
     "caller_role": "報案人身分",
     "building_construction": "建物構造",
     "hazardous_materials": "危險物品",
-    "odor": "氣味",
+    "odor": "氣味類型",
     "explosion_status": "有無爆炸",
     "access_info": "其他資訊",
-    "fire_extent": "燃燒範圍",  # A 延燒面積、B2 燃燒面積、C 燃燒範圍共用
+    "fire_extent": "延燒面積",
+    # 垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
+    "spread_reached": "是否延燒",
+    "burning_area": "燃燒面積",
+    "burning_range": "燃燒範圍",
+    "door_unanswered": "無人應門或聯絡不上",
     # 垂片 B1（交通工具火警）
     "vehicle_kind": "交通工具",
     "vehicle_model": "車型",
-    "vehicle_power": "車輛動力",
+    "vehicle_power": "車輛動力(汽車)",
+    "vehicle_power_motorcycle": "車輛動力(機車)",
     "bicycle_type": "腳踏車車型",
     "fire_origin_part": "起火部位",
     "vehicle_count": "起火車輛數量",
-    "engine_off_status": "車輛是否已熄火",
-    "occupants_status": "乘客下車狀況",
+    "engine_off_status": "熄火狀態",
+    "occupants_status": "受困狀況",
     "injury_status": "有無人員受傷",
     "cargo": "載運物",
     "extinguish_status": "滅火狀況",

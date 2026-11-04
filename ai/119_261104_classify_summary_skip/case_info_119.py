@@ -54,24 +54,32 @@ class CaseInfo119:
     is_ohca:       bool           = False  # 是否判斷為 OHCA
 
     # ── 患者基本資訊（救護專用）────────────────────────────────────────────
-    patient_count:        Optional[str] = None  # 傷病患人數
+    patient_count:        Optional[str] = None  # 患者人數
     patient_gender:       Optional[str] = None  # 性別
     patient_age:          Optional[str] = None  # 年齡
     caller_is_patient:    Optional[bool] = None  # True=報案人即患者
-    incident_description: Optional[str] = None  # 發生了什麼事
+    incident_description: Optional[str] = None  # 發生了什麼事（緊急救援用；救護的病徵、主訴各有自己的欄位）
     current_condition:    Optional[str] = None  # 目前狀況
     injury_cause:         Optional[str] = None  # 受傷原因（一般受傷專用）
     injury_location:      Optional[str] = None  # 受傷部位（一般受傷專用）
     injury_severity:      Optional[str] = None  # 傷勢（一般受傷專用）
+    injury_place:         Optional[str] = None  # 發生場所（一般受傷）：住家室內、戶外等，照報案人說的記
+    crash_vehicles:       Optional[str] = None  # 事故車種（救護-車禍）：照報案人說的記，例：汽車撞機車
+    crash_trapped:        Optional[str] = None  # 有無人員受困（救護-車禍）：未知/無人受困/有人受困
+    conflict_status:      Optional[str] = None  # 衝突狀況（打架受傷）：已停止/進行中
+    weapon_held:          Optional[str] = None  # 持械（打架受傷）：沒有/不確定/刀/棍棒/酒瓶/玻璃/其他照原話
     tocc:                 Optional[str] = None  # TOCC（旅遊/職業/接觸/群聚史）
     medical_history:      Optional[str] = None  # 過去病史（路倒專用）
     collapse_cause:       Optional[str] = None  # 路倒原因（路倒專用）
-    ingested_substance:   Optional[str] = None  # 服藥種類與數量（吞食藥物專用）
+    ingested_substance:   Optional[str] = None  # 服用藥物（吞食藥物）
     # 救護垂片 1018 xlsx 新增的文字欄位（急病、燒燙傷照題目表問）
-    consciousness_level:  Optional[str] = None  # 意識程度：未知/意識清醒/剛剛昏倒、現在已清醒/對聲音有反應/對疼痛有反應/昏迷
-    caller_relation:      Optional[str] = None  # 報案人與患者關係（報案身分）：本人/家人/朋友/路過/不認識…
+    consciousness_level:  Optional[str] = None  # 意識：未知/意識清醒/剛剛昏倒、現在已清醒/對聲音有反應/對疼痛有反應/昏迷
+    caller_relation:      Optional[str] = None  # 報案身分：本人/家人/朋友/路過/不認識…
     caller_location:      Optional[str] = None  # 報案人位置：在現場/在患者旁邊/在遠處/不敢靠近/不在現場…
     drinking_status:      Optional[str] = None  # 是否飲酒：有喝酒/沒有喝酒/不清楚（被動）
+    collapse_status:      Optional[str] = None  # 路倒狀況：喝醉/睡著/身體不舒服/跌倒受傷/不清楚
+    patient_appearance:   Optional[str] = None  # 患者外觀特徵（路倒）：照報案人說的記，讓救護人員找得到人
+    companion_present:    Optional[str] = None  # 身旁親友（路倒）：有家人或朋友在旁邊/只有他一個人/不清楚
     mobility:             Optional[str] = None  # 平常行動能力：平常可以自己走/平常需要人扶/長期臥床或坐輪椅（被動）
     symptom_onset:        Optional[str] = None  # 症狀發生時間（被動）
     scene_access:         Optional[str] = None  # 現場進入條件：有沒有人開門、管理員、電梯（被動）
@@ -87,9 +95,9 @@ class CaseInfo119:
     hanging_status:       Optional[str] = None  # 上吊狀況：已解開繩子/還沒解開
     break_in_need:        Optional[str] = None  # 破門需求：需要破門/不需要破門
     hanging_location:     Optional[str] = None  # 患者位置：住家/橋墩/山上電塔
-    # 救護垂片 1028 xlsx 割腕OK（初步傷勢沿用 injury_severity）
-    cutting_tool:         Optional[str] = None  # 工具：美工刀/菜刀/玻璃…
-    tool_status:          Optional[str] = None  # 工具狀況：已移除/還在身上/不清楚
+    # 救護垂片 1104 xlsx 割腕OK（傷勢沿用 injury_severity）
+    cutting_tool:         Optional[str] = None  # 工具（割腕、刀傷）：美工刀/菜刀/玻璃…
+    tool_status:          Optional[str] = None  # 工具移除：已移除/還在身上/不清楚
     # 救護垂片 1028 xlsx 吞食藥物OK（服用藥物沿用 ingested_substance、病史沿用 medical_history）
     drug_amount:          Optional[str] = None  # 藥物數量：一整罐、大概 20 顆…
     medicine_bag:         Optional[str] = None  # 藥袋：有/無
@@ -99,14 +107,28 @@ class CaseInfo119:
     forced_admission:     Optional[str] = None  # 強制送醫：需要/不需要/不清楚
     forced_admission_reason: Optional[str] = None  # 強制送醫原因：大吼罵人/摔丟東西/胡言亂語…
     family_accompany:     Optional[str] = None  # 家屬陪同：有/沒有/家屬在路上
+    # 救護垂片 1102 xlsx 電擊傷、溺水
+    electric_type:        Optional[str] = None  # 電擊種類：高壓電/雷擊/家用電/其他
+    power_off:            Optional[str] = None  # 現場是否已斷電：已斷電/未斷電
+    patient_identity:     Optional[str] = None  # 傷患身分（電擊傷）：照報案人說的記，例：工地工人、外籍移工
+    drowning_status:      Optional[str] = None  # 溺水狀況：已拉上岸/未拉上岸
+    # 救護垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
+    symptoms:             Optional[str] = None  # 病徵：全身無力/昏倒/喘/頭暈…
+    chief_complaint:      Optional[str] = None  # 主訴（其它）：身體不舒服/受傷/想自殺…
+    burn_cause:           Optional[str] = None  # 燒燙傷原因：熱水/熱油/火燒/化學藥劑/電
+    burn_severity:        Optional[str] = None  # 燙傷傷勢：燙到哪裡、範圍多大、有沒有起水泡
+    drowning_cause:       Optional[str] = None  # 溺水原因（救護）：失足落水/游泳抽筋/翻船；緊急救援的溺水原因是 drown_cause
+    pesticide_type:       Optional[str] = None  # 農藥種類：除草劑/巴拉刈/清潔劑…
+    pesticide_amount:     Optional[str] = None  # 農藥劑量：半瓶/一整瓶…
 
     # ── 孕婦急產專用 ─────────────────────────────────────────────────────────────
-    pregnancy_week:        Optional[str] = None  # 胎次與孕週（如「第1胎32週」）
+    # 下面幾個欄位照 1028 xlsx「12-孕婦待產」的關鍵要素記（題目表見 ems_tab_map_119）
+    pregnancy_week:        Optional[str] = None  # 懷孕週數（如「39週」）
     due_date:              Optional[str] = None  # 預產期
-    multiple_pregnancy:    Optional[str] = None  # 單或雙胞胎
+    multiple_pregnancy:    Optional[str] = None  # 胎次與胎數（如「第2胎、單胞胎」）
     water_broken_bleeding: Optional[str] = None  # 破水/出血狀況
-    contractions:          Optional[str] = None  # 宮縮情況（如「5分鐘一次」）
-    prenatal_history:      Optional[str] = None  # 產檢異常史
+    contractions:          Optional[str] = None  # 陣痛狀況：沒有陣痛/不規則陣痛/規則陣痛/已經破水/落紅
+    prenatal_history:      Optional[str] = None  # 產檢狀況：產檢正常/產檢有異常/沒產檢或不知道
     prenatal_clinic:       Optional[str] = None  # 產檢醫院/診所
 
     # ── 火警 SOP 要素 ────────────────────────────────────────────────────────
@@ -114,7 +136,7 @@ class CaseInfo119:
     smoke_color:         Optional[str] = None  # 黑煙/白煙/其他顏色
     burning_object:      Optional[str] = None  # 燒什麼（房子/車子/雜草…）
     fire_trend:          Optional[str] = None  # 變大/消退/穩定
-    fire_extent:         Optional[str] = None  # 火勢大約範圍
+    fire_extent:         Optional[str] = None  # 延燒面積（垂片 A）：未知/0~50坪…500坪以上
     fire_category:       Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
 
     # 火警垂片代碼（0 為合法已填值）
@@ -152,12 +174,13 @@ class CaseInfo119:
 
     # 垂片 B1（交通工具火警）照 xlsx 新增的欄位，存文字。起火車輛數量沿用 vehicle_count。
     vehicle_kind:          Optional[str] = None  # 交通工具（1013）：聯結車/大小貨車/小客車/汽車/機車/腳踏車…
-    vehicle_model:         Optional[str] = None  # 車型（1013）：小客車/休旅車/計程車/貨車…
-    vehicle_power:         Optional[str] = None  # 車輛動力（1013）：油車/油電車/電動車
+    vehicle_model:         Optional[str] = None  # 車型（1013）：1104 xlsx 拿掉，不問也不抽
+    vehicle_power:         Optional[str] = None  # 車輛動力(汽車)：不確定/油車/油電車/電動車(Tesla)
+    vehicle_power_motorcycle: Optional[str] = None  # 車輛動力(機車)：不確定/油車/電動車(GOGORO)
     bicycle_type:          Optional[str] = None  # 腳踏車車型（1013）：一般腳踏車/UBIKE/電輔車
     fire_origin_part:     Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
-    engine_off_status:     Optional[str] = None  # 車輛是否已熄火：已熄火/未熄火…
-    occupants_status:      Optional[str] = None  # 乘客下車狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上就轉人工
+    engine_off_status:     Optional[str] = None  # 熄火狀態：已熄火/未熄火
+    occupants_status:      Optional[str] = None  # 受困狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上：有火轉人工、沒有火改判緊急救援
     injury_status:         Optional[str] = None  # 有無人員受傷
     cargo:                 Optional[str] = None  # 載運物：易燃物/化學品/鋰電池…
     extinguish_status:     Optional[str] = None  # 滅火狀況：無人/有人在場/已在自行滅火…（B2 也用）
@@ -165,10 +188,15 @@ class CaseInfo119:
     plate_number:          Optional[str] = None  # 車牌號碼（被動）
 
     # 垂片 C（輕微火警）照 0929 xlsx 新增的欄位，存文字。
-    # 氣味類型沿用 odor、無人應門沿用 door_response、燃燒範圍沿用 fire_extent（都跟 A 共用）。
+    # 氣味類型沿用 odor（跟 A 共用）。
     alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
     source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
     target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
+    # 火警垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
+    spread_reached:        Optional[str] = None  # 是否延燒（B1、B2、C）：無/有（B2：無/是）
+    burning_area:          Optional[str] = None  # 燃燒面積（B2）：小於一個停車格/約一台車/約半個籃球場/一個籃球場以上/不確定
+    burning_range:         Optional[str] = None  # 燃燒範圍（C）：照報案人說的記
+    door_unanswered:       Optional[str] = None  # 無人應門或聯絡不上（C）：已聯絡上/無人應門或聯絡不上
 
     # 建築物火災
     caller_position:      Optional[str] = None  # 報案人在建物內/外

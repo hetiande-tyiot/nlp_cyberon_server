@@ -113,7 +113,6 @@ from sop_utils_119 import (
     extract_road_section,
     extract_street_address_components,
     has_complete_street_address,
-    incident_is_vague,
     is_house_number_only,
     is_street_address,
     is_usable_address,
@@ -212,9 +211,9 @@ END_FLOW_SENTINEL = "__END_FLOW__"
 _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "incident_description": "現場發生什麼事",
     "consciousness": "是否有意識",
-    "breathing": "是否有呼吸",
+    "breathing": "呼吸",
     "abdomen_rise": "肚子是否有起伏",
-    "patient_count": "傷病患人數",
+    "patient_count": "患者人數",
     "patient_gender": "患者性別",
     "patient_age": "患者年齡",
     "current_condition": "目前狀況（依子類語義：傷情/現場安全/酒精/炭盆/繩子等）",
@@ -223,19 +222,27 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "injury_cause": "受傷原因/機制",
     "injury_location": "受傷部位",
     "injury_severity": "傷勢",
+    "injury_place": "發生場所",
+    "crash_vehicles": "事故車種",
+    "crash_trapped": "有無人員受困",
+    "conflict_status": "衝突狀況",
+    "weapon_held": "持械",
     "tocc": "TOCC 旅遊職業接觸群聚史",
-    "ingested_substance": "服藥種類與數量",
-    "pregnancy_week": "胎次與孕週",
+    "ingested_substance": "服用藥物",
+    "pregnancy_week": "懷孕週數",
     "due_date": "預產期",
-    "multiple_pregnancy": "單或雙胞胎",
+    "multiple_pregnancy": "胎次與胎數",
     "water_broken_bleeding": "破水或出血",
-    "contractions": "宮縮情況",
-    "prenatal_history": "產檢異常史",
+    "contractions": "陣痛狀況",
+    "prenatal_history": "產檢狀況",
     "prenatal_clinic": "產檢醫院",
-    "consciousness_level": "意識程度",
-    "caller_relation": "報案人與患者關係",
+    "consciousness_level": "意識",
+    "caller_relation": "報案身分",
     "caller_location": "報案人位置",
     "drinking_status": "是否飲酒",
+    "collapse_status": "路倒狀況",
+    "patient_appearance": "患者外觀特徵",
+    "companion_present": "身旁親友",
     "mobility": "平常行動能力",
     "symptom_onset": "症狀發生時間",
     "scene_access": "現場進入條件",
@@ -249,7 +256,7 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "break_in_need": "破門需求",
     "hanging_location": "患者位置（上吊）",
     "cutting_tool": "工具",
-    "tool_status": "工具狀況",
+    "tool_status": "工具移除",
     "drug_amount": "藥物數量",
     "medicine_bag": "藥袋",
     "aggression": "攻擊傾向",
@@ -257,22 +264,30 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "forced_admission": "強制送醫",
     "forced_admission_reason": "強制送醫原因",
     "family_accompany": "家屬陪同",
+    "electric_type": "電擊種類",
+    "power_off": "現場是否已斷電",
+    "patient_identity": "傷患身分",
+    "drowning_status": "溺水狀況",
+    "symptoms": "病徵",
+    "chief_complaint": "主訴",
+    "burn_cause": "燒燙傷原因",
+    "burn_severity": "燙傷傷勢",
+    "drowning_cause": "溺水原因",
+    "pesticide_type": "農藥種類",
+    "pesticide_amount": "農藥劑量",
 }
 
 
-# ─── 救護細類判定：信心度追問與選取閾值 ────────────────────────────────────────
-# 於 _run_救護() 細類定案時使用。實測期間可依誤分狀況調整。
+# ─── 緊急救援次案類判定：信心度追問閾值 ────────────────────────────────────────
+# 於 _accepted_emergency_sub()、_settle_emergency_subcategory() 使用（救護判次案類已不追問）。
 #   CONF   : top-1 置信度低於此值 → 追問（模型本身沒把握）
 #   MARGIN : top1−top2 機率差低於此值 → 追問（前兩名咬得很近、兩類難分）
-#   LATER_PREFER_DELTA : 多輪候選挑選時，晚輪信心未低於最佳超過此值就採晚輪
-#                        （晚輪文字較完整、資訊較多，避免資訊少的早輪誤勝）
 #   MAX_REASK : 最多追問次數
 SUB_CONF_THRESHOLD: float = 0.7
 # 緊急救援 v2 是 8 類。整段通話送進去時，最高信心常常只有 0.4～0.66，
 # 但和第一名的差距仍大於 0.2。沿用救護的 0.7 會讓這個模型永遠寫不進次案類。
 EMERGENCY_BERT_CONF_THRESHOLD: float = 0.35
 SUB_MARGIN_THRESHOLD: float = 0.15
-SUB_LATER_PREFER_DELTA: float = 0.1
 MAX_SUB_REASK: int = 2
 
 # ─── 火警次案類：margin 閘門 ─────────────────────────────────────────────────────
@@ -382,6 +397,11 @@ RESCUE_EXCLUSIVE_FIELDS = frozenset({
     "injury_cause",
     "injury_location",
     "injury_severity",
+    "injury_place",
+    "crash_vehicles",
+    "crash_trapped",
+    "conflict_status",
+    "weapon_held",
     "tocc",
     "ingested_substance",
     "blood_glucose",
@@ -399,6 +419,9 @@ RESCUE_EXCLUSIVE_FIELDS = frozenset({
     "caller_relation",
     "caller_location",
     "drinking_status",
+    "collapse_status",
+    "patient_appearance",
+    "companion_present",
     "mobility",
     "symptom_onset",
     "scene_access",
@@ -420,6 +443,17 @@ RESCUE_EXCLUSIVE_FIELDS = frozenset({
     "forced_admission",
     "forced_admission_reason",
     "family_accompany",
+    "electric_type",
+    "power_off",
+    "patient_identity",
+    "drowning_status",
+    "symptoms",
+    "chief_complaint",
+    "burn_cause",
+    "burn_severity",
+    "drowning_cause",
+    "pesticide_type",
+    "pesticide_amount",
 })
 FIRE_EXCLUSIVE_FIELDS = frozenset({
     "fire_or_smoke",
@@ -483,12 +517,18 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "alarm_status",
     "source_located",
     "target_object",
+    # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+    "spread_reached",
+    "burning_area",
+    "burning_range",
+    "door_unanswered",
     "power_outage",
     # 以下是火警照 1013 xlsx 新增的欄位（火警垂片在問）
     "building_type",
     "vehicle_kind",
     "vehicle_model",
     "vehicle_power",
+    "vehicle_power_motorcycle",
     "bicycle_type",
 })
 # 災害通用流程的五個欄位。切離災害時清空，不跟火警的受傷／受困／身分欄共用。
@@ -765,13 +805,18 @@ class SopEngine119:
             parts.append(self.case.incident_description)
         full_text = "\n".join(p for p in parts if p)
 
+        # 救護照 xlsx 垂片：性別記「男性／女性」；報案人是不是患者記在「報案身分」，
+        # 由模型照規則抽，不另外判廠商的「報案人是否即患者」（11/02 使用者決定）
+        is_rescue = self._fields_category() == "救護"
         with self._case_lock:
             if not self.case.patient_gender and full_text:
                 gender = infer_patient_gender_from_honorific(full_text)
+                if gender and is_rescue:
+                    gender = {"男": "男性", "女": "女性"}.get(gender, gender)
                 if gender:
                     self.case.patient_gender = gender
 
-            if self.case.caller_is_patient is None and full_text:
+            if not is_rescue and self.case.caller_is_patient is None and full_text:
                 is_patient = infer_caller_is_patient(full_text)
                 if is_patient is not None:
                     self.case.caller_is_patient = is_patient
@@ -952,17 +997,22 @@ class SopEngine119:
             "alarm_status",
             "source_located",
             "target_object",
+            # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+            "spread_reached",
+            "burning_area",
+            "burning_range",
+            "door_unanswered",
             # 垂片 B1 照 1013 xlsx 新增（建築物類型由次案類代碼換算，不在這裡）
             "vehicle_kind",
             "vehicle_model",
             "vehicle_power",
+            "vehicle_power_motorcycle",
             "bicycle_type",
         }
 
         from fire_tab_map_119 import FIRE_IDENTITY_CODE_FIELDS
 
         identity_updates: Dict[str, Any] = {}  # 本輪 LLM 抽到的次案類代碼
-        consciousness_level_before = self.case.consciousness_level
         for key, val in extracted.items():
             if val is None:
                 continue
@@ -982,10 +1032,8 @@ class SopEngine119:
                 continue
             if key in _RESCUE_FIELDS and self._fields_category() != "救護":
                 continue
-            if (
-                key == "incident_description"
-                and self.case.main_category not in {"救護", "緊急救援"}
-            ):
+            # 救護的病徵、主訴各有自己的欄位，「發生了什麼事」只給緊急救援
+            if key == "incident_description" and self.case.main_category != "緊急救援":
                 continue
             if key in _FIRE_OVERWRITE_FIELDS and self.case.main_category != "火警":
                 continue
@@ -1167,16 +1215,6 @@ class SopEngine119:
             if not current:
                 setattr(self.case, key, val)
 
-        if self._fields_category() == "救護":
-            from ems_tab_map_119 import fill_consciousness_from_level
-
-            # 意識程度改口了、這一句沒直接講有沒有意識：「是否有意識」清掉，照新的意識程度重算
-            if (
-                self.case.consciousness_level != consciousness_level_before
-                and extracted.get("consciousness") is None
-            ):
-                self.case.consciousness = None
-            fill_consciousness_from_level(self.case)
         if identity_updates and self.case.main_category == "火警":
             self._sync_fire_sub_category_from_identity_codes(identity_updates)
         if self.case.main_category == "火警":
@@ -1729,16 +1767,19 @@ class SopEngine119:
         if self._llm is not None:
             try:
                 # 火警：告訴抽取器目前是哪張垂片，只抽這張垂片用得到的欄位
-                fire_extra = (
+                extra = (
                     {"fire_tab": self.case.fire_tab}
                     if self.case.main_category == "火警" else {}
                 )
+                # 救護：告訴抽取器目前是哪個次案類，同一欄位在不同次案類參考範圍不同時照次案類抽
+                if self._fields_category() == "救護":
+                    extra["sub_category"] = self.case.sub_category
                 extracted = self._llm.extract_general_fields(
                     caller_text,
                     question=qa_question,
                     main_category=self._fields_category(),
                     call_type=self.case.call_type,
-                    **fire_extra,
+                    **extra,
                 )
                 self._debug_print("general_extract", {
                     "question": qa_question,
@@ -1767,12 +1808,16 @@ class SopEngine119:
                 self._apply_extracted_fields({"ImportantTag": matched_tags})
 
         # 3) 生命征象規則校正（僅填補空值 / 校正明顯誤填風險）
-        vital_hints = extract_vital_signs_hint(caller_text)
+        # 救護照 xlsx 垂片抽取，這段關鍵字的詞已經寫進意識、呼吸的抽取規則，救護不跑（11/02 使用者決定）
+        vital_hints = (
+            extract_vital_signs_hint(caller_text) if self._fields_category() != "救護" else {}
+        )
         if vital_hints:
             with self._case_lock:
                 self._apply_extracted_fields(vital_hints)
 
-        if qa_question:
+        # 救護照 xlsx 垂片抽取，不用這段關鍵字補是／否（11/02 使用者決定）
+        if qa_question and self._fields_category() != "救護":
             for slot, keywords in (
                 ("consciousness", ("意識", "意识", "清醒", "反應", "反应", "捏", "肩膀")),
                 ("breathing", ("呼吸",)),
@@ -4522,82 +4567,11 @@ class SopEngine119:
             # ════════════════════════════════════════════════════════
             # 此時：收集所有輪報警人文本 → 關鍵詞直判 / 次分類器
             # ════════════════════════════════════════════════════════
+            # 判一次就定，不追問「現場發生什麼狀況」（承辦問卷反映已經講過症狀還被重複問）。
+            # 判錯或報案人還沒講症狀也沒關係：題目表每答一題都會依新的回答重新判次案類，
+            # 急病第 1 題也會問「請問患者是哪裡不舒服？」
             all_caller_text = self.case.full_caller_text()
-            sub_cat, sub_conf, sub_source, sub_margin = self._do_sub_classify(all_caller_text, "救護")
-
-            # 關鍵詞未命中，且分類器「信心不足」或「兩類難分」時 → 最多追問兩遍。
-            # 觸發重問的兩個條件（任一成立即追問）：
-            #   1. top-1 置信度 < SUB_CONF_THRESHOLD   → 模型本身沒把握
-            #   2. top1−top2 差距 < SUB_MARGIN_THRESHOLD → 前兩名咬得很近，模稜兩可
-            # 每次分類結果都保留，最終挑選時偏好較晚輪（見下方 C）。
-            # 閾值定義於模組層級（SUB_CONF_THRESHOLD 等），實測期間集中調整。
-            # （關鍵詞命中 conf=1.0、margin=1.0，不會進入此分支）
-            # 重問時換句話問：觸發重問多半是 ASR 聽錯（例：「羊水」→「涼水」），
-            # 一字不差地再問一次，報案人會以為系統沒聽到。
-            _SUB_REASK_QUESTIONS = (
-                "不好意思，請再說一次現場發生什麼狀況？",
-                "麻煩您簡短描述一下傷病患目前的情形？",
-            )
-            candidates: List[tuple] = []
-            if sub_cat is not None:
-                candidates.append((sub_cat, sub_conf if sub_conf is not None else 0.0, sub_source))
-
-            for _reask_i in range(MAX_SUB_REASK):
-                if sub_source in ("keyword", "hard_rule"):
-                    break
-                conf_ok = sub_conf is not None and sub_conf >= SUB_CONF_THRESHOLD
-                margin_ok = sub_margin is not None and sub_margin >= SUB_MARGIN_THRESHOLD
-                # A：分類跑在「問發生什麼事」之前，此時可能只有地址/「我要救護車」而無任何
-                #    病情描述。BERT 在空症狀輸入下仍可能過度自信（例：급병→急病 4b830f85 案例，
-                #    sub_conf=0.855；4c012163「我要救護車」→急病 0.98），讓 conf/margin 閘門失效
-                #    而過早定類。故 incident_description 仍為空、或只是「要救護車」這類請求而非
-                #    病情（incident_is_vague）時，不論 conf/margin 都先追問，確保分類建立在
-                #    「有症狀文字」之上。
-                no_symptom_yet = (
-                    not self._is_field_filled("incident_description")
-                    or incident_is_vague(self.case.incident_description)
-                )
-                if conf_ok and margin_ok and not no_symptom_yet:
-                    break
-
-                # 首輪且尚無任何病情描述 → 用正常語氣初問（而非「請再說一次」的重問，
-                # 後者會讓還沒講過的報案人以為系統漏聽）；否則沿用換句話重問。
-                # 這句不問「需要救護車嗎」：報案人一開始就說要救護車了，
-                # 再問要不要救護車，報案人會以為系統沒聽懂、或懷疑車到底有沒有派出去。
-                # 這句問的目的只是取得病情描述給次案類分類用，不是在確認要不要派車。
-                if no_symptom_yet and _reask_i == 0:
-                    reask_question = "請問現場發生什麼狀況？"
-                else:
-                    reask_question = _SUB_REASK_QUESTIONS[_reask_i]
-                self._ask_and_extract(reask_question)
-                all_caller_text = self.case.full_caller_text()
-                sub_cat, sub_conf, sub_source, sub_margin = self._do_sub_classify(
-                    all_caller_text, "救護"
-                )
-                if sub_cat is not None:
-                    candidates.append(
-                        (sub_cat, sub_conf if sub_conf is not None else 0.0, sub_source)
-                    )
-
-            if candidates:
-                # C：候選依輪次由早到晚排列，越晚輪文字越完整、資訊越多。
-                # 逐一比較，只要晚輪信心未明顯低於目前最佳（差距在 delta 內）就採晚輪，
-                # 避免「資訊少的早輪」因信心稍高而壓過「已描述事件的晚輪」。
-                best = candidates[0]
-                for cand in candidates[1:]:
-                    if cand[1] >= best[1] - SUB_LATER_PREFER_DELTA:
-                        best = cand
-                sub_cat, sub_conf, sub_source = best
-                self._debug_print(
-                    "sub_classify_best",
-                    {
-                        "chosen": {"sub": sub_cat, "conf": sub_conf, "source": sub_source},
-                        "candidates": [
-                            {"sub": c, "conf": conf, "source": src}
-                            for c, conf, src in candidates
-                        ],
-                    },
-                )
+            sub_cat, sub_conf, sub_source, _margin = self._do_sub_classify(all_caller_text, "救護")
 
             with self._case_lock:
                 self.case.sub_category = sub_cat
@@ -4614,14 +4588,14 @@ class SopEngine119:
             )
             self._notify_case_update()
             self._set_stage("救護_sub_classified")
-            self._announce_dispatch("救護車已派出了喔。")
+            self._announce_dispatch("救護車已派出了歐。")
         except MainCategorySwitched:
             raise
         finally:
             self._main_reclassify_enabled = False
 
         # ── 進入子類前：關鍵欄位若仍空，對最近一則回答再跑一次 LLM 全欄位抽取 ─
-        if not self._is_field_filled("incident_description"):
+        if not self._is_field_filled("symptoms"):
             pairs = self._iter_caller_qa_pairs()
             if pairs:
                 last_q, last_a = pairs[-1]
@@ -4698,6 +4672,11 @@ class SopEngine119:
                     setattr(self.case, slot, vital_val)
                 self._notify_case_update()
 
+            # 救護的呼吸照 xlsx 記文字（未知／有呼吸／呼吸不正常／無呼吸）：跟照題目表問的案類用同一套，
+            # 呼吸不正常、無呼吸轉真人，其他就不再往下問生命徵象（11/02 使用者決定）
+            if slot == "breathing" and isinstance(vital_val, str):
+                handler._check_breathing_transfer(self)
+                break
             # 任一項確認為有，即停止後續生命征象問題；只有明確為否才繼續。
             if vital_val is True:
                 self._debug_print("vital_confirmed", slot)
@@ -4855,7 +4834,7 @@ class SopEngine119:
 
         # ════════════════════════════════════════════════════════
         # 階段 1：詢問地址（首問同救護；不可用再追問建物/路燈）→ 覆頌
-        #（救援人員已派出要等問完發生什麼事才講，見緊急救援通用 run_generic_flow）
+        #（救護人員已經派出要等問完發生什麼事才講，見緊急救援通用 run_generic_flow）
         # ════════════════════════════════════════════════════════
         self._main_reclassify_enabled = True
         try:
@@ -4946,6 +4925,27 @@ class SopEngine119:
         if self._escalated_from_rescue:
             return "救護"
         return self.case.main_category
+
+    def _switch_fire_to_vehicle_rescue(self) -> None:
+        """
+        火警 1104 xlsx 交通工具備註：沒有火、車上有人出不來 → 改判緊急救援-車禍救助（使用者 11/04 決定）。
+        中斷火警，改走緊急救援車禍救助的題目，跟一般換主案類一樣（清掉火警欄位、用新大類重抽報案人講過的話）。
+        地址已確認過不重問；派車整通只講一次，火警講過就不再講。
+        """
+        from emergency_accident_119 import SUBCATEGORY
+
+        self._debug_print("fire_to_vehicle_rescue", {
+            "火煙狀況": self.case.fire_or_smoke, "受困狀況": self.case.occupants_status,
+        })
+        self._apply_main_switch("火警", "緊急救援", 1.0)
+        with self._case_lock:
+            self.case.sub_category = SUBCATEGORY
+            self.case.sub_conf = 1.0
+        self._emit_classification(
+            main="緊急救援", main_conf=1.0, sub=SUBCATEGORY, sub_conf=1.0, sub_source="hard_rule",
+        )
+        self._notify_case_update()
+        raise MainCategorySwitched("火警", "緊急救援")
 
     def _escalate_main_to_emergency(
         self,
