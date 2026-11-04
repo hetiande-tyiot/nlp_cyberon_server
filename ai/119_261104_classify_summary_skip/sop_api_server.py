@@ -175,8 +175,9 @@ if ENABLE_SUB_CLASSIFIER:
             device=BERT_DEVICE,
             enable_llm=False,
         )
-        # build_classifiers 已登記 v2。這裡只在它沒載到時再補一次，避免舊的 5 類模型蓋掉 v2。
-        _es_dir = os.path.join(BERT_MODELS_BASE, "TW-119-BERT-sub_緊急救援_v2")
+        # 「TW-119-BERT-sub_緊急救援」資料夾裡已是 8 類的 v2 模型，build_classifiers 會先載入。
+        # 這裡只在它沒載到時再補一次，避免重複載入。
+        _es_dir = os.path.join(BERT_MODELS_BASE, "TW-119-BERT-sub_緊急救援")
         if os.path.isdir(_es_dir) and _shared_sub_classifiers.get("緊急救援") is None:
             try:
                 _shared_sub_classifiers.register(SubCategoryClassifier(
@@ -189,7 +190,7 @@ if ENABLE_SUB_CLASSIFIER:
             except Exception as exc2:  # noqa: BLE001
                 print(f"⚠️  緊急救援 v2 子分類器補註冊失敗：{exc2}", flush=True)
         # 災害子模型資料不足時目錄可能不存在；有才註冊，沒有就讓子類維持空。
-        _disaster_dir = os.path.join(BERT_MODELS_BASE, "TW-119-BERT-sub_災害_v2")
+        _disaster_dir = os.path.join(BERT_MODELS_BASE, "TW-119-BERT-sub_災害")
         if os.path.isdir(_disaster_dir) and _shared_sub_classifiers.get("災害") is None:
             try:
                 _shared_sub_classifiers.register(SubCategoryClassifier(
