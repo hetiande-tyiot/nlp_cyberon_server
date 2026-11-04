@@ -605,21 +605,16 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "無火有煙＝報案人明確說看到煙、而且沒看到火；"
         "無火無煙＝明確說沒看到火也沒看到煙（例如只聞到味道、只聽到警報器）；"
         "不確定＝人不在現場、沒去看、聽別人說的、說不知道。"
-        "只說「失火了、火災、燒起來了」而沒說看到什麼 → null。"
         "回答煙的顏色（例如「黑煙」）不代表沒看到火，不可因此填「無火有煙」。"
         "「不確定」不可填成「無火無煙」。"
         "例句（受理員問題｜報案人回答 → 要填的值）："
         "「是火災還是救護｜對面麵包店燒起來」→ null；"
-        "「是火災還是救護｜機車燒起來了」→ null；"
-        "「是火災還是救護｜那間工廠起火了」→ null；"
-        "「是火災還是救護｜後面的鐵皮工廠燒起來了」→ null；"
         "「是黑煙還是白煙｜有黑煙」→ null；"
         "「是火災還是救護｜廚房燒起來了，火很大」→ 有火有煙；"
         "「有看到火嗎｜有火，沒什麼煙」→ 有火無煙；"
         "「有看到火嗎｜只看到一直冒煙，沒看到火」→ 無火有煙；"
         "「有看到火嗎｜電線桿上面一直在噴火花」→ 只有火花；"
-        "「有看到火嗎｜我人不在現場」→ 不確定。"
-        "「燒起來了、起火了、失火了、火災」只是說發生火災，不是描述看到什麼，不能填有火。",
+        "「有看到火嗎｜我人不在現場」→ 不確定。",
     ),
     "smoke_color": (
         "string|null",
@@ -646,7 +641,7 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     "fire_extent": (
         "string|null",
         "- fire_extent 延燒面積：參考 未知、0~50坪、50~100坪、100~300坪、"
-        "300~500坪、500坪以上；報案人用其他方式形容範圍也照記；"
+        "300~500坪、500坪以上；"
         "報案人說看不清楚、離太遠不知道多大 → 未知。",
     ),
     "door_response": (
@@ -762,13 +757,10 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "string|null",
         "- plate_number 車牌號碼：照報案人說的記。",
     ),
-    # 垂片 A（工廠）、B2（山林田野）共用
+    # 垂片 A（工廠）、B2（山林田野）共用；選項各張垂片不同，見 _FIRE_TAB_RULES
     "burning_object": (
         "string|null",
-        "- burning_object 燃燒物：什麼東西在燒；工廠參考 不確定、雜物、廢棄物、垃圾、"
-        "回收物、機台、電線、塑膠、木材、紙箱、化學品、鋰電池、食品、其他；"
-        "山林田野參考 雜草、樹木、公墓或墳墓、農作物、垃圾雜物、其他(不確定)；"
-        "報案人說看不清楚、離太遠不知道在燒什麼 → 其他(不確定)。",
+        "- burning_object 燃燒物：什麼東西在燒。",
     ),
     "nearby_water_source": (
         "string|null",
@@ -791,6 +783,25 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
 }
 
+# 同一個欄位在不同垂片的參考範圍不一樣時，照那張垂片的 xlsx 只給它自己的選項（火警 1104 xlsx）。
+# 沒列在這裡的就用上面 _FIRE_FIELD_RULES 的說明（報案人身分還不知道垂片時給全部選項）。
+_FIRE_TAB_RULES: Dict[Tuple[str, str], str] = {
+    ("A", "burning_object"): (
+        "- burning_object 燃燒物：什麼東西在燒；參考 不確定、雜物、廢棄物、垃圾、"
+        "回收物、機台、電線、塑膠、木材、紙箱、化學品、鋰電池、食品、其他。"
+    ),
+    ("B2", "burning_object"): (
+        "- burning_object 燃燒物：什麼東西在燒；參考 雜草、樹木、公墓或墳墓、農作物、"
+        "垃圾雜物、其他(不確定)；報案人說看不清楚、離太遠不知道在燒什麼 → 其他(不確定)。"
+    ),
+    ("A", "caller_role"): "- caller_role 報案人身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、里長、其他。",
+    ("B1", "caller_role"): "- caller_role 報案人身分：參考 車主或駕駛、同車乘客、後方或路過駕駛、附近住戶或商家、其他。",
+    ("B2", "caller_role"): "- caller_role 報案人身分：參考 當地住戶、路過、掃墓或作業民眾、其他。",
+    ("C", "caller_role"): "- caller_role 報案人身分：參考 住戶、管理員或警衛、路人、其他。",
+    # 山林田野的是否延燒，xlsx 選項是「無、是」（交通工具、輕微火警是「無、有」）
+    ("B2", "spread_reached"): "- spread_reached 是否延燒：火有沒有燒到旁邊的東西，只能填 無、是。",
+}
+
 
 def _build_fire_schema_and_rules(
     fire_tab: Optional[str],
@@ -798,11 +809,9 @@ def _build_fire_schema_and_rules(
     """依目前垂片挑出這一輪要抽的火警欄位，組成 JSON Schema 與規則文字。"""
     fields = fire_fields_to_extract(fire_tab)
     schema = {field: _FIRE_FIELD_RULES[field][0] for field in fields}
-    rule_texts = {field: _FIRE_FIELD_RULES[field][1] for field in fields}
-    # 山林田野的是否延燒，xlsx 選項是「無、是」（交通工具、輕微火警是「無、有」）
-    if fire_tab == "B2" and "spread_reached" in rule_texts:
-        rule_texts["spread_reached"] = "- spread_reached 是否延燒：火有沒有燒到旁邊的東西，只能填 無、是。"
-    rules = _FIRE_RULES_HEADER + "\n".join(rule_texts.values())
+    rules = _FIRE_RULES_HEADER + "\n".join(
+        _FIRE_TAB_RULES.get((fire_tab, field), _FIRE_FIELD_RULES[field][1]) for field in fields
+    )
     return schema, rules
 
 
