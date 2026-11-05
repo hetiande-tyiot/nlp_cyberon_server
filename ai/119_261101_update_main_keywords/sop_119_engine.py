@@ -4537,6 +4537,9 @@ class SopEngine119:
             # 急病第 1 題也會問「請問患者是哪裡不舒服？」
             all_caller_text = self.case.full_caller_text()
             sub_cat, sub_conf, sub_source, _margin = self._do_sub_classify(all_caller_text, "救護")
+            if not sub_cat:
+                # 判不出次案類（例如次案類模型出錯）就照救護-其它的題目問，不走廠商舊的通用流程。
+                sub_cat = "其它"
 
             with self._case_lock:
                 self.case.sub_category = sub_cat
