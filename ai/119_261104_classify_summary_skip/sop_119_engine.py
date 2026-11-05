@@ -1771,8 +1771,9 @@ class SopEngine119:
                     {"fire_tab": self.case.fire_tab}
                     if self.case.main_category == "火警" else {}
                 )
-                # 救護：告訴抽取器目前是哪個次案類，同一欄位在不同次案類參考範圍不同時照次案類抽
-                if self._fields_category() == "救護":
+                # 救護、緊急救援：告訴抽取器目前是哪個次案類，只抽這個次案類用得到的欄位；
+                # 同一欄位在不同次案類參考範圍不同時照次案類抽
+                if self._fields_category() in ("救護", "緊急救援"):
                     extra["sub_category"] = self.case.sub_category
                 extracted = self._llm.extract_general_fields(
                     caller_text,
@@ -3102,6 +3103,7 @@ class SopEngine119:
             "sop_remap",
             {"old": old_sub, "new": new_sub, "remapped": remapped},
         )
+        self._reextract_for_new_sub()
         self._emit_classification(
             main=self.case.main_category,
             main_conf=self.case.main_conf,
@@ -3110,6 +3112,41 @@ class SopEngine119:
             sub_source=source,
         )
         self._notify_case_update()
+
+    def _reextract_for_new_sub(self) -> None:
+        """
+        救護、緊急救援每輪只抽目前次案類的欄位，次案類換了之後，換之前講過的話裡
+        屬於新次案類的內容（例如還在急病時說「喝了巴拉刈」）就沒抽到。
+        這裡用新次案類的欄位把整通報案人講過的話再抽一次，只補還空著的欄位。
+        抽取一次最多讀 600 字，整通較長時切成幾段分別抽。
+        """
+        category = self._fields_category()
+        if self._llm is None or category not in ("救護", "緊急救援"):
+            return
+        limit = self._llm._MAX_TEXT_CHARS
+        chunks: List[str] = []
+        for text in self.case.caller_texts():
+            if chunks and len(chunks[-1]) + 1 + len(text) <= limit:
+                chunks[-1] += "\n" + text
+            else:
+                chunks.append(text)
+        for chunk in chunks:
+            try:
+                extracted = self._llm.extract_general_fields(
+                    chunk,
+                    main_category=category,
+                    call_type=self.case.call_type,
+                    sub_category=self.case.sub_category,
+                    sub_fields_only=True,
+                )
+            except Exception as e:
+                self._debug_print("sub_reextract_error", e)
+                continue
+            with self._case_lock:
+                self._apply_extracted_fields({
+                    k: v for k, v in extracted.items() if not self.case.is_field_filled(k)
+                })
+        self._debug_print("sub_reextract", {"sub": self.case.sub_category, "chunks": len(chunks)})
 
     # ── 共用：地址詢問 + 覆頌確認 ─────────────────────────────────────────────
 

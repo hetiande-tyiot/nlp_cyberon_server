@@ -814,6 +814,45 @@ def _build_fire_schema_and_rules(
     return schema, rules
 
 
+def _rules_for_fields(rules: str, fields) -> str:
+    """規則文字只留下標題行，以及有提到要抽的欄位的那幾行。"""
+    kept = []
+    for line in rules.split("\n"):
+        if not line.startswith("- ") or any(
+            re.search(rf"(?<![A-Za-z_]){f}(?![A-Za-z_])", line) for f in fields
+        ):
+            kept.append(line)
+    return "\n".join(kept)
+
+
+def _pick_fields(schema: Dict[str, str], rules: str, fields) -> Tuple[Dict[str, str], str]:
+    """從整組欄位挑出要抽的那幾個，組成這一組的 JSON Schema 與規則文字。"""
+    picked = [f for f in schema if f in fields]
+    return {f: schema[f] for f in picked}, _rules_for_fields(rules, picked)
+
+
+def _ems_sub_fields(sub_category: Optional[str]) -> Optional[set]:
+    """救護次案類題目表用到的欄位；次案類還沒判出來（或沒有題目表）回傳 None，代表全部都抽。"""
+    from ems_tab_map_119 import questions_for_subtype
+
+    questions = questions_for_subtype(sub_category)
+    return {q.field for q in questions} if questions else None
+
+
+def _emergency_sub_groups(sub_category: Optional[str]) -> list:
+    """緊急救援只抽目前次案類的欄位。次案類還沒判出來時，車禍救助和其他次案類的欄位都抽；
+    判出來之後只抽那個次案類的；沒有專屬欄位的次案類（其他、氣爆等）就不送這組。"""
+    from emergency_accident_119 import SUBCATEGORY as ACCIDENT_SUB
+    from emergency_rescue_subs_119 import emergency_slots_for
+
+    if not sub_category:
+        return [accident_schema_and_rules(), subs_schema_and_rules()]
+    if sub_category == ACCIDENT_SUB:
+        return [accident_schema_and_rules()]
+    schema, rules = _pick_fields(*subs_schema_and_rules(), set(emergency_slots_for(sub_category)))
+    return [(schema, rules)] if schema else []
+
+
 class LLMExtractor119:
     """
     119 報案受理 LLM 抽取器。
@@ -1503,13 +1542,16 @@ class LLMExtractor119:
         call_type: Optional[str] = None,
         fire_tab: Optional[str] = None,
         sub_category: Optional[str] = None,
+        sub_fields_only: bool = False,
     ) -> Dict[str, Any]:
         """
         每輪輸入後依案件類型跨欄位抽取業務欄位。
         火警時 fire_tab 是目前的垂片（A / B1 / B2 / C，還不知道就是 None），
         只抽這張垂片用得到的火警欄位。
-        救護時 sub_category 是目前的次案類（還不知道就是 None）：同一個欄位在不同次案類
-        參考範圍不同時（例如刀傷的受傷原因只能記四個選項之一），照目前次案類給規則。
+        救護、緊急救援時 sub_category 是目前的次案類（還不知道就是 None）：只抽這個次案類
+        用得到的欄位；同一個欄位在不同次案類參考範圍不同時
+        （例如刀傷的受傷原因只能記四個選項之一），照目前次案類給規則。
+        sub_fields_only=True 時只抽次案類專屬的那幾組，給換次案類後補抽用。
 
         設計原則：
         - 每一則報警人回答都抽取通用欄位
@@ -1863,20 +1905,29 @@ class LLMExtractor119:
             k in question for k in _aggressive_q
         ) else _STRICT_TAIL
 
+        # 次案類專屬的欄位：救護、緊急救援只抽目前次案類用得到的，次案類換了就換成新的
+        sub_groups = []
+        if main_category == "救護":
+            ems_fields = _ems_sub_fields(sub_category)
+            ext_schema, ext_rules = _pick_fields(
+                rescue_ext_schema, rescue_ext_rules,
+                rescue_ext_schema.keys() if ems_fields is None else ems_fields,
+            )
+            if ext_schema:
+                sub_groups.append((ext_schema, ext_rules))
+        if main_category == "緊急救援":
+            sub_groups.extend(_emergency_sub_groups(sub_category))
+
         schema_groups = [
             (common_schema, common_rules),
             (location_schema, location_rules),
             (universal_schema, universal_rules),
         ]
         if main_category == "救護":
-            schema_groups.extend((
-                (rescue_core_schema, rescue_core_rules),
-                (rescue_ext_schema, rescue_ext_rules),
-            ))
+            schema_groups.append((rescue_core_schema, rescue_core_rules))
         if main_category == "緊急救援":
             schema_groups.append((rescue_incident_schema, rescue_incident_rules))
-            schema_groups.append(accident_schema_and_rules())
-            schema_groups.append(subs_schema_and_rules())
+        schema_groups.extend(sub_groups)
         if main_category == "火警":
             schema_groups.append((fire_schema, fire_rules))
             schema_groups.append((fire_level_schema, fire_level_rules))
@@ -1884,6 +1935,8 @@ class LLMExtractor119:
             schema_groups.append(disaster_schema_and_rules())
         if call_type == "局內回報":
             schema_groups.append((internal_report_schema, internal_report_rules))
+        if sub_fields_only:
+            schema_groups = sub_groups
 
         merged: Dict[str, Any] = {}
         for out in self._extract_groups(
@@ -1895,6 +1948,7 @@ class LLMExtractor119:
         # 救護患者欄位缺漏 → 專項 LLM 再抽（小 schema，更穩）
         _need_patient_retry = (
             main_category == "救護"
+            and not sub_fields_only
             and
             len((caller_text or "").strip()) >= 6
             and (
