@@ -2551,7 +2551,8 @@ class SopEngine119:
         """緊急救援、其他案類、檢舉投訴只跑硬規則，不叫子類 MacBERT。"""
         if self.case.main_category not in ("緊急救援", "其他案類", "檢舉投訴"):
             return
-        text = (self.case.full_caller_text() or "").strip()
+        # 跟分類器一樣不看問地址的回答，地址裡的字（例如「環河路」的河）才不會撞到關鍵字
+        text = (self.case.classifier_caller_text() or "").strip()
         hard_cat, hard_kw = match_hard_subcategory(text, self.case.main_category or "")
         if hard_cat:
             # 細題進行中換成別的次案類要清舊欄並重跑題目，這裡先不改名稱。
@@ -2599,7 +2600,9 @@ class SopEngine119:
             margin: top1−top2 機率差（分類器來源時），硬規則或關鍵詞命中為 1.0，
                     無結果為 None。用於偵測「兩類難分」的模稜兩可誤分。
         """
-        hard_cat, hard_kw = match_hard_subcategory(text, main_cat)
+        # 硬規則、關鍵詞跟分類器一樣不看問地址的回答，地址裡的字（例如「豫溪街」的溪）才不會撞到關鍵字
+        keyword_text = self._model_caller_text(text)
+        hard_cat, hard_kw = match_hard_subcategory(keyword_text, main_cat)
         if hard_cat:
             self._debug_print(
                 "hard_subcategory_hit",
@@ -2608,7 +2611,7 @@ class SopEngine119:
             return hard_cat, 1.0, "hard_rule", 1.0
 
         if main_cat == "救護":
-            kw_cat, kw_conf, kw = match_rescue_subcategory(text)
+            kw_cat, kw_conf, kw = match_rescue_subcategory(keyword_text)
             if kw_cat:
                 self._debug_print(
                     "sub_keyword_hit",
@@ -2809,7 +2812,8 @@ class SopEngine119:
             return None
         text = (self.case.full_caller_text() or "").strip()
         if text:
-            hard_cat, _hard_kw = match_hard_subcategory(text, main_cat)
+            # 跟分類器一樣不看問地址的回答，地址裡的字才不會撞到關鍵字
+            hard_cat, _hard_kw = match_hard_subcategory(self._model_caller_text(text), main_cat)
             if hard_cat:
                 # 硬規則命中就不把次案類交給 MacBERT 改寫。
                 if hard_cat != current:
@@ -2955,7 +2959,8 @@ class SopEngine119:
         text = (self.case.full_caller_text() or "").strip()
         if not text:
             return None
-        hard_cat, _hard_kw = match_hard_subcategory(text, "緊急救援")
+        # 跟分類器一樣不看問地址的回答，地址裡的字才不會撞到關鍵字
+        hard_cat, _hard_kw = match_hard_subcategory(self._model_caller_text(text), "緊急救援")
         if hard_cat:
             if hard_cat != current:
                 self._switch_subcategory(
