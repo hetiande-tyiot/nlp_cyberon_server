@@ -93,8 +93,8 @@ def _asked(io: ScriptedIO, questions) -> list[str]:
 
 CHEST_PAIN = ("他突然胸口痛", {"incident_description": "突然胸口痛"})
 SON = ("我是他兒子", {"caller_relation": "家人"})
-AWAKE = ("他人是清醒的", {"consciousness_level": "意識清醒"})
-COMA = ("叫他都沒反應", {"consciousness_level": "昏迷"})
+AWAKE = ("他人是清醒的", {"consciousness_level": "清醒"})
+COMA = ("叫他都沒反應", {"consciousness_level": "沒有反應"})
 DONT_KNOW = ("我不知道耶", {"consciousness_level": "未知"})
 NOT_THERE = ("我不在他旁邊", {"caller_location": "不在現場"})
 MALE = ("男生", {"patient_gender": "男"})
@@ -168,7 +168,7 @@ class JiBingElementIdTests(unittest.TestCase):
         case = SopEngine119(io=ScriptedIO([])).case
         case.main_category = "救護"
         case.sub_category = "急病"
-        case.consciousness_level = "昏迷"
+        case.consciousness_level = "沒有反應"
         ids = sop_element_ids(case.to_dict())
         self.assertEqual(ids["201-1"], PENDING_ANSWER)
         self.assertEqual(ids["201-8"], PENDING_ANSWER)  # 昏迷 → 要問呼吸
@@ -183,8 +183,8 @@ MOM = ("是我媽媽", {"caller_relation": "家人"})
 SELF = ("是我自己", {"caller_relation": "本人"})
 PASSERBY = ("我路過看到的", {"caller_relation": "路過"})
 FEMALE_60 = ("女生，六十歲", {"patient_gender": "女", "patient_age": "60歲"})
-BURN_AWAKE = ("她很清醒", {"consciousness_level": "意識清醒"})
-BURN_COMA = ("叫不醒", {"consciousness_level": "昏迷"})
+BURN_AWAKE = ("她很清醒", {"consciousness_level": "清醒"})
+BURN_COMA = ("叫不醒", {"consciousness_level": "沒有反應"})
 BURN_NO_BREATHING = ("沒有呼吸", {"breathing": False})
 
 

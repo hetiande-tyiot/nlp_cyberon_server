@@ -82,8 +82,8 @@ FRIEND = ("我是他朋友", {"caller_relation": "朋友"})
 PASSER = ("我是路過的", {"caller_relation": "路過"})
 NEIGHBOR = ("我是鄰居", {"caller_relation": "鄰居"})
 MALE_40 = ("男生，四十歲", {"patient_gender": "男性", "patient_age": "40歲"})
-AWAKE = ("他醒著", {"consciousness_level": "意識清醒"})
-COMA = ("叫不醒", {"consciousness_level": "昏迷"})
+AWAKE = ("他醒著", {"consciousness_level": "清醒"})
+COMA = ("叫不醒", {"consciousness_level": "沒有反應"})
 BREATHING = ("有在呼吸", {"breathing": "有呼吸"})
 NO_BREATHING = ("沒有呼吸了", {"breathing": "無呼吸"})
 
@@ -114,6 +114,12 @@ class ZhuiLuoShangTests(unittest.TestCase):
         self.assertEqual(_asked("墜落傷", io), ["墜落狀況", "報案身分", "性別"])
         self.assertEqual(engine.case.main_category, "緊急救援")
         self.assertEqual(engine.case.caller_relation, "路過")  # 改判後的回答照樣記下來
+
+    def test_fall_status_stuck_escalates(self) -> None:
+        """墜落狀況答卡住（1104 xlsx 11/05 版新選項）：照備註「跳下來卡住」改判緊急救援。"""
+        stuck = ("跳下來卡在半空中", {"fall_status": "卡住"})
+        engine, _io = _run("墜落傷", [stuck, PASSER, MALE_40])
+        self.assertEqual(engine.case.main_category, "緊急救援")
 
     def test_stuck_escalates_and_asks_where(self) -> None:
         engine, io = _run("墜落傷", [
@@ -232,9 +238,9 @@ class ChangedAnswerTests(unittest.TestCase):
     def test_consciousness_changed_follows_latest(self) -> None:
         """意識先說醒著、後來說叫不醒：意識改成昏迷；不寫廠商的「是否有意識」。"""
         engine = self._engine()
-        engine._apply_extracted_fields({"consciousness_level": "意識清醒"})
-        engine._apply_extracted_fields({"consciousness_level": "昏迷"})
-        self.assertEqual(engine.case.consciousness_level, "昏迷")
+        engine._apply_extracted_fields({"consciousness_level": "清醒"})
+        engine._apply_extracted_fields({"consciousness_level": "沒有反應"})
+        self.assertEqual(engine.case.consciousness_level, "沒有反應")
         self.assertIsNone(engine.case.consciousness)
 
     def test_free_text_field_takes_latest_answer(self) -> None:
@@ -409,7 +415,7 @@ class LuDaoTests(unittest.TestCase):
     def test_family_awake(self) -> None:
         engine, io = _run("路倒", [self.UNWELL, self.ONE, self.RED_COAT, FAMILY, MALE_40, AWAKE])
         self.assertEqual(_asked("路倒", io), [
-            "路倒狀況", "患者人數", "患者外觀特徵", "報案身分", "性別", "意識",
+            "路倒狀況", "患者人數", "外觀特徵", "報案身分", "性別", "意識",
         ])
         self.assertIsNone(engine.case.drinking_status)
 
@@ -421,7 +427,7 @@ class LuDaoTests(unittest.TestCase):
     def test_passer_not_on_scene_skips_gender_and_consciousness(self) -> None:
         _, io = _run("路倒", [self.UNWELL, self.ONE, self.RED_COAT, PASSER],
                      caller_location="不在現場")
-        self.assertEqual(_asked("路倒", io), ["路倒狀況", "患者人數", "患者外觀特徵", "報案身分"])
+        self.assertEqual(_asked("路倒", io), ["路倒狀況", "患者人數", "外觀特徵", "報案身分"])
 
 
 class CheHuoTests(unittest.TestCase):
@@ -434,14 +440,14 @@ class CheHuoTests(unittest.TestCase):
     def test_family_awake(self) -> None:
         engine, io = _run("車禍", [self.CAR_SCOOTER, self.ONE, self.NOT_TRAPPED, FAMILY, MALE_40, AWAKE])
         self.assertEqual(_asked("車禍", io), [
-            "事故車種", "患者人數", "有無人員受困", "報案身分", "性別", "意識",
+            "事故車種", "患者人數", "人員受困", "報案身分", "性別", "意識",
         ])
         self.assertEqual(engine.case.main_category, "救護")
 
     def test_passer_not_on_scene_skips_gender_and_consciousness(self) -> None:
         _, io = _run("車禍", [self.CAR_SCOOTER, self.ONE, self.NOT_TRAPPED, PASSER],
                      caller_location="不在現場")
-        self.assertEqual(_asked("車禍", io), ["事故車種", "患者人數", "有無人員受困", "報案身分"])
+        self.assertEqual(_asked("車禍", io), ["事故車種", "患者人數", "人員受困", "報案身分"])
 
     def test_trapped_escalates_without_speaking_and_keeps_asking(self) -> None:
         """xlsx 備註：有人受困 → 改判緊急救援；不講話，車禍題目照樣問完，次案類維持車禍。"""
@@ -449,7 +455,7 @@ class CheHuoTests(unittest.TestCase):
         self.assertEqual(engine.case.main_category, "緊急救援")
         self.assertEqual(engine.case.sub_category, "車禍")
         self.assertEqual(_asked("車禍", io), [
-            "事故車種", "患者人數", "有無人員受困", "報案身分", "性別", "意識",
+            "事故車種", "患者人數", "人員受困", "報案身分", "性別", "意識",
         ])
 
 
@@ -599,7 +605,7 @@ class DianJiShangTests(unittest.TestCase):
 class NiShuiTests(unittest.TestCase):
     """11-溺水：還沒標 OK，先照 1102 題目表問給承辦實測。"""
     ASHORE = ("已經拉上來了", {"drowning_status": "已拉上岸"})
-    IN_WATER = ("還在水裡", {"drowning_status": "未拉上岸"})
+    IN_WATER = ("還在水裡", {"drowning_status": "還在水裡"})
     SLIPPED = ("失足掉下去的", {"drowning_cause": "失足落水"})
     ONE = ("一個", {"patient_count": "1人"})
 
@@ -618,6 +624,12 @@ class NiShuiTests(unittest.TestCase):
         self.assertEqual(_asked("溺水", io), [
             "溺水狀況", "溺水原因", "患者人數", "報案身分", "性別", "意識",
         ])
+
+    def test_cannot_see_person_also_escalates(self) -> None:
+        """看不到人也改判緊急救援（使用者 11/05 決定）。"""
+        cannot_see = ("看不到人了", {"drowning_status": "看不到人"})
+        engine, _io = _run("溺水", [cannot_see, self.SLIPPED, self.ONE, FAMILY, MALE_40, AWAKE])
+        self.assertEqual(engine.case.main_category, "緊急救援")
 
 
 class SubCategoryToExtractorTests(unittest.TestCase):

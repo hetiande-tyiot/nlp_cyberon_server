@@ -32,9 +32,9 @@ from fire_tab_map_119 import (
 
 # 條件會用到的固定說法。LLM 抽取規則（llm_extractor_119 的 rescue_ext_rules）
 # 要求這幾個欄位遇到對應情況時一定記成這些字，條件才判斷得出來。
-CONSCIOUSNESS_AWAKE = "意識清醒"
-# 前置條件「意識 = 對聲音有反應、對疼痛有反應、昏迷」
-CONSCIOUSNESS_UNRESPONSIVE = ("對聲音有反應", "對疼痛有反應", "昏迷")
+CONSCIOUSNESS_AWAKE = "清醒"
+# 前置條件「意識 = 沒有反應」（1104 xlsx 11/05 版意識改成 未知／清醒／迷迷糊糊／沒有反應）
+CONSCIOUSNESS_UNRESPONSIVE = ("沒有反應",)
 # 呼吸是這兩種就轉真人（使用者 11/02 決定，不再用 OHCA 判定）
 BREATHING_TRANSFER = ("呼吸不正常", "無呼吸")
 RELATION_SELF = "本人"
@@ -46,9 +46,10 @@ PATIENT_STILL_INSIDE = "還在裡面"
 # 報案身分（OK 表參考範圍）：精神異常的病史、家屬陪同要看是不是家人、朋友
 RELATION_FAMILY = "家人"
 RELATION_FRIEND = "朋友"
-# 墜落傷：尚未跳下、卡住 → 改判緊急救援（見 handlers/墜落傷.py）
+# 墜落傷：墜落狀況是尚未跳下或卡住、患者位置是卡住 → 改判緊急救援（見 handlers/墜落傷.py）
 FALL_NOT_YET = "尚未跳下"
 FALL_JUMPED = "已跳下"
+FALL_STATUS_STUCK = "卡住"
 FALL_POSITION_STUCK = "卡住"
 FALL_POSITION_UNKNOWN = "不清楚"
 # 上吊
@@ -71,12 +72,12 @@ CONFLICT_ONGOING = "進行中"
 CONTRACTIONS_WATER_BROKEN = "已經破水"
 # 燒燙傷小兒：14 歲（含）以前轉真人
 CHILD_MAX_AGE = 14
-# 溺水：未拉上岸 → 改判緊急救援（xlsx 備註，見 handlers/溺水.py）
-DROWNING_IN_WATER = "未拉上岸"
+# 溺水：還在水裡（xlsx 備註）、看不到人（使用者 11/05 決定）→ 改判緊急救援（見 handlers/溺水.py）
+DROWNING_NOT_RESCUED = ("還在水裡", "看不到人")
 
 
 def _consciousness_unresponsive(case: Any) -> bool:
-    """意識 = 對聲音有反應、對疼痛有反應、昏迷。"""
+    """意識 = 沒有反應。"""
     return case.consciousness_level in CONSCIOUSNESS_UNRESPONSIVE
 
 
@@ -201,7 +202,7 @@ def is_child_age(age: Optional[str]) -> bool:
     return years is not None and years <= CHILD_MAX_AGE
 
 
-_UNRESPONSIVE_TEXT = "意識 = 對聲音有反應、對疼痛有反應、昏迷"
+_UNRESPONSIVE_TEXT = "意識 = 沒有反應"
 
 # ─── 01-急病 ─────────────────────────────────────────────────────────────────
 # 性別、年齡共用的前置條件（各案類第幾題不同，條件一樣）
@@ -225,7 +226,7 @@ JI_BING_QUESTIONS: Tuple[EmsQuestion, ...] = (
                 _not_self_on_scene_or_unmentioned,
                 "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
     EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                "急病-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                "急病-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                 _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
     EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "急病-報案人位置"),
 )
@@ -252,7 +253,7 @@ SHAO_TANG_SHANG_QUESTIONS: Tuple[EmsQuestion, ...] = (
                 _not_self_on_scene_or_unmentioned,
                 "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
     EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                "燒燙傷-呼吸", "還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                "燒燙傷-呼吸", "還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                 _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
     EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "燒燙傷-報案人位置"),
 )
@@ -287,8 +288,8 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     "燒炭-意識", "患者現在清醒嗎？叫他有沒有反應？",
                     _not_self_on_scene, "報案身分 ≠ 本人 且 報案人位置 = 在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "燒炭-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
-                    _consciousness_unresponsive, "意識 ≠ 意識清醒、未知"),
+                    "燒炭-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
+                    _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
     ),
     # ─── 06-墜落傷OK ─────────────────────────────────────────────────────────
     # 第 5 題年齡沒有問句：跟第 4 題性別同一句問，前置條件也跟第 4 題一樣。
@@ -320,7 +321,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     "墜落傷-意識", "他現在人清醒嗎？叫他有沒有反應？",
                     _not_self_on_scene, "報案身分 ≠ 本人 且 報案人位置 = 在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "墜落傷-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "墜落傷-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
     ),
     # ─── 16-上吊OK ───────────────────────────────────────────────────────────
@@ -346,7 +347,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _hanging_untied_on_scene_or_unmentioned,
                     "上吊狀況 = 已解開繩子 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "上吊-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "上吊-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "上吊-報案人位置"),
     ),
@@ -371,8 +372,8 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案人位置 = 未提到、在現場 且 報案身分 ≠ 本人"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "割腕-呼吸", "幫我看他有沒有正常呼吸，胸口、肚子有沒有一上一下起伏",
-                    _consciousness_unresponsive, "意識 ≠ 意識清醒、未知"),
+                    "割腕-呼吸", "幫我看他有沒有正常呼吸，胸部有沒有一上一下起伏呢？",
+                    _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "割腕-報案人位置"),
     ),
     # ─── 15-吞食藥物OK ───────────────────────────────────────────────────────
@@ -395,7 +396,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "吞食藥物-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "吞食藥物-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("病史", "medical_history", MODE_PASSIVE, "吞食藥物-病史"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "吞食藥物-報案人位置"),
@@ -429,7 +430,10 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     "精神異常-家屬陪同", "身邊有家屬陪同嗎？",
                     _caller_not_family, "報案身分 ≠ 家人"),
         EmsQuestion("意識", "consciousness_level", MODE_PASSIVE, "精神異常-意識"),
-        EmsQuestion("呼吸", "breathing", MODE_PASSIVE, "精神異常-呼吸"),
+        EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
+                    "精神異常-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
+                    _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
+        EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "精神異常-報案人位置"),
     ),
     # ─── 10-一般受傷（還沒標 OK）────────────────────────────────────────────
     # 第 7 題年齡沒有問句：跟第 6 題性別同一句問，前置條件也跟第 6 題一樣。
@@ -455,7 +459,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "一般受傷-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "一般受傷-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "一般受傷-報案人位置"),
     ),
@@ -468,8 +472,8 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("患者人數", "patient_count", MODE_ACTIVE,
                     "路倒-患者人數", "現場有幾個人需要救護？"),
         EmsQuestion("是否飲酒", "drinking_status", MODE_PASSIVE, "路倒-是否飲酒"),
-        EmsQuestion("患者外觀特徵", "patient_appearance", MODE_ACTIVE,
-                    "路倒-患者外觀特徵", "他身上穿什麼顏色的衣服？我請救護人員好認一點。"),
+        EmsQuestion("外觀特徵", "patient_appearance", MODE_ACTIVE,
+                    "路倒-外觀特徵", "他身上穿什麼顏色的衣服？我請救護人員好認一點。"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                     "路倒-報案身分", "請問你認識患者嗎？"),
         EmsQuestion("身旁親友", "companion_present", MODE_PASSIVE, "路倒-身旁親友"),
@@ -484,7 +488,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "路倒-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "路倒-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "路倒-報案人位置"),
     ),
@@ -496,8 +500,8 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     "車禍-事故車種", "請問是什麼車跟什麼車的車禍？"),
         EmsQuestion("患者人數", "patient_count", MODE_ACTIVE,
                     "車禍-患者人數", "現場有幾個人需要救護？"),
-        EmsQuestion("有無人員受困", "crash_trapped", MODE_ACTIVE,
-                    "車禍-有無人員受困", "有沒有人被卡在車子裡面，或是車子底下？"),
+        EmsQuestion("人員受困", "crash_trapped", MODE_ACTIVE,
+                    "車禍-人員受困", "有沒有人被卡在車子裡面，或是車子底下？"),
         EmsQuestion("受傷部位", "injury_location", MODE_PASSIVE, "車禍-受傷部位"),
         EmsQuestion("傷勢", "injury_severity", MODE_PASSIVE, "車禍-傷勢"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
@@ -513,7 +517,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "車禍-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "車禍-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "車禍-報案人位置"),
     ),
@@ -542,7 +546,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "打架受傷-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "打架受傷-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("病徵", "symptoms", MODE_PASSIVE, "打架受傷-病徵"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "打架受傷-報案人位置"),
@@ -575,7 +579,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "孕婦待產-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "孕婦待產-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("病徵", "symptoms", MODE_PASSIVE, "孕婦待產-病徵"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "孕婦待產-報案人位置"),
@@ -604,7 +608,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "刀傷(切割傷)-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "刀傷(切割傷)-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "刀傷(切割傷)-患者人數"),
         EmsQuestion("是否飲酒", "drinking_status", MODE_PASSIVE, "刀傷(切割傷)-是否飲酒"),
@@ -632,7 +636,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "槍傷-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "槍傷-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("受傷原因", "injury_cause", MODE_PASSIVE, "槍傷-受傷原因"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "槍傷-報案人位置"),
@@ -659,7 +663,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "壓傷-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "壓傷-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("受傷原因", "injury_cause", MODE_PASSIVE, "壓傷-受傷原因"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "壓傷-報案人位置"),
@@ -688,7 +692,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "電擊傷-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "電擊傷-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "電擊傷-報案人位置"),
     ),
@@ -715,7 +719,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "溺水-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "溺水-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "溺水-報案人位置"),
     ),
@@ -740,7 +744,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "喝農藥-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "喝農藥-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("病徵", "symptoms", MODE_PASSIVE, "喝農藥-病徵"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "喝農藥-報案人位置"),
@@ -765,7 +769,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "吸入廢氣-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "吸入廢氣-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "吸入廢氣-報案人位置"),
     ),
@@ -788,7 +792,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _not_self_on_scene_or_unmentioned,
                     "報案身分 ≠ 本人 且 報案人位置 = 未提到、在現場"),
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
-                    "其它-呼吸", "他還有沒有呼吸？胸口、肚子有沒有一上一下起伏？",
+                    "其它-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
         EmsQuestion("病史", "medical_history", MODE_PASSIVE, "其它-病史"),
         EmsQuestion("現場進入條件", "scene_access", MODE_PASSIVE, "其它-現場進入條件"),

@@ -138,7 +138,7 @@ SHAO_TAN_CALL = [
     ("炭盆我已經拿出去了，熄了", {"charcoal_status": "已滅火"}),
     ("我把他拖出來了", {"patient_location": "已在外面"}),
     ("男生，大概三十歲", {"patient_gender": "男性", "patient_age": "30歲"}),
-    ("他現在醒著，可以講話", {"consciousness_level": "意識清醒"}),
+    ("他現在醒著，可以講話", {"consciousness_level": "清醒"}),
     ("我叫王小明，0912345678", {"caller_name": "王小明", "caller_contact": "0912345678"}),
 ]
 
