@@ -46,6 +46,7 @@ vendor/
 *.log
 log_119/
 log_119_history/
+test_results/
 *.zip
 *.tmp
 
