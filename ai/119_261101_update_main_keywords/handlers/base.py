@@ -47,6 +47,15 @@ SINGLE_MISSING_QUESTIONS = {
         "due_date": "預產期是什麼時候？",
         "pregnancy_week": "現在懷孕幾週了？",
     },
+    # 災害：句子照 1106 xlsx 問句欄另外寫的單問句
+    ("disaster_injury", "trapped_status"): {
+        "disaster_injury": "有沒有人受傷？",
+        "trapped_status": "有沒有人被困住出不來？",
+    },
+    ("caller_location", "caller_relation"): {
+        "caller_location": "請問您還在現場嗎？",
+        "caller_relation": "是路過民眾嗎？",
+    },
 }
 
 

@@ -220,11 +220,11 @@ class CaseInfo119:
     affected_targets:   Optional[str] = None  # 波及建物/車輛/人員
 
     # ── 災害通用流程（所有子類同一套題）──────────────────────────────────────
-    disaster_injury_or_trapped: Optional[str] = None  # 受傷受困：無人受傷/有人受傷/有人受困
-    disaster_trapped_count:     Optional[str] = None  # 受困人數（照報案人的話記）
-    traffic_impact:             Optional[str] = None  # 交通影響：未影響交通/佔用部分車道/完全無法通行
-    electrical_hazard:          Optional[str] = None  # 有無火花冒煙或帶電：沒有/有火花或冒煙/不確定
-    disaster_caller_role:       Optional[str] = None  # 報案人身分：屋主或住戶/鄰居或附近店家/路過/里長或管理員/其他
+    # 人員受困、火煙狀況、報案人位置、報案身分跟火警、救護共用欄位
+    #（trapped_status、fire_or_smoke、caller_location、caller_relation）
+    disaster_injury:        Optional[str] = None  # 人員受傷：未知/無人受傷/有人受傷
+    disaster_trapped_count: Optional[str] = None  # 受困人數（照報案人的話記）
+    traffic_impact:         Optional[str] = None  # 交通影響：未影響交通/佔用部分車道/完全無法通行
 
     # ── 緊急救援・車禍救助 ────────────────────────────────────────────────────
     accident_vehicle_type:    Optional[str] = None  # 事故車種（固定九種）
@@ -361,8 +361,8 @@ class CaseInfo119:
     #   → 火警_summary_confirm → 火警_caller_info → completed
     #   緊急救援：緊急救援_location → 緊急救援_location_confirm
     #   → 緊急救援_incident → 緊急救援_summary_confirm → 緊急救援_caller_info → completed
-    #   災害：災害_location → 災害_location_confirm → 災害-受傷受困 → 災害-受困人數
-    #   → 災害-交通影響 → 災害-有無火花冒煙或帶電 → 災害-報案人身分
+    #   災害：災害_location → 災害_location_confirm → 災害-人員受傷 → 災害-受困人數
+    #   → 災害-交通影響 → 災害-火煙狀況 → 災害-報案人位置
     #   → 災害_summary_confirm → 災害_caller_info → completed
     #   局內回報：局內回報_need → 局內回報_location
     #   → 局內回報_field_content | 局內回報_support_detail

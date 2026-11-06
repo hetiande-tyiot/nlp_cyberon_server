@@ -1865,7 +1865,13 @@ class LLMExtractor119:
             schema_groups.append((fire_schema, fire_rules))
             schema_groups.append((fire_level_schema, fire_level_rules))
         if main_category == "災害":
-            schema_groups.append(disaster_schema_and_rules())
+            # 火煙狀況跟火警共用欄位，抽取規則也用火警的
+            disaster_schema, disaster_rules = disaster_schema_and_rules()
+            smoke_type, smoke_rule = _FIRE_FIELD_RULES["fire_or_smoke"]
+            schema_groups.append((
+                {**disaster_schema, "fire_or_smoke": smoke_type},
+                disaster_rules + "\n" + smoke_rule,
+            ))
         if call_type == "局內回報":
             schema_groups.append((internal_report_schema, internal_report_rules))
 

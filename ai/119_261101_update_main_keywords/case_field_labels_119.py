@@ -209,11 +209,9 @@ LABELS: Dict[str, str] = {
     "spread_reached": "是否延燒",
     "burning_area": "燃燒面積",
     # 災害通用流程（所有子類同一套題）
-    "disaster_injury_or_trapped": "受傷受困",
+    "disaster_injury": "人員受傷",
     "disaster_trapped_count": "受困人數",
     "traffic_impact": "交通影響",
-    "electrical_hazard": "有無火花冒煙或帶電",
-    "disaster_caller_role": "報案人身分",
     # 緊急救援・車禍救助
     "accident_vehicle_type": "事故車種",
     "accident_injury": "受傷情形",
