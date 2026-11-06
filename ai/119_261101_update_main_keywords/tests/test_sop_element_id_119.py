@@ -121,7 +121,7 @@ class SopElementIdTests(unittest.TestCase):
         self.assertNotIn("101-2", ids)
 
     def test_fire_conditions_not_met_are_left_out(self) -> None:
-        # 垃圾、無火無煙：只有「氣味」要問；濃煙顏色、是否延燒都不列
+        # 垃圾、無火無煙：只有「氣味類型」要問；濃煙顏色、是否延燒都不列
         case = CaseInfo119(
             main_category="火警",
             sub_category="垃圾",
@@ -130,46 +130,154 @@ class SopElementIdTests(unittest.TestCase):
 
         ids = case.to_dict()["sop_element_ids"]
 
-        self.assertEqual(ids["130-9"], "待問")  # 氣味
+        self.assertEqual(ids["130-9"], "待問")  # 氣味類型
         self.assertNotIn("130-7", ids)  # 濃煙顏色
         self.assertNotIn("130-10", ids)  # 是否延燒
 
-    def test_fire_tab_questions_match_case_type_qa_order(self) -> None:
-        # 火警的編號用「垂片第幾題」當題號，所以垂片題目要跟 CaseTypeQA.xlsx 一題一題對得上。
+    def test_question_tables_match_case_type_qa(self) -> None:
+        # 編號用「題目表第幾題」當題號，前端再用題號去 CaseTypeQA 查題目名稱，
+        # 所以每個次案類的題目表第 N 題，名稱要跟 CaseTypeQA.xlsx 該次案類第 N 題的關鍵要素一樣。
         # 對不上代表改了其中一邊沒同步另一邊。
-        from fire_tab_map_119 import TAB_QUESTIONS
-        from sop_element_id_119 import _XLSX, _SHEET
+        from disaster_flow_119 import DISASTER_QUESTIONS
+        from emergency_tab_map_119 import EMERGENCY_QUESTIONS
+        from ems_tab_map_119 import questions_for_subtype as ems_questions
+        from fire_tab_map_119 import TAB_QUESTIONS, tab_for_subtype
         from openpyxl import load_workbook
+        from sop_element_id_119 import _SHEET, _XLSX, case_type_key
 
-        # 1106 xlsx 起兩邊名稱一致；只剩氣味類型在 CaseTypeQA 寫「氣味」（10/08 統一的名稱）
-        unified = {
-            "氣味類型": "氣味",
+        rows: dict = {}
+        sheet = load_workbook(_XLSX, read_only=True)[_SHEET]
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            rows.setdefault(row[1], []).append((row[4], row[5]))  # 次案類 → (題號, 關鍵要素)
+        # 緊急救援的程式次案類名稱不一定跟表一樣（卡住夾住在表裡叫「緊急救援-其他」），用程式的對照找
+        emergency = {
+            case_type_key("緊急救援", sub): questions for sub, questions in EMERGENCY_QUESTIONS.items()
         }
-        rows: dict = {}
-        sheet = load_workbook(_XLSX, read_only=True)[_SHEET]
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            rows.setdefault(row[1], []).append(row[5])  # 次案類 → 關鍵要素（依題號）
-        for tab, subtype in (("A", "火警-透天厝"), ("B1", "火警-汽車"),
-                             ("B2", "火警-山林田野(平地)"), ("C", "火警-垃圾")):
-            with self.subTest(tab=tab):
-                expected = [unified.get(q.element, q.element) for q in TAB_QUESTIONS[tab]]
-                self.assertEqual(rows[subtype], expected)
+        checked = set()
+        for subtype, items in rows.items():
+            main, _, sub = subtype.partition("-")
+            if main == "火警":
+                questions = TAB_QUESTIONS.get(tab_for_subtype(sub) or "", ())
+            elif main == "救護" and sub not in ("", "未知"):
+                questions = ems_questions(sub)
+            elif main == "災害":
+                questions = DISASTER_QUESTIONS
+            elif main == "緊急救援":
+                questions = emergency.get(subtype, ())
+            else:
+                continue  # 2 救護、救護-未知：次案類還沒定，程式沒有題目表
+            with self.subTest(subtype=subtype):
+                self.assertTrue(questions, "程式沒有這個次案類的題目表")
+                self.assertEqual(
+                    items, [(n, q.element) for n, q in enumerate(questions, start=1)],
+                )
+            checked.add(main)
+        self.assertEqual(checked, {"火警", "救護", "災害", "緊急救援"})
 
-    def test_emergency_questions_match_case_type_qa_order(self) -> None:
-        # 緊急救援也用「題目表第幾題」當題號，題目表要跟 CaseTypeQA.xlsx 一題一題對得上
-        from emergency_tab_map_119 import EMERGENCY_QUESTIONS, TRAPPED_ALIAS
-        from sop_element_id_119 import _XLSX, _SHEET
-        from openpyxl import load_workbook
+    def test_case_type_qa_sql_matches_question_tables(self) -> None:
+        # 前端拿到「次案類編號-第N題」後，是用 docs/CaseTypeQA.sql 匯入資料庫的那份表查題目名稱和問句。
+        # 所以程式四個案類每個次案類的每一題，SQL 裡都要有同一個編號的一列，而且題目名稱要一樣；
+        # SQL 也不能多出程式沒有的題目。對不上代表改了程式題目表或 CaseTypeQA.xlsx，卻沒重新產生 SQL。
+        import re
+        from pathlib import Path
 
-        rows: dict = {}
-        sheet = load_workbook(_XLSX, read_only=True)[_SHEET]
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            rows.setdefault(row[1], []).append(row[5])  # 次案類 → 關鍵要素（依題號）
+        from disaster_flow_119 import DISASTER_QUESTIONS
+        from emergency_tab_map_119 import EMERGENCY_QUESTIONS
+        from ems_tab_map_119 import EMS_QUESTIONS
+        from fire_tab_map_119 import FIRE_SUBTYPES, TAB_QUESTIONS, tab_for_subtype
+        from sop_element_id_119 import case_type_key, load_element_index
+
+        sql_path = Path(__file__).resolve().parents[3] / "docs" / "CaseTypeQA.sql"
+        sql: dict = {}  # 「次案類編號-題號」→ 題目名稱
+        pattern = re.compile(r"VALUES \((\d+), \d+, (\d+), N'((?:[^']|'')*)', N'(?:[^']|'')*', \d\);")
+        for line in sql_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("INSERT"):
+                match = pattern.search(line)
+                self.assertIsNotNone(match, f"SQL 這一列格式看不懂：{line}")
+                sql[f"{match.group(1)}-{match.group(2)}"] = match.group(3).replace("''", "'")
+
+        # 次案類名稱 → 次案類編號：照程式送編號時的做法，從 CaseTypeQA.xlsx 的對照表取
+        case_type_ids = {
+            subtype: code.rsplit("-", 1)[0] for (subtype, _), code in load_element_index().items()
+        }
+        # 每個次案類用的題目表：火警依次案類所屬垂片、救護和緊急救援各自一張、災害所有次案類共用一張
+        tables = {}
+        for item in FIRE_SUBTYPES:
+            tables[case_type_key("火警", item.name)] = TAB_QUESTIONS[tab_for_subtype(item.name)]
+        for sub, questions in EMS_QUESTIONS.items():
+            tables[case_type_key("救護", sub)] = questions
         for sub, questions in EMERGENCY_QUESTIONS.items():
-            if sub == TRAPPED_ALIAS:
-                continue
-            with self.subTest(sub=sub):
-                self.assertEqual(rows[f"緊急救援-{sub}"], [q.element for q in questions])
+            tables[case_type_key("緊急救援", sub)] = questions
+        for subtype in case_type_ids:
+            if subtype.startswith("災害-"):
+                tables[subtype] = DISASTER_QUESTIONS
+
+        expected = {}
+        for subtype, questions in tables.items():
+            with self.subTest(subtype=subtype):
+                self.assertIn(subtype, case_type_ids, "CaseTypeQA.xlsx 找不到這個次案類的編號")
+                for number, question in enumerate(questions, start=1):
+                    expected[f"{case_type_ids[subtype]}-{number}"] = question.element
+
+        for element_id, element in expected.items():
+            with self.subTest(element_id=element_id):
+                self.assertEqual(sql.get(element_id), element)
+        # 2 救護、200 救護-未知：次案類還沒定，程式沒有題目表，SQL 保留原本的內容
+        extra = sorted(
+            element_id for element_id in sql
+            if element_id not in expected and element_id.split("-")[0] not in ("2", "200")
+        )
+        self.assertEqual(extra, [], "SQL 有程式沒有的題目")
+
+    def test_disaster_lists_questions_still_to_ask_as_pending(self) -> None:
+        # 積水剛開始：人員受傷、人員受困、交通影響、報案人位置、報案身分都要問；
+        # 受困人數要有人受困才問，火煙狀況只有電線掉落、招牌掉落、電線桿傾倒才問，都不列
+        case = CaseInfo119(main_category="災害", sub_category="積水")
+
+        ids = case.to_dict()["sop_element_ids"]
+
+        self.assertEqual(ids, {
+            "501-1": "待問",  # 人員受傷
+            "501-2": "待問",  # 人員受困：跟人員受傷同一句問，但有自己的題號
+            "501-4": "待問",  # 交通影響
+            "501-6": "待問",  # 報案人位置
+            "501-7": "待問",  # 報案身分：跟報案人位置同一句問，但有自己的題號
+        })
+
+    def test_disaster_trapped_makes_count_pending(self) -> None:
+        case = CaseInfo119(
+            main_category="災害",
+            sub_category="積水",
+            disaster_injury="無人受傷",
+            trapped_status="有人受困",
+        )
+
+        ids = case.to_dict()["sop_element_ids"]
+
+        self.assertEqual(ids["501-1"], "無人受傷")
+        self.assertEqual(ids["501-2"], "有人受困")
+        self.assertEqual(ids["501-3"], "待問")  # 受困人數：有人受困才問
+        self.assertNotIn("501-5", ids)  # 火煙狀況：積水不問
+
+    def test_disaster_wire_subtype_asks_fire_or_smoke(self) -> None:
+        case = CaseInfo119(
+            main_category="災害",
+            sub_category="電線掉落",
+            trapped_status="無人受困",
+            caller_location="在現場",
+            caller_relation="路過",
+        )
+
+        ids = case.to_dict()["sop_element_ids"]
+
+        self.assertEqual(ids, {
+            "511-1": "待問",
+            "511-2": "無人受困",
+            "511-4": "待問",
+            "511-5": "待問",  # 火煙狀況：電線掉落要問
+            "511-6": "在現場",
+            "511-7": "路過",
+        })
 
     def test_emergency_lists_questions_still_to_ask_as_pending(self) -> None:
         # 車禍救助，報案人位置還沒講到（算未提到）：要在現場才問的題目都列「待問」；
@@ -209,6 +317,30 @@ class SopElementIdTests(unittest.TestCase):
             "301-10": "待問",
             "301-11": "在遠處",
         })
+
+    def test_emergency_trapped_uses_309(self) -> None:
+        # 卡住夾住在 CaseTypeQA 是 309「緊急救援-其他」，第 2 題是卡住物品
+        case = CaseInfo119(
+            main_category="緊急救援",
+            sub_category="其他(卡住夾住)",
+            trap_object="機器",
+        )
+
+        ids = case.to_dict()["sop_element_ids"]
+
+        self.assertEqual(ids["309-2"], "機器")
+        self.assertEqual(ids["309-1"], "待問")  # 卡住部位
+
+    def test_emergency_other_transfers_without_ids(self) -> None:
+        # 分類器判出的「其他」轉真人、不問卡住夾住的題目，所以不給編號
+        case = CaseInfo119(
+            main_category="緊急救援",
+            sub_category="其他",
+            trap_object="機器",
+            caller_relation="家人",
+        )
+
+        self.assertEqual(case.to_dict()["sop_element_ids"], {})
 
     def test_empty_case_has_no_ids(self) -> None:
         self.assertEqual(CaseInfo119().to_dict()["sop_element_ids"], {})

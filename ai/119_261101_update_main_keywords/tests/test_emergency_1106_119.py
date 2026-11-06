@@ -7,7 +7,8 @@
   兩句都問完還是判不出來就不再問
 - 車禍救助、瓦斯漏氣的火煙狀況看得到火或煙 → 改判火警（車禍救助 B1、瓦斯漏氣 A）；只有火花不改判
 - 呼吸 = 呼吸不正常、無呼吸 → 轉真人
-- 判到 CO中毒、開瓦斯自殺、氣爆、化學災害或硬規則的「緊急救援」→ 轉真人
+- 判到 CO中毒、開瓦斯自殺、氣爆、化學災害、分類器判出的「其他」或硬規則的「緊急救援」→ 轉真人；
+  「其他(卡住夾住)」照卡住夾住的題目問
 - 名稱跟救護、火警、災害一樣的關鍵要素共用欄位
 
 這裡的 LLM 是假的：每一句要抽出什麼，由測試事先指定。
@@ -365,7 +366,7 @@ class EmergencyBreathingTransferTests(unittest.TestCase):
     def test_no_breathing_transfers(self) -> None:
         for state in ("呼吸不正常", "無呼吸"):
             with self.subTest(state=state):
-                engine, io = _engine("其他", [])
+                engine, io = _engine("其他(卡住夾住)", [])
                 engine.case.breathing = state
                 with self.assertRaises(TransferToHumanError):
                     JinJiJiuYuanGenericHandler().run_generic_flow(engine)
@@ -373,7 +374,8 @@ class EmergencyBreathingTransferTests(unittest.TestCase):
 
 
 class EmergencyNoQuestionTableTransferTests(unittest.TestCase):
-    """判到 CO中毒、開瓦斯自殺、氣爆、化學災害或硬規則的「緊急救援」就轉真人，不管原本有沒有次案類。"""
+    """判到 CO中毒、開瓦斯自殺、氣爆、化學災害、分類器判出的「其他」或硬規則的「緊急救援」就轉真人，
+    不管原本有沒有次案類。"""
 
     def test_hard_rule_emergency_before_dispatch_transfers(self) -> None:
         # 「聯絡不上」是硬規則判成「緊急救援」的詞：定次案類時就轉，不講派車
@@ -388,6 +390,36 @@ class EmergencyNoQuestionTableTransferTests(unittest.TestCase):
         with self.assertRaises(TransferToHumanError):
             JinJiJiuYuanGenericHandler().run_generic_flow(engine)
         self.assertEqual(io.messages, [DISPATCH_LINE, "發生什麼事需要破門？", TRANSFER_LINE])
+
+    def test_classifier_other_transfers_before_dispatch(self) -> None:
+        # 分類器判出的「其他」內容很雜，不問卡住夾住的題目，定次案類時就轉，不講派車（使用者 11/06 決定）
+        engine, io = _engine("其他", [])
+        with self.assertRaises(TransferToHumanError):
+            JinJiJiuYuanGenericHandler().run_generic_flow(engine)
+        self.assertEqual(io.messages, [TRANSFER_LINE])
+
+    def test_trapped_alias_still_asks_trapped_questions(self) -> None:
+        engine, io = _engine("其他(卡住夾住)", [
+            ("我手指卡住", {"trap_body_part": "手指", "caller_relation": "本人", "caller_location": "在現場"}),
+            ("卡在門", {"trap_object": "門"}),
+            ("還卡著", {"trap_freed": "還卡著"}),
+            ("手指", {"injury_location": "手指"}),
+            ("有流血", {"injury_severity": "流血"}),
+            ("在家裡", {"injury_place": "住家"}),
+            ("男生三十歲", {"patient_gender": "男性", "patient_age": "30歲"}),
+        ])
+        JinJiJiuYuanGenericHandler().run_generic_flow(engine)
+        # 報案身分已經知道是本人：不問報案身分，也不問意識
+        self.assertEqual(io.messages, [
+            DISPATCH_LINE,
+            "哪裡卡住了？",
+            "卡在什麼東西裡面？",
+            "現在還卡著嗎？",
+            "傷到哪裡？",
+            "傷得嚴不嚴重？有沒有一直流血？",
+            "是在家裡還是工作的地方？",
+            "請問當事人是男生還是女生？大概幾歲？",
+        ])
 
     def test_switch_to_co_poisoning_during_questions_transfers(self) -> None:
         # 「頭暈」是硬規則判成 CO中毒的詞
@@ -488,12 +520,12 @@ class EmergencyExtractionTests(unittest.TestCase):
         self.assertEqual(result["consciousness_level"], "沒有反應")
 
     def test_old_yes_no_keywords_do_not_write_breathing(self) -> None:
-        engine, _io = _engine("其他", [("他沒有呼吸", {})])
+        engine, _io = _engine("其他(卡住夾住)", [("他沒有呼吸", {})])
         engine._extract_all_fields_from_reply("他沒有呼吸", question="他還有沒有呼吸？")
         self.assertIsNone(engine.case.breathing)
 
     def test_honorific_gender_uses_xlsx_wording(self) -> None:
-        engine, _io = _engine("其他", [])
+        engine, _io = _engine("其他(卡住夾住)", [])
         engine.case.transcript.append({"role": "caller", "text": "有一位先生手卡在機器裡"})
         engine._ensure_known_fields_from_history()
         # 從「一位先生」推出男；緊急救援跟救護一樣記成 xlsx 的「男性」，不是「男」

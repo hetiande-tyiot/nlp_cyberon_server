@@ -36,15 +36,18 @@ DROWN = "溺水"
 DIVE = "跳水"
 FALL = "跳樓"
 MOUNTAIN = "山難"
-TRAPPED = "其他"            # 309-其他：xlsx 只分析了內容是卡住、夾住的通話
+# 309-其他：xlsx 只分析了內容是卡住、夾住的通話，只有「其他(卡住夾住)」照卡住夾住的題目問；
+# 分類器判出的「其他」內容很雜，轉真人（見 TRANSFER_SUBS）
 TRAPPED_ALIAS = "其他(卡住夾住)"
 GAS = "瓦斯漏氣(建築物)"
 LIFT = "電梯受困"
 DOOR = "破門"
 
 # 判到這些次案類就轉真人（使用者 11/06 決定）：前 4 類是 1106 規格表案類總覽註明「關鍵字，轉真人」的；
-# 「緊急救援」是硬規則判出來的，系統案類沒有這一類、也沒有垂片。不管原本有沒有次案類，判到就轉。
-TRANSFER_SUBS = frozenset({"CO中毒", "開瓦斯自殺", "氣爆", "化學災害(洩漏)", "緊急救援"})
+# 「緊急救援」是硬規則判出來的，系統案類沒有這一類、也沒有垂片。
+# 「其他」是分類器判出來的，不一定是卡住夾住，不問卡住夾住的題目（使用者 11/06 決定）。
+# 不管原本有沒有次案類，判到就轉。
+TRANSFER_SUBS = frozenset({"CO中毒", "開瓦斯自殺", "氣爆", "化學災害(洩漏)", "緊急救援", "其他"})
 
 DISPATCH_LINE = "救護人員已經派出了歐。"
 # 次案類還判不出來時，分兩次問（使用者 11/05 給的句子）。兩句都問完還是判不出來，就直接問姓名電話。
@@ -74,7 +77,7 @@ PARTY_SINGLE_MISSING_QUESTIONS = {
     "patient_gender": "請問當事人是男生還是女生？",
     "patient_age": "請問當事人大概幾歲？",
 }
-PARTY_SUBS = frozenset({MOUNTAIN, TRAPPED, TRAPPED_ALIAS, DOOR})
+PARTY_SUBS = frozenset({MOUNTAIN, TRAPPED_ALIAS, DOOR})
 
 
 # ─── 前置條件 ─────────────────────────────────────────────────────────────────
@@ -391,7 +394,6 @@ EMERGENCY_QUESTIONS: Dict[str, Tuple[EmergencyQuestion, ...]] = {
     DIVE: DIVE_QUESTIONS,
     FALL: FALL_QUESTIONS,
     MOUNTAIN: MOUNTAIN_QUESTIONS,
-    TRAPPED: TRAPPED_QUESTIONS,
     TRAPPED_ALIAS: TRAPPED_QUESTIONS,
     GAS: GAS_QUESTIONS,
     LIFT: LIFT_QUESTIONS,
