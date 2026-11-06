@@ -1,0 +1,58 @@
+{
+  "main_category": "災害",
+  "source_jsonl": "/root/autodl-tmp/119_20260609stt_case_public.jsonl",
+  "data_dir": "/home/cvmax/autodl-tmp/119_sub_disaster_data",
+  "base_model": "/home/cvmax/autodl-tmp/models/chinese-macbert-base",
+  "output_dir": "/home/cvmax/autodl-tmp/models/TW-119-BERT-sub_災害",
+  "n_records": 225,
+  "n_labels": 16,
+  "distribution": {
+    "路樹傾倒": 80,
+    "其他": 50,
+    "電線掉落": 33,
+    "道路坍方落石": 17,
+    "積水": 15,
+    "鐵皮掉落": 8,
+    "招牌掉落": 6,
+    "淹水": 4,
+    "交通號誌損壞": 2,
+    "人員疏散及災民收容": 2,
+    "災害": 2,
+    "電線桿傾倒": 2,
+    "土石流及大規模崩塌災害": 1,
+    "山坡地社區災害": 1,
+    "自來水管線破裂": 1,
+    "道路受損": 1
+  },
+  "split": {
+    "train": 176,
+    "val": 23,
+    "test": 26,
+    "train_ratio": 0.8,
+    "val_ratio": 0.1,
+    "notes": {
+      "n1_all_train": [
+        3,
+        4,
+        9,
+        11
+      ],
+      "n2_train_test": [
+        0,
+        1,
+        7,
+        15
+      ]
+    }
+  },
+  "max_len": 128,
+  "batch_size": 8,
+  "epochs": 20,
+  "lr": 2e-05,
+  "warmup_ratio": 0.1,
+  "weight_decay": 0.01,
+  "seed": 42,
+  "fp16": true,
+  "use_class_weight": false,
+  "cuda": true
+}
