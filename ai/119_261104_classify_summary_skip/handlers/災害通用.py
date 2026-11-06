@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from disaster_flow_119 import DISASTER_QUESTIONS, should_switch_to_fire
-from .base import CLOSING_LINE, SubCategoryHandler
+from .base import RESCUE_CLOSING_LINE, SubCategoryHandler
 
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
@@ -85,7 +85,7 @@ class ZaiHaiGenericHandler(SubCategoryHandler):
         # 要恢復就把下面兩行的註解拿掉
         # engine._say("，".join(parts) + "，已為您記錄。")
         # engine._say("請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。")
-        engine._say(CLOSING_LINE)
+        engine._say(RESCUE_CLOSING_LINE)
         with engine._case_lock:
             engine.case.result = "dispatched"
         engine._set_stage("completed")
