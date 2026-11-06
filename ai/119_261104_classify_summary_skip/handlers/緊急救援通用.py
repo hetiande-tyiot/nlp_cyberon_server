@@ -30,8 +30,7 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
 
     def run_generic_flow(self, engine: "SopEngine119") -> None:
         """
-        次案類定了才派車（判不出來也在追問完之後講）。有次案類就照題目表問，判不出來就不再問，
-        直接進收集報案人資訊（使用者 11/06 決定）。
+        次案類定了才派車。有次案類就照題目表問，判不出來就轉真人（使用者 11/07 決定）。
         題目進行中若換成別的次案類，從新次案類的題目表重問還沒填的題。
         """
         from sop_119_engine import SubCategorySwitched
@@ -57,7 +56,12 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
             engine._sub_reclassify_enabled = False
 
     def _transfer_if_needed(self, engine: "SopEngine119") -> None:
-        """判到要轉真人的次案類（見 TRANSFER_SUBS）就轉。定完次案類、題目進行中換次案類，都會檢查。"""
+        """
+        判到要轉真人的次案類（見 TRANSFER_SUBS），或兩句都問完還判不出次案類，就轉。
+        定完次案類、題目進行中換次案類，都會檢查。
+        """
+        if not engine.case.sub_category:
+            engine._transfer_to_human("緊急救援次案類判不出來")
         if engine.case.sub_category in TRANSFER_SUBS:
             engine._transfer_to_human(f"緊急救援次案類轉真人：{engine.case.sub_category}")
 
