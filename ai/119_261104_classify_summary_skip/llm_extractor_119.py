@@ -797,6 +797,11 @@ def _build_fire_schema_and_rules(
     return schema, rules
 
 
+# 報案人位置只收這四種（xlsx 參考範圍；沒講到就是空的，等於「未提到」）。
+# LLM 曾把地址填進來，條件就當成不在現場而跳過意識，所以每輪抽取和換次案類搬欄位都要檢查
+CALLER_LOCATION_OPTIONS = ("在現場", "在遠處", "不敢靠近", "不在現場")
+
+
 def _rules_for_fields(rules: str, fields) -> str:
     """規則文字只留下標題行，以及有提到要抽的欄位的那幾行。"""
     kept = []
@@ -1787,9 +1792,12 @@ class LLMExtractor119:
             "爸媽、兄弟姊妹、先生太太、老公老婆、子女等親屬 → 家人（我媽、我爸、我先生、我老婆、我孩子）；"
             "我朋友 → 朋友；我同事 → 同事；我鄰居 → 鄰居；警衛、保全 → 警衛(保全)；"
             "路人、經過看到 → 路過。沒講到 → null。\n"
-            "- caller_location：報案人現在在哪裡（報案人位置），只能填這幾種之一："
-            "在現場、在遠處、不敢靠近、不在現場。在患者身邊也算在現場。"
-            "地址、路名不是報案人位置，不要填在這裡。沒講到 → null。\n"
+            "- caller_location：報案人自己現在在哪裡（報案人位置），只能填這幾種之一："
+            "在現場（在患者旁邊、跟患者在同一個地方、本人報案）、"
+            "在遠處（人在附近看得到，但離患者有段距離，例如在對面、在樓上往下看）、"
+            "不敢靠近（怕危險不敢過去看）、"
+            "不在現場（人不在那裡，例如在外地、聽別人轉述才打來、已經離開）。"
+            "地址、路名不是報案人位置，不要填在這裡。沒講自己在哪裡就是未提到 → null。\n"
             "- drinking_status：患者有沒有喝酒（有喝酒/沒有喝酒/不清楚）。\n"
             "- mobility：患者平常的行動能力，只能填：平常可以自己走、平常需要人扶、長期臥床或坐輪椅。"
             "突然走不動、站不起來不填這裡。沒講到 → null。\n"
@@ -1978,9 +1986,8 @@ class LLMExtractor119:
                 elif bool_val is not None:
                     result[key] = bool_val
             elif key == "caller_location":
-                # 報案人位置會決定問不問意識等題目，只收這四種；
-                # LLM 曾把地址填進來，條件就當成不在現場而跳過意識，選項以外的一律當沒講到
-                if str(val).strip() in ("在現場", "在遠處", "不敢靠近", "不在現場"):
+                # 選項以外的一律當沒講到（見 CALLER_LOCATION_OPTIONS）
+                if str(val).strip() in CALLER_LOCATION_OPTIONS:
                     result[key] = str(val).strip()
             elif key == "NeedPolice":
                 bool_val = _coerce_bool(val)
@@ -2401,6 +2408,8 @@ class LLMExtractor119:
                     result[slot] = normalized
                 continue
             cleaned = _clean_str(val)
+            if slot == "caller_location" and cleaned not in CALLER_LOCATION_OPTIONS:
+                continue  # 搬過來的報案人位置也只收四種選項
             if cleaned is not None:
                 result[slot] = cleaned
         return result
