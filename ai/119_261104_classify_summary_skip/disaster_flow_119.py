@@ -39,6 +39,11 @@ FIRE_SWITCH_SMOKE_STATES: Tuple[str, ...] = FIRE_SMOKE_FIRE_OR_SMOKE_VISIBLE
 
 DISPATCH_LINE = "救護人員已經派出了歐。"
 TRAPPED_COUNT_QUESTION = "有幾個人被困住？"
+# 次案類判不出來時依序追問的兩句（使用者 11/07 決定），兩句問完還判不出來就轉真人
+SUB_REASK_QUESTIONS: Tuple[str, ...] = (
+    "請問發生什麼事呢？",
+    "請再說明一次發生什麼事情呢？",
+)
 
 # 只能從固定說法裡選的欄位。選了清單以外的值就不記。
 DISASTER_FIXED_ANSWERS: Dict[str, Tuple[str, ...]] = {

@@ -2645,7 +2645,7 @@ class SopEngine119:
         """拼接全部報案人文本，置信度與 margin 夠才寫入災害子類。
 
         門檻跟火警填碼一樣。子類只記錄、並決定要不要問火花，不換題、不清欄。
-        不夠有把握就維持原樣，不另外追問發生什麼事。
+        不夠有把握就維持原樣（判不出來的追問見 handlers/災害通用.py）。
         """
         from fire_tab_map_119 import FIRE_BERT_CONF_THRESHOLD
 
@@ -4871,7 +4871,6 @@ class SopEngine119:
 
     def _run_災害(self) -> None:
         """災害地址確認後：子類只記錄，所有子類走同一套通用題。"""
-        from disaster_flow_119 import DISPATCH_LINE
         from handlers.災害通用 import ZaiHaiGenericHandler
 
         # 地址階段仍可改判主類；進通用題後關閉，跟救護、火警、緊急救援一樣。
@@ -4895,8 +4894,8 @@ class SopEngine119:
             return
 
         # 地址確認後、通用題開始前再辨一次。地址過程中每一輪也會辨。
+        # 判不出來的追問、派車句寫在 handlers/災害通用.py
         self._refresh_disaster_subtype_from_bert()
-        self._announce_dispatch(DISPATCH_LINE)
 
         handler = ZaiHaiGenericHandler()
         handler.run_generic_flow(self)
