@@ -1523,10 +1523,12 @@ class LLMExtractor119:
             complaint_field = "symptoms"
             # 病徵照 xlsx 參考範圍（救護各案類統一同一份清單）
             complaint_rule = (
-                "- symptoms：病徵，記成下列一種或多種："
+                "- symptoms：病徵。報案人明確講到下列症狀才記，用清單裡的詞（可以記多個）："
                 "全身無力、昏倒、喘、頭暈、嘔吐、發燒、疑似中風、跌倒、血壓血糖異常、肚子痛、抽搐、"
-                "胸痛、出血、發抖、冒冷汗、手腳腰背痛、頭痛、心悸、拉肚子、過敏；不屬於這些的照報案人說的記。"
-                "只說不舒服、要救護車，沒講是什麼症狀 → null。沒講到 → null。\n"
+                "胸痛、出血、發抖、冒冷汗、手腳腰背痛、頭痛、心悸、拉肚子、過敏；"
+                "講到清單以外的具體症狀照報案人說的記。"
+                "只說不舒服、身體不舒服、要救護車，沒講是什麼症狀 → null，"
+                "不可以換成清單裡意思相近的詞（例如全身無力）。沒講到 → null。\n"
             )
         # 救護照 1028 xlsx 垂片關鍵要素抽取（11/02 使用者決定）：一個關鍵要素一個欄位，
         # 跟關鍵要素重複的廠商欄位（是否有意識、報案人是否即患者、肚子起伏、目前狀況、路倒原因）不再抽。
@@ -2019,6 +2021,15 @@ class LLMExtractor119:
                     "先生", "小姐",
                 }:
                     cleaned = None
+                # 報案人只說不舒服時，LLM 曾自己換成「全身無力」（11/06 承辦反映）：
+                # 這句話沒講到無力、虛弱這類字就拿掉全身無力，同一句的其他症狀照收
+                if cleaned and key == "symptoms" and not any(
+                    word in (caller_text or "") for word in ("無力", "沒力", "沒有力", "虛弱", "軟")
+                ):
+                    cleaned = "、".join(
+                        item.strip() for item in re.split(r"[、,，]", cleaned)
+                        if item.strip() and item.strip() != "全身無力"
+                    ) or None
                 if cleaned and key == "location_type":
                     cleaned = cleaned.lower()
                     if cleaned not in {
