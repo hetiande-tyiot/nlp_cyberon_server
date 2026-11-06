@@ -779,7 +779,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
     # 第 5 題年齡沒有問句：跟第 4 題性別同一句問，前置條件也跟第 4 題一樣。
     "其它": (
         EmsQuestion("主訴", "chief_complaint", MODE_ACTIVE,
-                    "其它-主訴", "請問患者是身體不舒服，還是受傷？"),
+                    "其它-主訴", "請問發生什麼事？"),
         EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "其它-患者人數"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                     "其它-報案身分", "請問你認識患者嗎？"),
