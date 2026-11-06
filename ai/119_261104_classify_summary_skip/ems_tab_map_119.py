@@ -776,11 +776,11 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "吸入廢氣-報案人位置"),
     ),
     # ─── 21-其它（還沒標 OK）────────────────────────────────────────────────
-    # 第 5 題年齡沒有問句：跟第 4 題性別同一句問，前置條件也跟第 4 題一樣。
+    # 第 4 題年齡沒有問句：跟第 3 題性別同一句問，前置條件也跟第 3 題一樣。
+    # 被動題只留報案人位置，其他被動題拿掉（11/06 使用者決定；報案人位置還要再跟承辦確認）。
     "其它": (
         EmsQuestion("主訴", "chief_complaint", MODE_ACTIVE,
                     "其它-主訴", "請問發生什麼事？"),
-        EmsQuestion("患者人數", "patient_count", MODE_PASSIVE, "其它-患者人數"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                     "其它-報案身分", "請問你認識患者嗎？"),
         EmsQuestion("性別", "patient_gender", MODE_CONDITIONAL,
@@ -796,10 +796,6 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("呼吸", "breathing", MODE_CONDITIONAL,
                     "其它-呼吸", "他還有沒有呼吸？胸部有沒有一上一下起伏呢？",
                     _consciousness_unresponsive, _UNRESPONSIVE_TEXT),
-        EmsQuestion("病史", "medical_history", MODE_PASSIVE, "其它-病史"),
-        EmsQuestion("現場進入條件", "scene_access", MODE_PASSIVE, "其它-現場進入條件"),
-        EmsQuestion("是否飲酒", "drinking_status", MODE_PASSIVE, "其它-是否飲酒"),
-        EmsQuestion("平常行動能力", "mobility", MODE_PASSIVE, "其它-平常行動能力"),
         EmsQuestion("報案人位置", "caller_location", MODE_PASSIVE, "其它-報案人位置"),
     ),
 }
