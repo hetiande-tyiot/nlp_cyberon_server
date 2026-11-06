@@ -15,6 +15,7 @@ from emergency_tab_map_119 import (
     DISPATCH_LINE,
     PARTY_SINGLE_MISSING_QUESTIONS,
     PARTY_SUBS,
+    TRANSFER_SUBS,
     questions_for_subtype,
     should_switch_to_fire,
 )
@@ -37,11 +38,13 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
 
         engine._ensure_known_fields_from_history()
         engine._settle_emergency_subcategory()
+        self._transfer_if_needed(engine)
         engine._announce_dispatch(DISPATCH_LINE)
         engine._sub_reclassify_enabled = True
         try:
             while True:
                 try:
+                    self._transfer_if_needed(engine)
                     self._ask_ems_questions(engine, questions_for_subtype(engine.case.sub_category))
                     break
                 except SubCategorySwitched as sw:
@@ -52,6 +55,11 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
                     continue
         finally:
             engine._sub_reclassify_enabled = False
+
+    def _transfer_if_needed(self, engine: "SopEngine119") -> None:
+        """判到要轉真人的次案類（見 TRANSFER_SUBS）就轉。定完次案類、題目進行中換次案類，都會檢查。"""
+        if engine.case.sub_category in TRANSFER_SUBS:
+            engine._transfer_to_human(f"緊急救援次案類轉真人：{engine.case.sub_category}")
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
         """車禍救助、瓦斯漏氣：報案人哪一句講到有火或有煙都改判火警，不限問到火煙狀況那一題。"""

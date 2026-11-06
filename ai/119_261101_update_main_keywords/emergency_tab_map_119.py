@@ -8,7 +8,7 @@
   主動：還不知道才問（報案人前面已經講過就跳過）
   條件：前置條件確定成立、而且還不知道才問；答案還不知道的條件一律當作不成立
   被動：AI 不主動問，報案人自己講到時由每一輪的欄位抽取記下來
-題目的順序就是 xlsx 的順序。年齡在 xlsx 沒有問句、前置條件空白：上一題性別的問句同時問性別和年齡，
+題目的順序照 xlsx A 欄「順序」（使用者 11/06 決定，不照沒有標題的 J 欄）。年齡在 xlsx 沒有問句、前置條件空白：上一題性別的問句同時問性別和年齡，
 所以年齡跟性別同一句問、用同一個前置條件（跟救護一樣）。
 
 一個關鍵要素一個欄位：名稱跟別的垂片一字不差、參考範圍也一樣，就共用欄位（11/04、11/06 使用者決定），
@@ -41,6 +41,10 @@ TRAPPED_ALIAS = "其他(卡住夾住)"
 GAS = "瓦斯漏氣(建築物)"
 LIFT = "電梯受困"
 DOOR = "破門"
+
+# 判到這些次案類就轉真人（使用者 11/06 決定）：前 4 類是 1106 規格表案類總覽註明「關鍵字，轉真人」的；
+# 「緊急救援」是硬規則判出來的，系統案類沒有這一類、也沒有垂片。不管原本有沒有次案類，判到就轉。
+TRANSFER_SUBS = frozenset({"CO中毒", "開瓦斯自殺", "氣爆", "化學災害(洩漏)", "緊急救援"})
 
 DISPATCH_LINE = "救護人員已經派出了歐。"
 # 次案類還判不出來時，分兩次問（使用者 11/05 給的句子）。兩句都問完還是判不出來，就直接問姓名電話。
@@ -171,9 +175,7 @@ def _caller_location(sub: str) -> EmergencyQuestion:
     return EmergencyQuestion("報案人位置", "caller_location", MODE_PASSIVE, f"緊急救援-{sub}-報案人位置")
 
 
-# ─── 題目表（順序照 xlsx）──────────────────────────────────────────────────────
-# 301-車禍救助：意識的前置條件要看報案身分，但報案身分排在第 9 題；報案人前面沒講到身分時，
-# 輪到意識那一題條件還不成立，就不問（照 xlsx 順序，使用者沒決定前不調換）。
+# ─── 題目表（順序照 xlsx A 欄）────────────────────────────────────────────────
 
 CRASH_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     EmergencyQuestion("事故車種", "crash_vehicles", MODE_ACTIVE,
@@ -190,6 +192,8 @@ CRASH_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     EmergencyQuestion("患者人數", "patient_count", MODE_CONDITIONAL,
                       "緊急救援-車禍救助-患者人數", "有幾個人受傷？幾個人受困？",
                       _injured_or_trapped, "受傷部位 ≠ 無 或 人員受困 = 有人受困"),
+    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
+                      "緊急救援-車禍救助-報案身分", "請問是當事人還是路人代報？"),
     EmergencyQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
                       "緊急救援-車禍救助-意識", "當事人有清醒嗎？",
                       _not_self_on_scene_or_not_mentioned, _CONSCIOUSNESS_TEXT),
@@ -197,8 +201,6 @@ CRASH_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     EmergencyQuestion("火煙狀況", "fire_or_smoke", MODE_CONDITIONAL,
                       "緊急救援-車禍救助-火煙狀況", "車子有沒有冒煙或起火？",
                       _on_scene_or_not_mentioned, _ON_SCENE_TEXT),
-    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
-                      "緊急救援-車禍救助-報案身分", "請問是當事人還是路人代報？"),
     EmergencyQuestion("交通影響", "traffic_impact", MODE_ACTIVE,
                       "緊急救援-車禍救助-交通影響", "有擋到路嗎？車子還過得去嗎？"),
     _caller_location(CRASH),
@@ -215,11 +217,11 @@ DROWN_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     EmergencyQuestion("離岸距離", "drown_distance", MODE_CONDITIONAL,
                       "緊急救援-溺水-離岸距離", "離岸邊大概多遠？",
                       _on_scene_or_not_mentioned, _ON_SCENE_TEXT),
+    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
+                      "緊急救援-溺水-報案身分", "請問是家屬朋友還是路人代報呢？"),
     EmergencyQuestion("救生裝備", "drown_flotation", MODE_CONDITIONAL,
                       "緊急救援-溺水-救生裝備", "對方有穿救生衣或泳圈嗎？",
                       _on_scene_or_family_friend, _GENDER_AGE_TEXT),
-    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
-                      "緊急救援-溺水-報案身分", "請問是家屬朋友還是路人代報呢？"),
     *_gender_age(DROWN, "請問患者是男生還是女生？大概幾歲？"),
     EmergencyQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
                       "緊急救援-溺水-意識", "對方還會動嗎？",
@@ -317,9 +319,9 @@ TRAPPED_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
                       _on_scene_or_not_mentioned, _ON_SCENE_TEXT),
     EmergencyQuestion("發生場所", "injury_place", MODE_ACTIVE,
                       "緊急救援-卡住夾住-發生場所", "是在家裡還是工作的地方？"),
-    *_gender_age("卡住夾住", "請問當事人是男生還是女生？大概幾歲？"),
     EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                       "緊急救援-卡住夾住-報案身分", "請問是當事人還是家屬朋友代報？"),
+    *_gender_age("卡住夾住", "請問當事人是男生還是女生？大概幾歲？"),
     EmergencyQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
                       "緊急救援-卡住夾住-意識", "人是清醒的嗎？",
                       _not_self_on_scene_or_not_mentioned, _CONSCIOUSNESS_TEXT),
@@ -346,7 +348,6 @@ GAS_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     _caller_location("瓦斯漏氣"),
 )
 
-# 意識的前置條件要看報案身分，但報案身分排在第 8 題（同車禍救助的說明）。
 LIFT_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     EmergencyQuestion("社區棟別", "lift_building", MODE_ACTIVE,
                       "緊急救援-電梯受困-社區棟別", "是哪個社區？哪一棟、哪一部電梯？"),
@@ -354,6 +355,8 @@ LIFT_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
                       "緊急救援-電梯受困-受困樓層", "電梯現在停在幾樓？"),
     EmergencyQuestion("受困人數", "lift_count", MODE_ACTIVE,
                       "緊急救援-電梯受困-受困人數", "裡面有幾個人？"),
+    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
+                      "緊急救援-電梯受困-報案身分", "請問是本人嗎？還是管理員或警衛？"),
     EmergencyQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
                       "緊急救援-電梯受困-意識", "裡面的人都清醒嗎？",
                       _not_self_on_scene_or_not_mentioned, _CONSCIOUSNESS_TEXT),
@@ -361,20 +364,17 @@ LIFT_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     EmergencyQuestion("身體不適", "gas_discomfort", MODE_PASSIVE, "緊急救援-電梯受困-身體不適"),
     EmergencyQuestion("電梯公司", "lift_company", MODE_ACTIVE,
                       "緊急救援-電梯受困-電梯公司", "有聯絡電梯公司了嗎？"),
-    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
-                      "緊急救援-電梯受困-報案身分", "請問是本人嗎？還是管理員或警衛？"),
     _caller_location(LIFT),
 )
 
-# 有無回應的前置條件要看報案身分，但報案身分排在第 3 題（同車禍救助的說明）。
 DOOR_QUESTIONS: Tuple[EmergencyQuestion, ...] = (
     EmergencyQuestion("擔心原因", "door_reason", MODE_ACTIVE,
                       "緊急救援-破門-擔心原因", "發生什麼事需要破門？"),
+    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
+                      "緊急救援-破門-報案身分", "請問是當事人還是家屬朋友代報？"),
     EmergencyQuestion("有無回應", "knock_response", MODE_CONDITIONAL,
                       "緊急救援-破門-有無回應", "敲門或打電話，會有回應嗎？",
                       _not_self, "報案身分 ≠ 本人"),
-    EmergencyQuestion("報案身分", "caller_relation", MODE_ACTIVE,
-                      "緊急救援-破門-報案身分", "請問是當事人還是家屬朋友代報？"),
     *_gender_age(DOOR, "請問當事人是男生還是女生？大概幾歲？"),
     EmergencyQuestion("門的種類", "door_kind", MODE_ACTIVE,
                       "緊急救援-破門-門的種類", "是大門還是房間的門？"),

@@ -7,6 +7,7 @@
   兩句都問完還是判不出來就不再問
 - 車禍救助、瓦斯漏氣的火煙狀況看得到火或煙 → 改判火警（車禍救助 B1、瓦斯漏氣 A）；只有火花不改判
 - 呼吸 = 呼吸不正常、無呼吸 → 轉真人
+- 判到 CO中毒、開瓦斯自殺、氣爆、化學災害或硬規則的「緊急救援」→ 轉真人
 - 名稱跟救護、火警、災害一樣的關鍵要素共用欄位
 
 這裡的 LLM 是假的：每一句要抽出什麼，由測試事先指定。
@@ -101,13 +102,14 @@ class EmergencyQuestionTests(unittest.TestCase):
             ("一直流血", {"injury_severity": "一直流血"}),
             ("有人卡在車裡", {"trapped_status": "有人受困"}),
             ("一個受傷一個卡住", {"patient_count": "受傷1人、受困1人"}),
-            ("沒有火也沒有煙", {"fire_or_smoke": "無火無煙"}),
             ("我是路過的", {"caller_relation": "路過"}),
+            ("人是醒著的", {"consciousness_level": "清醒"}),
+            ("沒有火也沒有煙", {"fire_or_smoke": "無火無煙"}),
             ("擋到一個車道", {"traffic_impact": "佔用部分車道"}),
         ]
         engine, io = _engine("車禍救助", steps)
         JinJiJiuYuanGenericHandler().run_generic_flow(engine)
-        # 意識的前置條件要看報案身分，報案身分排在後面：輪到意識時還不知道身分，照 xlsx 順序不問
+        # 報案身分排在意識前面（xlsx A 欄）：先知道是路人，意識的前置條件成立，就會問意識
         self.assertEqual(io.messages, [
             DISPATCH_LINE,
             "請問是什麼車跟什麼車的車禍？",
@@ -115,8 +117,9 @@ class EmergencyQuestionTests(unittest.TestCase):
             "傷得嚴不嚴重？有沒有一直流血？",
             "有沒有人被困在車裡出不來？",
             "有幾個人受傷？幾個人受困？",
-            "車子有沒有冒煙或起火？",
             "請問是當事人還是路人代報？",
+            "當事人有清醒嗎？",
+            "車子有沒有冒煙或起火？",
             "有擋到路嗎？車子還過得去嗎？",
         ])
         self.assertEqual(engine.case.main_category, "緊急救援")
@@ -142,8 +145,9 @@ class EmergencyQuestionTests(unittest.TestCase):
     def test_known_answers_are_skipped(self) -> None:
         engine, io = _engine("電梯受困", [
             ("裡面有兩個人", {"lift_count": "2人"}),
-            ("還沒", {"lift_company": "還沒聯絡"}),
             ("我是管理員", {"caller_relation": "管理室"}),
+            ("裡面的人都清醒", {"consciousness_level": "清醒"}),
+            ("還沒", {"lift_company": "還沒聯絡"}),
         ])
         engine.case.lift_building = "幸福社區A棟"
         engine.case.lift_floor = "3樓"
@@ -151,8 +155,9 @@ class EmergencyQuestionTests(unittest.TestCase):
         self.assertEqual(io.messages, [
             DISPATCH_LINE,
             "裡面有幾個人？",
-            "有聯絡電梯公司了嗎？",
             "請問是本人嗎？還是管理員或警衛？",
+            "裡面的人都清醒嗎？",
+            "有聯絡電梯公司了嗎？",
         ])
 
 
@@ -163,8 +168,8 @@ class EmergencySingleMissingTests(unittest.TestCase):
             ("一個人", {"patient_count": "1人"}),
             ("還在水裡", {"drowning_status": "還在水裡"}),
             ("大概十公尺", {"drown_distance": "約10公尺"}),
-            ("沒有", {"drown_flotation": "沒有"}),
             ("我是他朋友", {"caller_relation": "朋友"}),
+            ("沒有", {"drown_flotation": "沒有"}),
             ("是男生", {"patient_gender": "男性"}),
             ("二十幾歲", {"patient_age": "20幾歲"}),
             ("還會動", {"consciousness_level": "清醒"}),
@@ -221,8 +226,9 @@ class EmergencyNoSubcategoryTests(unittest.TestCase):
 
     def test_known_subcategory_asks_neither(self) -> None:
         engine, io = _engine("破門", [
-            ("獨居聯絡不上", {"door_reason": "獨居聯絡不上"}),
+            ("一個人住，打電話都沒人接", {"door_reason": "獨居沒人接電話"}),
             ("我是他兒子", {"caller_relation": "家人"}),
+            ("叫都沒回應", {"knock_response": "沒有回應"}),
             ("七十歲男生", {"patient_gender": "男性", "patient_age": "70歲"}),
             ("大門", {"door_kind": "大門"}),
             ("沒有鑰匙", {"door_locksmith": "沒有鑰匙"}),
@@ -231,8 +237,8 @@ class EmergencyNoSubcategoryTests(unittest.TestCase):
         JinJiJiuYuanGenericHandler().run_generic_flow(engine)
         self.assertNotIn(INCIDENT_QUESTION, io.messages)
         self.assertNotIn(INCIDENT_REASK_QUESTION, io.messages)
-        # 有無回應排在報案身分前面：輪到時還不知道身分，照 xlsx 順序不問
-        self.assertNotIn("敲門或打電話，會有回應嗎？", io.messages)
+        # 報案身分排在有無回應前面（xlsx A 欄）：先知道是家人，就會問有無回應
+        self.assertIn("敲門或打電話，會有回應嗎？", io.messages)
 
 
 class EmergencySubSwitchTests(unittest.TestCase):
@@ -289,9 +295,10 @@ class EmergencySubSwitchTests(unittest.TestCase):
             ("擦傷", {"injury_severity": "擦傷"}),
             ("沒有人被困", {"trapped_status": "無人受困"}),
             ("一個人受傷", {"patient_count": "受傷1人"}),
+            ("我是路人", {"caller_relation": "路過"}),
+            ("人是醒著的", {"consciousness_level": "清醒"}),
             # 不用「沒有冒煙」：含氣爆的硬規則詞「有冒煙」，會被改判氣爆（已回報使用者）
             ("沒看到煙也沒看到火", {"fire_or_smoke": "無火無煙"}),
-            ("我是路人", {"caller_relation": "路過"}),
             ("沒擋到路", {"traffic_impact": "未影響交通"}),
         ], SwitchBert(drown_conf=0.55, crash_conf=0.48))
         self.assertEqual(engine.case.sub_category, "車禍救助")
@@ -363,6 +370,32 @@ class EmergencyBreathingTransferTests(unittest.TestCase):
                 with self.assertRaises(TransferToHumanError):
                     JinJiJiuYuanGenericHandler().run_generic_flow(engine)
                 self.assertEqual(io.messages[-1], TRANSFER_LINE)
+
+
+class EmergencyNoQuestionTableTransferTests(unittest.TestCase):
+    """判到 CO中毒、開瓦斯自殺、氣爆、化學災害或硬規則的「緊急救援」就轉真人，不管原本有沒有次案類。"""
+
+    def test_hard_rule_emergency_before_dispatch_transfers(self) -> None:
+        # 「聯絡不上」是硬規則判成「緊急救援」的詞：定次案類時就轉，不講派車
+        engine, io = _engine(None, [("我媽獨居，電話都聯絡不上", {})])
+        with self.assertRaises(TransferToHumanError):
+            JinJiJiuYuanGenericHandler().run_generic_flow(engine)
+        self.assertEqual(engine.case.sub_category, "緊急救援")
+        self.assertEqual(io.messages, [INCIDENT_QUESTION, TRANSFER_LINE])
+
+    def test_hard_rule_emergency_with_known_subcategory_transfers(self) -> None:
+        engine, io = _engine("破門", [("他獨居，電話都聯絡不上", {"door_reason": "獨居聯絡不上"})])
+        with self.assertRaises(TransferToHumanError):
+            JinJiJiuYuanGenericHandler().run_generic_flow(engine)
+        self.assertEqual(io.messages, [DISPATCH_LINE, "發生什麼事需要破門？", TRANSFER_LINE])
+
+    def test_switch_to_co_poisoning_during_questions_transfers(self) -> None:
+        # 「頭暈」是硬規則判成 CO中毒的詞
+        engine, io = _engine("電梯受困", [("幸福社區A棟，裡面的人說頭暈", {"lift_building": "幸福社區A棟"})])
+        with self.assertRaises(TransferToHumanError):
+            JinJiJiuYuanGenericHandler().run_generic_flow(engine)
+        self.assertEqual(engine.case.sub_category, "CO中毒")
+        self.assertEqual(io.messages, [DISPATCH_LINE, "是哪個社區？哪一棟、哪一部電梯？", TRANSFER_LINE])
 
 
 class EmergencySharedFieldTests(unittest.TestCase):
