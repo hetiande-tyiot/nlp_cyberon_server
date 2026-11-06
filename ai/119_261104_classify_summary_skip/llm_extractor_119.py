@@ -1238,11 +1238,8 @@ class LLMExtractor119:
             "  • 未提及可定位地點 → null；嚴禁「未知」「不明」「不詳」等佔位字。"
         )
         if use_question:
-            question = (
-                "請先告訴我地址？幾樓？"
-                if include_floor
-                else "請先告訴我地址？"
-            )
+            # 跟實際問報案人的第一句一致（見 sop_utils_119.build_address_ask_questions）
+            question = "請先告訴我詳細的地址"
         else:
             question = None
         out = self.extract_slots(caller_text, schema, rules, question=question)

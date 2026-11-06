@@ -607,12 +607,9 @@ def build_address_ask_questions(
     flow: Literal["救護", "火警", "緊急救援", "災害"] = "救護",
 ) -> Tuple[str, ...]:
     """依流程類型與是否追問樓層，生成地址詢問問題序列。"""
-    if include_floor:
-        first = "請先告訴我地址？幾樓？"
-        rescue_second = "請問事發地址在哪裡？幾樓？"
-    else:
-        first = "請先告訴我地址？"
-        rescue_second = "請問事發地址在哪裡？"
+    # 11/05 改的問句不另外問樓層，所以有沒有帶「幾樓」都用同一句
+    first = "請先告訴我詳細的地址"
+    rescue_second = "請再說一次事發地址？"
 
     if flow == "救護":
         return (first, rescue_second)
