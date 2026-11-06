@@ -65,7 +65,7 @@ class CaseInfo119:
     injury_severity:      Optional[str] = None  # 傷勢（一般受傷專用）
     injury_place:         Optional[str] = None  # 發生場所（一般受傷）：住家室內、戶外等，照報案人說的記
     crash_vehicles:       Optional[str] = None  # 事故車種（救護-車禍）：照報案人說的記，例：汽車撞機車
-    crash_trapped:        Optional[str] = None  # 有無人員受困（救護-車禍）：未知/無人受困/有人受困
+    crash_trapped:        Optional[str] = None  # 人員受困（救護-車禍）：未知/無人受困/有人受困
     conflict_status:      Optional[str] = None  # 衝突狀況（打架受傷）：已停止/進行中
     weapon_held:          Optional[str] = None  # 持械（打架受傷）：沒有/不確定/刀/棍棒/酒瓶/玻璃/其他照原話
     tocc:                 Optional[str] = None  # TOCC（旅遊/職業/接觸/群聚史）
@@ -73,21 +73,21 @@ class CaseInfo119:
     collapse_cause:       Optional[str] = None  # 路倒原因（路倒專用）
     ingested_substance:   Optional[str] = None  # 服用藥物（吞食藥物）
     # 救護垂片 1018 xlsx 新增的文字欄位（急病、燒燙傷照題目表問）
-    consciousness_level:  Optional[str] = None  # 意識：未知/意識清醒/剛剛昏倒、現在已清醒/對聲音有反應/對疼痛有反應/昏迷
+    consciousness_level:  Optional[str] = None  # 意識：未知/清醒/迷迷糊糊/沒有反應
     caller_relation:      Optional[str] = None  # 報案身分：本人/家人/朋友/路過/不認識…
     caller_location:      Optional[str] = None  # 報案人位置：在現場/在患者旁邊/在遠處/不敢靠近/不在現場…
     drinking_status:      Optional[str] = None  # 是否飲酒：有喝酒/沒有喝酒/不清楚（被動）
     collapse_status:      Optional[str] = None  # 路倒狀況：喝醉/睡著/身體不舒服/跌倒受傷/不清楚
-    patient_appearance:   Optional[str] = None  # 患者外觀特徵（路倒）：照報案人說的記，讓救護人員找得到人
-    companion_present:    Optional[str] = None  # 身旁親友（路倒）：有家人或朋友在旁邊/只有他一個人/不清楚
+    patient_appearance:   Optional[str] = None  # 外觀特徵（路倒）：照報案人說的記，讓救護人員找得到人
+    companion_present:    Optional[str] = None  # 身旁親友（路倒舊欄位）：1106 xlsx 起路倒改問家屬陪同，這格沒有題目在用，要不要刪待決定
     mobility:             Optional[str] = None  # 平常行動能力：平常可以自己走/平常需要人扶/長期臥床或坐輪椅（被動）
     symptom_onset:        Optional[str] = None  # 症狀發生時間（被動）
     scene_access:         Optional[str] = None  # 現場進入條件：有沒有人開門、管理員、電梯（被動）
     # 救護垂片 1028 xlsx 燒炭OK 的文字欄位
     charcoal_status:      Optional[str] = None  # 炭盆狀況：尚未熄滅/已滅火
-    patient_location:     Optional[str] = None  # 患者所在位置：還在裡面/已在外面
+    patient_location:     Optional[str] = None  # 患者位置（燒炭）：還在裡面/已在外面
     # 救護垂片 1028 xlsx 墜落傷OK
-    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/已勸導離開
+    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/卡住/已勸導離開
     fall_height:          Optional[str] = None  # 墜落高度：幾樓或多高
     fall_position:        Optional[str] = None  # 患者位置：地面(一樓)/卡住/不清楚
     stuck_location:       Optional[str] = None  # 卡住位置：遮雨棚/女兒牆/屋頂或鐵皮屋/陽台/鷹架…
@@ -111,7 +111,7 @@ class CaseInfo119:
     electric_type:        Optional[str] = None  # 電擊種類：高壓電/雷擊/家用電/其他
     power_off:            Optional[str] = None  # 現場是否已斷電：已斷電/未斷電
     patient_identity:     Optional[str] = None  # 傷患身分（電擊傷）：照報案人說的記，例：工地工人、外籍移工
-    drowning_status:      Optional[str] = None  # 溺水狀況：已拉上岸/未拉上岸
+    drowning_status:      Optional[str] = None  # 溺水狀況：還在水裡/看不到人/已拉上岸
     # 救護垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
     symptoms:             Optional[str] = None  # 病徵：全身無力/昏倒/喘/頭暈…
     chief_complaint:      Optional[str] = None  # 主訴（其它）：身體不舒服/受傷/想自殺…
@@ -136,8 +136,7 @@ class CaseInfo119:
     smoke_color:         Optional[str] = None  # 黑煙/白煙/其他顏色
     burning_object:      Optional[str] = None  # 燒什麼（房子/車子/雜草…）
     fire_trend:          Optional[str] = None  # 變大/消退/穩定
-    fire_extent:         Optional[str] = None  # 延燒面積（垂片 A）：未知/0~50坪…500坪以上
-    fire_category:       Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
+    fire_category:      Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
 
     # 火警垂片代碼（0 為合法已填值）
     fire_tab:              Optional[str] = None  # A / B1 / B2 / C
@@ -159,18 +158,17 @@ class CaseInfo119:
 
     # 垂片 A（建築物火警）照 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
     # 其他 A 的關鍵要素沿用既有文字欄位：fire_or_smoke（火煙狀況）、
-    # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、fire_extent。
+    # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、
+    # nearby_water_source（水源狀況）。
     place_usage:           Optional[str] = None  # 場所用途：住宅/店家/工廠/辦公室…
     # 建築物類型（1013 xlsx，A、C 都問）：透天厝、集合住宅、倉庫…
     # 在 A 跟次案類相同；在 C 另外記，次案類仍是警報器作響等
     building_type:         Optional[str] = None
-    spread_status:         Optional[str] = None  # 延燒可能：延燒可能性低/極可能或已延燒…
-    trapped_status:        Optional[str] = None  # 有無受困：只記 有人受困/無人受困/不確定；有人受困就轉人工
-    door_response:         Optional[str] = None  # 起火戶應門：有人在或已聯絡上/敲門無回應或聯絡不上…
+    trapped_status:        Optional[str] = None  # 人員受困（A、B1、C）：只記 未知/無人受困/有人受困；有人受困就轉人工
+    door_response:         Optional[str] = None  # 起火戶應門（A、C）：有人應門/無人應門/已聯絡上/聯絡不上
     building_construction: Optional[str] = None  # 建物構造：木造屋/鐵皮屋/磚造屋/RC…
     odor:                  Optional[str] = None  # 氣味：燒焦味/塑膠味/瓦斯味…
     explosion_status:      Optional[str] = None  # 有無爆炸（被動，報案人講到才記）
-    access_info:           Optional[str] = None  # 其他資訊：消防車進不進得去、有沒有水源（被動）
 
     # 垂片 B1（交通工具火警）照 xlsx 新增的欄位，存文字。起火車輛數量沿用 vehicle_count。
     vehicle_kind:          Optional[str] = None  # 交通工具（1013）：聯結車/大小貨車/小客車/汽車/機車/腳踏車…
@@ -180,8 +178,7 @@ class CaseInfo119:
     bicycle_type:          Optional[str] = None  # 腳踏車車型（1013）：一般腳踏車/UBIKE/電輔車
     fire_origin_part:     Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
     engine_off_status:     Optional[str] = None  # 熄火狀態：已熄火/未熄火
-    occupants_status:      Optional[str] = None  # 受困狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上：有火轉人工、沒有火改判緊急救援
-    injury_status:         Optional[str] = None  # 有無人員受傷
+    injury_status:         Optional[str] = None  # 患者人數：記人數，例如 1 人、2 人
     cargo:                 Optional[str] = None  # 載運物：易燃物/化學品/鋰電池…
     extinguish_status:     Optional[str] = None  # 滅火狀況：無人/有人在場/已在自行滅火…（B2 也用）
     vehicle_motion:        Optional[str] = None  # 車輛行駛狀況：停放路邊/行駛中起火/停車場內
@@ -192,11 +189,9 @@ class CaseInfo119:
     alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
     source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
     target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
-    # 火警垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
-    spread_reached:        Optional[str] = None  # 是否延燒（B1、B2、C）：無/有（B2：無/是）
-    burning_area:          Optional[str] = None  # 燃燒面積（B2）：小於一個停車格/約一台車/約半個籃球場/一個籃球場以上/不確定
-    burning_range:         Optional[str] = None  # 燃燒範圍（C）：照報案人說的記
-    door_unanswered:       Optional[str] = None  # 無人應門或聯絡不上（C）：已聯絡上/無人應門或聯絡不上
+    # 各垂片共用（1106 xlsx），參考範圍不同的依垂片給抽取規則
+    spread_reached:        Optional[str] = None  # 是否延燒（A、B1、B2、C）：無/是/可能性高
+    burning_area:          Optional[str] = None  # 燃燒面積（A 坪數、B2 停車格或籃球場、C 照報案人說的記）
 
     # 建築物火災
     caller_position:      Optional[str] = None  # 報案人在建物內/外
@@ -221,15 +216,15 @@ class CaseInfo119:
 
     # 露天野外火災
     outdoor_fire_type:  Optional[str] = None  # 雜草垃圾/山林/高速公路
-    nearby_water_source: Optional[str] = None  # 水源或消防栓狀況
+    nearby_water_source: Optional[str] = None  # 水源狀況（A：一般情況/小巷/缺水/小巷且缺水；B2：無或未知/有）
     affected_targets:   Optional[str] = None  # 波及建物/車輛/人員
 
     # ── 災害通用流程（所有子類同一套題）──────────────────────────────────────
-    disaster_injury_or_trapped: Optional[str] = None  # 受傷受困：無人受傷/有人受傷/有人受困
-    disaster_trapped_count:     Optional[str] = None  # 受困人數（照報案人的話記）
-    traffic_impact:             Optional[str] = None  # 交通影響：未影響交通/佔用部分車道/完全無法通行
-    electrical_hazard:          Optional[str] = None  # 有無火花冒煙或帶電：沒有/有火花或冒煙/不確定
-    disaster_caller_role:       Optional[str] = None  # 報案人身分：屋主或住戶/鄰居或附近店家/路過/里長或管理員/其他
+    # 人員受困、火煙狀況、報案人位置、報案身分跟火警、救護共用欄位
+    #（trapped_status、fire_or_smoke、caller_location、caller_relation）
+    disaster_injury:        Optional[str] = None  # 人員受傷：未知/無人受傷/有人受傷
+    disaster_trapped_count: Optional[str] = None  # 受困人數（照報案人的話記）
+    traffic_impact:         Optional[str] = None  # 交通影響：未影響交通/佔用部分車道/完全無法通行
 
     # ── 緊急救援・車禍救助 ────────────────────────────────────────────────────
     accident_vehicle_type:    Optional[str] = None  # 事故車種（固定九種）
@@ -366,8 +361,8 @@ class CaseInfo119:
     #   → 火警_summary_confirm → 火警_caller_info → completed
     #   緊急救援：緊急救援_location → 緊急救援_location_confirm
     #   → 緊急救援_incident → 緊急救援_summary_confirm → 緊急救援_caller_info → completed
-    #   災害：災害_location → 災害_location_confirm → 災害-受傷受困 → 災害-受困人數
-    #   → 災害-交通影響 → 災害-有無火花冒煙或帶電 → 災害-報案人身分
+    #   災害：災害_location → 災害_location_confirm → 災害-人員受傷 → 災害-受困人數
+    #   → 災害-交通影響 → 災害-火煙狀況 → 災害-報案人位置
     #   → 災害_summary_confirm → 災害_caller_info → completed
     #   局內回報：局內回報_need → 局內回報_location
     #   → 局內回報_field_content | 局內回報_support_detail

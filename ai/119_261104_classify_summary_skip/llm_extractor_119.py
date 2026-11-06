@@ -579,17 +579,13 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     # 轉人工要看的欄位
     "trapped_status": (
-        "有人受困|無人受困|不確定|null",
-        "- trapped_status 有無受困（固定說法）：只能填 有人受困、無人受困、不確定。"
-        "有人受困＝還有人在裡面出不來、沒出來、有人呼救"
-        "（例如「三樓還有阿嬤出不來」）；無人受困＝人都出來了、裡面沒人；"
-        "不確定＝報案人說不知道或不清楚。"
-        "只說陸續有人出來 → 不確定。",
-    ),
-    "occupants_status": (
-        "人已全部下車|仍有人在車上|不確定|null",
-        "- occupants_status 受困狀況（固定說法）：只能填 人已全部下車、仍有人在車上、不確定。"
-        "仍有人在車上＝車上還有人沒下來或出不來。",
+        "未知|無人受困|有人受困|null",
+        "- trapped_status 人員受困（固定說法）：只能填 未知、無人受困、有人受困。"
+        "有人受困＝還有人在裡面或車上出不來、沒出來、有人呼救"
+        "（例如「三樓還有阿嬤出不來」「駕駛還卡在車上」）；"
+        "無人受困＝人都出來了、都下車了、裡面沒人；"
+        "未知＝報案人說不知道或不清楚。"
+        "只說陸續有人出來 → 未知。",
     ),
     # 多張垂片共用
     "fire_or_smoke": (
@@ -623,13 +619,9 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "報案人說有煙或在冒煙、但沒說顏色 → null；"
         "說黑白都有 → 填「黑煙、白煙都有」，不填null或其他色煙。",
     ),
-    "spread_status": (
-        "string|null",
-        "- spread_status 延燒可能：只能填 延燒可能性低、極可能或已延燒。",
-    ),
     "caller_role": (
         "string|null",
-        "- caller_role 報案人身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、里長、"
+        "- caller_role 報案身分：參考住戶(起火戶)、鄰居、路人、管理員或警衛、里長、"
         "車主或駕駛、同車乘客、後方或路過駕駛、附近住戶或商家、當地住戶、"
         "掃墓或作業民眾、其他。",
     ),
@@ -638,36 +630,20 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "- odor 氣味：參考 無、燒焦味、塑膠味、瓦斯味、其他；"
         "報案人說沒聞到任何味道時一定要填「無」。",
     ),
-    "fire_extent": (
-        "string|null",
-        "- fire_extent 延燒面積：參考 未知、0~50坪、50~100坪、100~300坪、"
-        "300~500坪、500坪以上；"
-        "報案人說看不清楚、離太遠不知道多大 → 未知。",
-    ),
     "door_response": (
         "string|null",
-        "- door_response 起火戶應門：參考 "
-        "有人在或已聯絡上、敲門無回應或聯絡不上。",
+        "- door_response 起火戶應門（有沒有敲門或聯絡到起火戶、負責人）："
+        "參考 有人應門、無人應門、已聯絡上、聯絡不上。",
     ),
-    # 下面是各張垂片名稱不同、各自一格的欄位（11/04 使用者決定），照火警 1013 xlsx 參考範圍
+    # 下面幾個欄位各垂片共用（1106 xlsx）；參考範圍不同的見 _FIRE_TAB_RULES
     "spread_reached": (
         "string|null",
-        "- spread_reached 是否延燒：火有沒有燒到旁邊的東西，只能填 無、有。",
+        "- spread_reached 是否延燒：火有沒有燒到旁邊的東西，只能填 無、是、可能性高。"
+        "是＝已經燒到旁邊；可能性高＝還沒燒到、但很可能會燒過去；無＝沒有燒到也不會。",
     ),
     "burning_area": (
         "string|null",
-        "- burning_area 燃燒面積：只能填 小於一個停車格、約一台車、"
-        "約半個籃球場、一個籃球場以上、不確定；"
-        "報案人說看不清楚、離太遠不知道多大 → 不確定。",
-    ),
-    "burning_range": (
-        "string|null",
-        "- burning_range 燃燒範圍：燒起來的範圍大概多大，照報案人說的記。",
-    ),
-    "door_unanswered": (
-        "string|null",
-        "- door_unanswered 無人應門或聯絡不上（有沒有敲門或聯絡到負責人）："
-        "只能填 已聯絡上、無人應門或聯絡不上。",
+        "- burning_area 燃燒面積：燒起來的範圍大概多大，照報案人說的記。",
     ),
     "extinguish_status": (
         "string|null",
@@ -704,11 +680,6 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "string|null",
         "- explosion_status 有無爆炸：參考 無爆炸、有爆炸。",
     ),
-    "access_info": (
-        "string|null",
-        "- access_info 其他資訊：消防車進不進得去、附近有沒有水源；"
-        "參考 一般情況、小巷、缺水、小巷且缺水。",
-    ),
     # 垂片 B1（交通工具火警）
     "vehicle_kind": (
         "聯結車|大客車(公車、遊覽車)|大貨車|小貨車(發財車)|汽車(轎車)|機車(摩托車)|腳踏車(自行車)|其他|null",
@@ -742,7 +713,8 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "injury_status": (
         "string|null",
-        "- injury_status 有無人員受傷：參考 無、有；有的話記下幾個人受傷、受傷情形。",
+        "- injury_status 患者人數：有幾個人受傷，記人數，例如 1 人、2 人；"
+        "報案人說沒有人受傷 → 0 人。",
     ),
     "cargo": (
         "string|null",
@@ -756,7 +728,7 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "string|null",
         "- plate_number 車牌號碼：照報案人說的記。",
     ),
-    # 垂片 A（工廠）、B2（山林田野）共用；選項各張垂片不同，見 _FIRE_TAB_RULES
+    # 垂片 A、B2 共用；選項各張垂片不同，見 _FIRE_TAB_RULES
     "burning_object": (
         "string|null",
         "- burning_object 燃燒物：什麼東西在燒。",
@@ -782,8 +754,8 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
 }
 
-# 同一個欄位在不同垂片的參考範圍不一樣時，照那張垂片的 xlsx 只給它自己的選項（火警 1104 xlsx）。
-# 沒列在這裡的就用上面 _FIRE_FIELD_RULES 的說明（報案人身分還不知道垂片時給全部選項）。
+# 同一個欄位在不同垂片的參考範圍不一樣時，照那張垂片的 xlsx 只給它自己的選項（火警 1106 xlsx）。
+# 沒列在這裡的就用上面 _FIRE_FIELD_RULES 的說明（報案身分還不知道垂片時給全部選項）。
 _FIRE_TAB_RULES: Dict[Tuple[str, str], str] = {
     ("A", "burning_object"): (
         "- burning_object 燃燒物：什麼東西在燒；參考 不確定、雜物、廢棄物、垃圾、"
@@ -793,12 +765,24 @@ _FIRE_TAB_RULES: Dict[Tuple[str, str], str] = {
         "- burning_object 燃燒物：什麼東西在燒；參考 雜草、樹木、公墓或墳墓、農作物、"
         "垃圾雜物、其他(不確定)；報案人說看不清楚、離太遠不知道在燒什麼 → 其他(不確定)。"
     ),
-    ("A", "caller_role"): "- caller_role 報案人身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、里長、其他。",
-    ("B1", "caller_role"): "- caller_role 報案人身分：參考 車主或駕駛、同車乘客、後方或路過駕駛、附近住戶或商家、其他。",
-    ("B2", "caller_role"): "- caller_role 報案人身分：參考 當地住戶、路過、掃墓或作業民眾、其他。",
-    ("C", "caller_role"): "- caller_role 報案人身分：參考 住戶、管理員或警衛、路人、其他。",
-    # 山林田野的是否延燒，xlsx 選項是「無、是」（交通工具、輕微火警是「無、有」）
-    ("B2", "spread_reached"): "- spread_reached 是否延燒：火有沒有燒到旁邊的東西，只能填 無、是。",
+    ("A", "caller_role"): "- caller_role 報案身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、里長、其他。",
+    ("B1", "caller_role"): "- caller_role 報案身分：參考 車主或駕駛、同車乘客、後方或路過駕駛、附近住戶或商家、其他。",
+    ("B2", "caller_role"): "- caller_role 報案身分：參考 當地住戶、路過、掃墓或作業民眾、其他。",
+    ("C", "caller_role"): "- caller_role 報案身分：參考 住戶、管理員或警衛、路人、其他。",
+    # 燃燒面積：C 照報案人說的記（用上面的說明）
+    ("A", "burning_area"): (
+        "- burning_area 燃燒面積：參考 未知、0~50坪、50~100坪、100~300坪、300~500坪、500坪以上；"
+        "報案人說看不清楚、離太遠不知道多大 → 未知。"
+    ),
+    ("B2", "burning_area"): (
+        "- burning_area 燃燒面積：只能填 小於一個停車格、約一台車、約半個籃球場、一個籃球場以上、不確定；"
+        "報案人說看不清楚、離太遠不知道多大 → 不確定。"
+    ),
+    # 水源狀況：B2 用上面的說明
+    ("A", "nearby_water_source"): (
+        "- nearby_water_source 水源狀況：消防車進不進得去、附近有沒有水源；"
+        "參考 一般情況、小巷、缺水、小巷且缺水。"
+    ),
 }
 
 
@@ -1793,13 +1777,13 @@ class LLMExtractor119:
             "- prenatal_history：產檢狀況，只能填：產檢正常、產檢有異常、沒產檢或不知道。"
             "沒講到 → null。\n"
             # 下面三個欄位會拿來判斷要不要問下一題，只能記成固定說法（見 ems_tab_map_119）
-            # 意識、報案身分照 1102 xlsx 參考範圍；舉的說法是廠商原本關鍵字規則裡的詞
+            # 意識照 1104 xlsx（11/05 版）參考範圍與備註欄的說法；報案身分照 1102 xlsx 參考範圍
             "- consciousness_level：患者意識，只能填這幾種之一："
-            "未知（不知道、看不到）；"
-            "意識清醒（清醒、有意識、還清醒、會睜眼、睜得開、可以講話）；"
-            "對聲音有反應（叫他才有反應、叫了會回應或發出聲音）；"
-            "對疼痛有反應（要捏、拍才有反應，捏了手會動）；"
-            "昏迷（昏迷、叫不醒、沒反應、無意識、沒有意識、不清醒）。沒講到意識 → null。\n"
+            "清醒（清醒、醒著、會講話、會回答、會動）；"
+            "迷迷糊糊（意識不清、昏昏沉沉、講話不清楚、叫了才有反應、要捏才有反應）；"
+            "沒有反應（沒反應、叫不醒、叫不起來、昏迷、不省人事）；"
+            "未知（不知道、看不到、不敢靠近）。"
+            "「人不清楚」記迷迷糊糊，「我不清楚」記未知。沒講到意識 → null。\n"
             "- caller_relation：報案人和患者的關係（報案身分），只能填這幾種之一："
             "本人、家人、朋友、同事、老闆、房東、110、里長、鄰居、工人、工地主任、路過、看護、管理室、"
             "警衛(保全)、不認識。"
@@ -1828,15 +1812,15 @@ class LLMExtractor119:
             "沒講到 → null。\n"
             # 下面是 1028 xlsx 墜落傷、上吊、割腕、吞食藥物、精神異常 OK 表的欄位；
             # 寫「只能填」的會拿來判斷要不要問下一題或改判，只能記成固定說法（見 ems_tab_map_119）
-            "- fall_status：墜落的人是不是已經掉下來，只能填：尚未跳下、已跳下、已勸導離開。"
-            "已經掉下來也算已跳下。沒講到 → null。\n"
+            "- fall_status：墜落的人是不是已經掉下來，只能填：尚未跳下、已跳下、卡住、已勸導離開。"
+            "還在高處是尚未跳下；已經掉下來也算已跳下；跳下來卡住記卡住。沒講到 → null。\n"
             "- fall_height：從幾樓或多高掉下來（不是地址的樓層），例：5樓、約3公尺。\n"
             "- fall_position：墜落的患者現在在哪裡，只能填：地面(一樓)、卡住、不清楚。\n"
-            "- stuck_location：墜落卡住的地方，例：遮雨棚、女兒牆、屋頂或鐵皮屋、陽台、鷹架、A字梯、水溝。\n"
+            "- stuck_location：墜落卡住的地方，例：遮雨棚、女兒牆、屋頂或鐵皮屋、陽台、鷹架、A字梯、水溝、其他。\n"
             "- hanging_status：上吊的繩子解開了沒，只能填：已解開繩子、還沒解開。\n"
             "- break_in_need：上吊現場救護人員要不要破門才進得去，只能填：需要破門、不需要破門。\n"
             "- hanging_location：上吊的患者在哪裡，例：住家、橋墩、山上電塔。\n"
-            "- cutting_tool：割傷用的工具，例：刀子、菜刀、水果刀、美工刀、玻璃。\n"
+            "- cutting_tool：割傷用的工具，常見：刀子、菜刀、水果刀、美工刀；其他照報案人說的記。\n"
             "- tool_status：割腕的刀具還在不在患者身上，只能填：已移除、還在身上、不清楚。\n"
             "- drug_amount：吃了多少藥，例：一整罐、大概20顆；說藥罐、藥袋已經空了、整排吃光，"
             "也算回答了吃多少，照報案人說的記。喝的農藥、清潔劑不填這裡。\n"
@@ -1846,13 +1830,13 @@ class LLMExtractor119:
             "- injured_count：精神異常現場有幾個人受傷。\n"
             "- forced_admission：需不需要強制送醫（強送），只能填：需要、不需要、不清楚。\n"
             "- forced_admission_reason：為什麼要強制送醫，例：大吼罵人、摔丟東西、胡言亂語、"
-            "行為怪異、沒吃藥、不睡不吃、已有醫院或衛生局評估。\n"
-            "- family_accompany：精神異常的患者身邊有沒有家屬陪同，只能填：有、沒有、家屬在路上。\n"
+            "行為怪異、沒吃藥、不睡不吃、已有醫院或衛生局評估；不屬於這些的記其他。\n"
+            "- family_accompany：患者身邊有沒有家屬陪同（精神異常、路倒），只能填：有、沒有、家屬在路上。\n"
             # 1102 xlsx 電擊傷、溺水；溺水狀況會拿來判斷要不要改判緊急救援，只能記成固定說法
             "- electric_type：被什麼電到，只能填：高壓電、雷擊、家用電、其他。\n"
             "- power_off：電擊現場的電源關掉了沒，只能填：已斷電、未斷電。\n"
             "- patient_identity：電擊傷的患者是什麼身分，照報案人說的記（例：工地工人、外籍移工、一般民眾）。\n"
-            "- drowning_status：溺水的人拉上岸了沒，只能填：已拉上岸、未拉上岸。還在水裡就是未拉上岸。\n"
+            "- drowning_status：溺水的人拉上岸了沒，只能填：還在水裡、看不到人、已拉上岸。\n"
             # 下面是垂片名稱不同、各自一格的關鍵要素（11/04 使用者決定），照 xlsx 參考範圍記
             "- burn_cause：燒燙傷是被什麼燙到或燒到，照報案人說的記（常見：熱水、熱油、火燒、化學藥劑、電）。\n"
             "- burn_severity：燒燙傷的傷勢，照報案人說的記（例：燙到哪裡、範圍多大、有沒有起水泡）。\n"
@@ -1933,7 +1917,13 @@ class LLMExtractor119:
             schema_groups.append((fire_schema, fire_rules))
             schema_groups.append((fire_level_schema, fire_level_rules))
         if main_category == "災害":
-            schema_groups.append(disaster_schema_and_rules())
+            # 火煙狀況跟火警共用欄位，抽取規則也用火警的
+            disaster_schema, disaster_rules = disaster_schema_and_rules()
+            smoke_type, smoke_rule = _FIRE_FIELD_RULES["fire_or_smoke"]
+            schema_groups.append((
+                {**disaster_schema, "fire_or_smoke": smoke_type},
+                disaster_rules + "\n" + smoke_rule,
+            ))
         if call_type == "局內回報":
             schema_groups.append((internal_report_schema, internal_report_rules))
         if sub_fields_only:

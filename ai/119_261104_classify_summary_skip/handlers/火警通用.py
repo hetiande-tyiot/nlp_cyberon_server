@@ -18,9 +18,9 @@ from fire_tab_map_119 import (
     MODE_CONDITIONAL,
     MODE_PASSIVE,
     FIRE_SMOKE_NO_FIRE,
-    OCCUPANTS_STILL_INSIDE,
     SAFETY_MESSAGE,
     TAB_A,
+    TAB_B1,
     TAB_C,
     TAB_QUESTIONS,
     TRAPPED_TRANSFER_MESSAGE,
@@ -79,8 +79,9 @@ class HuoJingGenericHandler(SubCategoryHandler):
         """
         火警流程中每次報案人回答之後、每一題問之前都會檢查，不等問到那一題。
         - 交通工具是聯結車、大客車(公車、遊覽車) → 轉接專人（1104 xlsx 備註，講救護轉人工那句）
-        - 車上有人出不來（受困狀況 = 仍有人在車上）、而且沒有火 → 改判緊急救援-車禍救助（1104 xlsx 備註）
-        - 有人出不來（有無受困 = 有人受困，或車上有人出不來但不是沒有火）→ 說一句話後立刻轉接專人
+        - 交通工具火警、車上有人出不來（人員受困 = 有人受困）、而且沒有火
+          → 改判緊急救援-車禍救助（1104 xlsx 備註）
+        - 其他有人出不來（人員受困 = 有人受困）→ 說一句話後立刻轉接專人
         已經轉接過（真人接手、系統只在旁聽）就不再處理。
         """
         if engine._bridged:
@@ -92,15 +93,13 @@ class HuoJingGenericHandler(SubCategoryHandler):
             engine._debug_print("fire_large_vehicle_transfer", case.vehicle_kind)
             engine._say("請不要掛斷電話，我立即為您轉接專人。")
             raise TransferToHumanError("fire_large_vehicle", result="human_transfer")
-        if case.occupants_status == OCCUPANTS_STILL_INSIDE and case.fire_or_smoke in FIRE_SMOKE_NO_FIRE:
+        if case.trapped_status != TRAPPED_YES:
+            return
+        if resolve_fire_tab(case) == TAB_B1 and case.fire_or_smoke in FIRE_SMOKE_NO_FIRE:
             engine._switch_fire_to_vehicle_rescue()
-        if case.trapped_status == TRAPPED_YES or case.occupants_status == OCCUPANTS_STILL_INSIDE:
-            engine._debug_print(
-                "fire_people_trapped_transfer",
-                {"有無受困": case.trapped_status, "受困狀況": case.occupants_status},
-            )
-            engine._say(TRAPPED_TRANSFER_MESSAGE)
-            raise TransferToHumanError("fire_people_trapped", result="human_transfer")
+        engine._debug_print("fire_people_trapped_transfer", {"人員受困": case.trapped_status})
+        engine._say(TRAPPED_TRANSFER_MESSAGE)
+        raise TransferToHumanError("fire_people_trapped", result="human_transfer")
 
     def _backfill_earlier_answers_for_tab(self, engine: "SopEngine119") -> None:
         """

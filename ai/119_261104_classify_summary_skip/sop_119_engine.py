@@ -224,7 +224,7 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "injury_severity": "傷勢",
     "injury_place": "發生場所",
     "crash_vehicles": "事故車種",
-    "crash_trapped": "有無人員受困",
+    "crash_trapped": "人員受困",
     "conflict_status": "衝突狀況",
     "weapon_held": "持械",
     "tocc": "TOCC 旅遊職業接觸群聚史",
@@ -241,13 +241,13 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "caller_location": "報案人位置",
     "drinking_status": "是否飲酒",
     "collapse_status": "路倒狀況",
-    "patient_appearance": "患者外觀特徵",
+    "patient_appearance": "外觀特徵",
     "companion_present": "身旁親友",
     "mobility": "平常行動能力",
     "symptom_onset": "症狀發生時間",
     "scene_access": "現場進入條件",
     "charcoal_status": "炭盆狀況",
-    "patient_location": "患者所在位置",
+    "patient_location": "患者位置（燒炭）",
     "fall_status": "墜落狀況",
     "fall_height": "墜落高度",
     "fall_position": "患者位置（墜落傷）",
@@ -460,7 +460,6 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "smoke_color",
     "burning_object",
     "fire_trend",
-    "fire_extent",
     "fire_category",
     "fire_level",
     "fire_tab",
@@ -499,16 +498,13 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "vehicle_wildfire_code",
     "minor_fire_code",
     "place_usage",
-    "spread_status",
     "trapped_status",
     "door_response",
     "building_construction",
     "odor",
     "explosion_status",
-    "access_info",
     "fire_origin_part",
     "engine_off_status",
-    "occupants_status",
     "injury_status",
     "cargo",
     "extinguish_status",
@@ -517,11 +513,9 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "alarm_status",
     "source_located",
     "target_object",
-    # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+    # 各垂片共用的是否延燒、燃燒面積（1106 xlsx）
     "spread_reached",
     "burning_area",
-    "burning_range",
-    "door_unanswered",
     "power_outage",
     # 以下是火警照 1013 xlsx 新增的欄位（火警垂片在問）
     "building_type",
@@ -531,13 +525,19 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "vehicle_power_motorcycle",
     "bicycle_type",
 })
-# 災害通用流程的五個欄位。切離災害時清空，不跟火警的受傷／受困／身分欄共用。
+# 災害通用流程自己的欄位。切離災害時清空。
 DISASTER_EXCLUSIVE_FIELDS = frozenset({
-    "disaster_injury_or_trapped",
+    "disaster_injury",
     "disaster_trapped_count",
     "traffic_impact",
-    "electrical_hazard",
-    "disaster_caller_role",
+})
+# 災害跟別的垂片名稱一字不差、共用的欄位：人員受困、火煙狀況（火警）、報案人位置、報案身分（救護）。
+# 主類是災害時也可以寫入；切大類時新大類也用到就保留，用不到就清空。
+DISASTER_SHARED_FIELDS = frozenset({
+    "trapped_status",
+    "fire_or_smoke",
+    "caller_location",
+    "caller_relation",
 })
 # 車禍救助、溺水、跳水、跳樓。切離緊急救援時清空。
 EMERGENCY_EXCLUSIVE_FIELDS = frozenset({
@@ -940,7 +940,6 @@ class SopEngine119:
             "smoke_color",
             "burning_object",
             "fire_trend",
-            "fire_extent",
             "fire_category",
             "caller_position",
             "caller_role",
@@ -977,17 +976,14 @@ class SopEngine119:
             "minor_fire_code",
             # 垂片 A 照 0929 xlsx 新增的文字欄位
             "place_usage",
-            "spread_status",
             "trapped_status",
             "door_response",
             "building_construction",
             "odor",
             "explosion_status",
-            "access_info",
             # 垂片 B1 照 0929 xlsx 新增的文字欄位
             "fire_origin_part",
             "engine_off_status",
-            "occupants_status",
             "injury_status",
             "cargo",
             "extinguish_status",
@@ -997,11 +993,9 @@ class SopEngine119:
             "alarm_status",
             "source_located",
             "target_object",
-            # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+            # 各垂片共用的是否延燒、燃燒面積（1106 xlsx）
             "spread_reached",
             "burning_area",
-            "burning_range",
-            "door_unanswered",
             # 垂片 B1 照 1013 xlsx 新增（建築物類型由次案類代碼換算，不在這裡）
             "vehicle_kind",
             "vehicle_model",
@@ -1020,8 +1014,12 @@ class SopEngine119:
             if key in ("level", "fire_level_signals"):
                 continue
             current = getattr(self.case, key, None)
+            shared_in_disaster = (
+                key in DISASTER_SHARED_FIELDS and self.case.main_category == "災害"
+            )
 
             # 專屬欄位只允許在對應案件流程寫入，避免 LLM 跨類型污染 JSON。
+            # 災害共用的欄位（DISASTER_SHARED_FIELDS）在災害案件也可以寫入。
             if (
                 key in EMERGENCY_TAIL_FIELDS
                 and self.case.main_category == "緊急救援"
@@ -1030,12 +1028,20 @@ class SopEngine119:
                 continue
             if key in EMERGENCY_EXCLUSIVE_FIELDS and self.case.main_category != "緊急救援":
                 continue
-            if key in _RESCUE_FIELDS and self._fields_category() != "救護":
+            if (
+                key in _RESCUE_FIELDS
+                and self._fields_category() != "救護"
+                and not shared_in_disaster
+            ):
                 continue
             # 救護的病徵、主訴各有自己的欄位，「發生了什麼事」只給緊急救援
             if key == "incident_description" and self.case.main_category != "緊急救援":
                 continue
-            if key in _FIRE_OVERWRITE_FIELDS and self.case.main_category != "火警":
+            if (
+                key in _FIRE_OVERWRITE_FIELDS
+                and self.case.main_category != "火警"
+                and not shared_in_disaster
+            ):
                 continue
             if key in DISASTER_EXCLUSIVE_FIELDS and self.case.main_category != "災害":
                 continue
@@ -1137,7 +1143,7 @@ class SopEngine119:
                 continue
 
             if key in DISASTER_EXCLUSIVE_FIELDS - {"disaster_trapped_count"}:
-                # 四個固定說法允許報案人後面改口。
+                # 固定說法允許報案人後面改口。
                 setattr(self.case, key, val)
                 continue
             if key == "disaster_trapped_count":
@@ -2346,7 +2352,7 @@ class SopEngine119:
         if main_cat == "火警":
             return FIRE_EXCLUSIVE_FIELDS
         if main_cat == "災害":
-            return DISASTER_EXCLUSIVE_FIELDS
+            return DISASTER_EXCLUSIVE_FIELDS | DISASTER_SHARED_FIELDS
         if main_cat == "緊急救援":
             return EMERGENCY_EXCLUSIVE_FIELDS
         return frozenset()
@@ -4614,6 +4620,9 @@ class SopEngine119:
             # 急病第 1 題也會問「請問患者是哪裡不舒服？」
             all_caller_text = self.case.full_caller_text()
             sub_cat, sub_conf, sub_source, _margin = self._do_sub_classify(all_caller_text, "救護")
+            if not sub_cat:
+                # 判不出次案類（例如次案類模型出錯）就照救護-其它的題目問，不走廠商舊的通用流程。
+                sub_cat = "其它"
 
             with self._case_lock:
                 self.case.sub_category = sub_cat
@@ -4977,7 +4986,7 @@ class SopEngine119:
         from emergency_accident_119 import SUBCATEGORY
 
         self._debug_print("fire_to_vehicle_rescue", {
-            "火煙狀況": self.case.fire_or_smoke, "受困狀況": self.case.occupants_status,
+            "火煙狀況": self.case.fire_or_smoke, "人員受困": self.case.trapped_status,
         })
         self._apply_main_switch("火警", "緊急救援", 1.0)
         with self._case_lock:
@@ -4988,6 +4997,18 @@ class SopEngine119:
         )
         self._notify_case_update()
         raise MainCategorySwitched("火警", "緊急救援")
+
+    def _switch_disaster_to_fire(self) -> None:
+        """
+        災害 1106 xlsx 火煙狀況備註：有火有煙、有火無煙、無火有煙 → 改判火警（使用者 11/06 決定）。
+        中斷災害，改走火警的題目，跟一般換主案類一樣（清掉災害欄位、用新大類重抽報案人講過的話）。
+        地址已確認過不重問；派車整通只講一次，災害講過就不再講；改判時不對報案人講話。
+        """
+        self._debug_print("disaster_to_fire", {
+            "火煙狀況": self.case.fire_or_smoke, "次案類": self.case.sub_category,
+        })
+        self._apply_main_switch("災害", "火警", 1.0)
+        raise MainCategorySwitched("災害", "火警")
 
     def _escalate_main_to_emergency(
         self,
