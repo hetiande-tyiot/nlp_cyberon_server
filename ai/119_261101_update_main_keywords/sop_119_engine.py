@@ -279,14 +279,32 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
 }
 
 
-# ─── 緊急救援次案類判定：信心度追問閾值 ────────────────────────────────────────
-# 於 _accepted_emergency_sub()、_settle_emergency_subcategory() 使用（救護判次案類已不追問）。
+# ─── 救護、緊急救援次案類判定：信心度追問閾值 ──────────────────────────────────
+# 於 _accepted_emergency_sub()、_settle_emergency_subcategory()、_ems_sub_settled() 使用。
 #   CONF   : top-1 置信度低於此值 → 追問（模型本身沒把握）
 #   MARGIN : top1−top2 機率差低於此值 → 追問（前兩名咬得很近、兩類難分）
 #   MAX_REASK : 最多追問次數
 SUB_CONF_THRESHOLD: float = 0.7
 SUB_MARGIN_THRESHOLD: float = 0.15
 MAX_SUB_REASK: int = 2
+
+# 救護判不出次案類時依序追問的兩句（使用者 11/06 決定），兩句問完還判不出來就轉真人
+EMS_SUB_REASK_QUESTIONS = (
+    "請問發生什麼事呢？",
+    "請再說明一次發生什麼事情需要救護車呢？",
+)
+
+
+def _ems_sub_settled(sub: Optional[str], conf: Optional[float], source: Optional[str],
+                     margin: Optional[float]) -> bool:
+    """救護次案類算不算判出來：硬規則、救護關鍵字命中就算；
+    分類模型要信心夠高、第一名跟第二名差得夠多才算（跟緊急救援同一個標準）。"""
+    if not sub:
+        return False
+    if source in ("hard_rule", "keyword"):
+        return True
+    return (conf is not None and conf >= SUB_CONF_THRESHOLD
+            and (margin is None or margin >= SUB_MARGIN_THRESHOLD))
 
 # ─── 火警次案類：margin 閘門 ─────────────────────────────────────────────────────
 # 火警不走「追問發生什麼事」，而是每輪自動重跑分類。除了既有的
@@ -4452,14 +4470,19 @@ class SopEngine119:
             # ════════════════════════════════════════════════════════
             # 此時：收集所有輪報警人文本 → 關鍵詞直判 / 次分類器
             # ════════════════════════════════════════════════════════
-            # 判一次就定，不追問「現場發生什麼狀況」（承辦問卷反映已經講過症狀還被重複問）。
-            # 判錯或報案人還沒講症狀也沒關係：題目表每答一題都會依新的回答重新判次案類，
-            # 急病第 1 題也會問「請問患者是哪裡不舒服？」
-            all_caller_text = self.case.full_caller_text()
-            sub_cat, sub_conf, sub_source, _margin = self._do_sub_classify(all_caller_text, "救護")
-            if not sub_cat:
-                # 判不出次案類（例如次案類模型出錯）就照救護-其它的題目問，不走廠商舊的通用流程。
-                sub_cat = "其它"
+            # 判得出次案類就不追問（承辦問卷反映已經講過症狀還被重複問）；
+            # 判不出來才依序問 EMS_SUB_REASK_QUESTIONS 兩句，每問一句重判一次，
+            # 兩句問完還判不出來就轉真人（承辦 11/06 反映不該一判不出就走救護-其它）。
+            sub_cat, sub_conf, sub_source, margin = self._do_sub_classify(
+                self.case.full_caller_text(), "救護")
+            for question in EMS_SUB_REASK_QUESTIONS:
+                if _ems_sub_settled(sub_cat, sub_conf, sub_source, margin):
+                    break
+                self._ask_and_extract(question)
+                sub_cat, sub_conf, sub_source, margin = self._do_sub_classify(
+                    self.case.full_caller_text(), "救護")
+            if not _ems_sub_settled(sub_cat, sub_conf, sub_source, margin):
+                self._transfer_to_human(f"救護次案類判不出來：{sub_cat} {sub_conf}")
 
             with self._case_lock:
                 self.case.sub_category = sub_cat
