@@ -117,7 +117,7 @@ class CaseInfo119:
     chief_complaint:      Optional[str] = None  # 主訴（其它）：身體不舒服/受傷/想自殺…
     burn_cause:           Optional[str] = None  # 燒燙傷原因：熱水/熱油/火燒/化學藥劑/電
     burn_severity:        Optional[str] = None  # 燙傷傷勢：燙到哪裡、範圍多大、有沒有起水泡
-    drowning_cause:       Optional[str] = None  # 溺水原因（救護）：失足落水/游泳抽筋/翻船；緊急救援的溺水原因是 drown_cause
+    drowning_cause:       Optional[str] = None  # 溺水原因（救護、緊急救援共用）：照報案人說的記，例：失足落水/游泳抽筋/翻船
     pesticide_type:       Optional[str] = None  # 農藥種類：除草劑/巴拉刈/清潔劑…
     pesticide_amount:     Optional[str] = None  # 農藥劑量：半瓶/一整瓶…
 
@@ -226,90 +226,36 @@ class CaseInfo119:
     disaster_trapped_count: Optional[str] = None  # 受困人數（照報案人的話記）
     traffic_impact:         Optional[str] = None  # 交通影響：未影響交通/佔用部分車道/完全無法通行
 
-    # ── 緊急救援・車禍救助 ────────────────────────────────────────────────────
-    accident_vehicle_type:    Optional[str] = None  # 事故車種（固定九種）
-    accident_injury:          Optional[str] = None  # 受傷情形（固定八種，含無）
-    accident_trapped:         Optional[str] = None  # 有無受困：無人受困/有人受困
-    accident_casualty_count:  Optional[str] = None  # 受傷、受困人數（照報案人的話記）
-    accident_consciousness:   Optional[str] = None  # 當事人意識：意識清醒/對聲音有反應/對疼痛有反應/昏迷
-    accident_burning:         Optional[str] = None  # 燃燒情形（照原話記煙、火、延燒）
-    accident_caller_role:     Optional[str] = None  # 報案身分：當事人(本人)/路過/其他原話
-    accident_traffic_impact:  Optional[str] = None  # 影響範圍（照原話記）
-
-    # ── 緊急救援・溺水 / 跳水 / 跳樓 ─────────────────────────────────────────
-    drown_caller_role:    Optional[str] = None  # 路人/家屬/海巡/其他原話
-    drown_cause:          Optional[str] = None  # 戲水/釣魚/失足/其他
-    drown_count:          Optional[str] = None  # 落水人數（照原話）
-    drown_sight:          Optional[str] = None  # 還在水裡/看不到人/已經救起
-    drown_distance:       Optional[str] = None  # 離岸距離（照原話）
-    drown_flotation:      Optional[str] = None  # 有/沒有救生衣或泳圈
-    drown_consciousness:  Optional[str] = None  # 意識四種固定說法
-    drown_gender:         Optional[str] = None  # 男性/女性
-    drown_age:            Optional[str] = None  # 年齡；未滿一歲用 .01 這種小數
-    drown_clothing:       Optional[str] = None  # 衣著（照原話）
-    drown_group:          Optional[str] = None  # 團體帶隊（被動，照原話）
-    dive_status:          Optional[str] = None  # 已經跳下/還沒跳（還在橋上、欄杆外）
-    dive_sight:           Optional[str] = None  # 還在水裡/看不到人/已經救起
-    dive_caller_role:     Optional[str] = None  # 路人/家屬/朋友/其他原話
-    dive_gender:          Optional[str] = None  # 男性/女性
-    dive_age:             Optional[str] = None
-    dive_clothing:        Optional[str] = None
-    dive_count:           Optional[str] = None
-    dive_consciousness:   Optional[str] = None
-    fall_caller_role:     Optional[str] = None  # 當事人(本人)/家人/鄰居或住戶/路人
-    high_fall_status:     Optional[str] = None  # 還在高處/已經掉下來
-    fall_intent:          Optional[str] = None  # 輕生意圖（照原話）
-    fall_floor:           Optional[str] = None
-    fall_gender:          Optional[str] = None
-    fall_age:             Optional[str] = None
-
-    # ── 緊急救援・山難 / 卡住夾住 / 瓦斯漏氣 ──────────────────────────────
-    mountain_cause:          Optional[str] = None  # 迷路/受傷/身體不舒服/失聯沒下山/其他原話
-    mountain_injury:         Optional[str] = None  # 受傷部位固定說法
-    mountain_count:          Optional[str] = None
-    mountain_location:       Optional[str] = None
-    mountain_caller_role:    Optional[str] = None  # 本人/代為報案/其他原話
-    mountain_gender:         Optional[str] = None
-    mountain_age:            Optional[str] = None
-    mountain_consciousness:  Optional[str] = None
-    mountain_entry:          Optional[str] = None
-    mountain_route:          Optional[str] = None
-    mountain_supplies:       Optional[str] = None
-    mountain_leader:         Optional[str] = None  # 帶隊人員（被動）
-    trap_body_part:          Optional[str] = None
-    trap_object:             Optional[str] = None
-    trap_freed:              Optional[str] = None  # 還卡著/已經出來了
-    trap_injury:             Optional[str] = None  # 有/沒有
-    trap_place:              Optional[str] = None
-    trap_gender:             Optional[str] = None
-    trap_age:                Optional[str] = None
-    trap_caller_role:        Optional[str] = None  # 當事人(本人)/家人/同事/路人
-    trap_consciousness:      Optional[str] = None
-    gas_building_use:        Optional[str] = None
-    gas_caller_role:         Optional[str] = None
-    gas_flame:               Optional[str] = None  # 有/沒有
-    gas_smell_place:         Optional[str] = None
-    gas_smell_strength:      Optional[str] = None  # 很濃/淡淡的/一陣一陣
-    gas_type:                Optional[str] = None  # 天然氣/瓦斯桶
-    gas_adjacent:            Optional[str] = None  # 鄰接建物（被動）
-    gas_discomfort:          Optional[str] = None  # 身體不適（被動）：有/沒有
-
-    # ── 緊急救援・電梯受困 / 破門 ─────────────────────────────────────────
-    lift_caller_role:     Optional[str] = None  # 受困者本人/管理員或警衛/其他
-    lift_building:        Optional[str] = None  # 社區、棟別、哪一部電梯
-    lift_floor:           Optional[str] = None  # 停在幾樓
-    lift_count:           Optional[str] = None  # 受困人數（照原話）
-    lift_company:         Optional[str] = None  # 已經聯絡/還沒聯絡
-    lift_consciousness:   Optional[str] = None
-    lift_discomfort:      Optional[str] = None  # 有/沒有/不知道（被動）
-    door_caller_role:     Optional[str] = None  # 本人/家人/房客/朋友/同事/其他原話
-    door_reason:          Optional[str] = None  # 擔心原因（照原話或常見說法）
-    knock_response:       Optional[str] = None  # 有回應/沒有回應/有聲音但叫不應
-    door_kind:            Optional[str] = None  # 大門/房門/浴室門/鐵門
-    door_locksmith:       Optional[str] = None  # 有鑰匙但打不開/沒有鑰匙/已找鎖匠
-    door_consent:         Optional[str] = None  # 同意/不同意/家屬或屋主還沒到
-    door_gender:          Optional[str] = None
-    door_age:             Optional[str] = None
+    # ── 緊急救援（1106 xlsx）自己的關鍵要素 ──────────────────────────────────
+    # 跟救護、火警、災害名稱一樣的關鍵要素共用那邊的欄位（見 emergency_tab_map_119.EMERGENCY_SHARED_FIELDS）
+    drown_distance:       Optional[str] = None  # 離岸距離（照報案人說的記）
+    drown_flotation:      Optional[str] = None  # 救生裝備：有/沒有
+    drown_group:          Optional[str] = None  # 團體帶隊（被動）：個人/公司/社團（溺水、山難共用）
+    dive_status:          Optional[str] = None  # 跳水狀況：尚未跳下/已跳下/已勸導離開
+    fall_intent:          Optional[str] = None  # 輕生意圖（照報案人說的記）
+    fall_floor:           Optional[str] = None  # 所在樓層
+    mountain_cause:       Optional[str] = None  # 山難原因：迷路/受傷/身體不舒服/失聯沒下山/其他照報案人說的記
+    mountain_location:    Optional[str] = None  # 位置座標
+    mountain_entry:       Optional[str] = None  # 入山資訊
+    mountain_route:       Optional[str] = None  # 登山路線
+    mountain_supplies:    Optional[str] = None  # 隨身物資
+    trap_body_part:       Optional[str] = None  # 卡住部位
+    trap_object:          Optional[str] = None  # 卡住物品
+    trap_freed:           Optional[str] = None  # 是否脫困：還卡著/已經出來了
+    gas_smell_place:      Optional[str] = None  # 聞到位置
+    gas_smell_strength:   Optional[str] = None  # 味道濃淡：很濃/淡淡的/一陣一陣
+    gas_type:             Optional[str] = None  # 瓦斯種類：天然氣/瓦斯桶
+    gas_adjacent:         Optional[str] = None  # 鄰接建物（被動）
+    gas_discomfort:       Optional[str] = None  # 身體不適（被動）：有/沒有/不知道（瓦斯漏氣、電梯受困共用）
+    lift_building:        Optional[str] = None  # 社區棟別
+    lift_floor:           Optional[str] = None  # 受困樓層
+    lift_count:           Optional[str] = None  # 受困人數（照報案人說的記）
+    lift_company:         Optional[str] = None  # 電梯公司：已經聯絡/還沒聯絡
+    door_reason:          Optional[str] = None  # 擔心原因
+    knock_response:       Optional[str] = None  # 有無回應：有回應/沒有回應/有聲音但叫不應
+    door_kind:            Optional[str] = None  # 門的種類：大門/房門/浴室門/鐵門
+    door_locksmith:       Optional[str] = None  # 鑰匙鎖匠：有鑰匙但打不開/沒有鑰匙/已找鎖匠
+    door_consent:         Optional[str] = None  # 同意破門：同意/不同意/家屬或屋主還沒到
 
     # ── 觸發情境（急病 / 火警通用）────────────────────────────────────────────
     triggered_scenarios: List[int]  = field(default_factory=list)  # 已觸發情境編號清單

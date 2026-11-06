@@ -166,11 +166,12 @@ class DisasterSharedFieldTests(unittest.TestCase):
         self.assertEqual(engine.case.caller_relation, "工人")
 
     def test_shared_fields_still_blocked_in_other_categories(self) -> None:
+        # 緊急救援 11/06 起也共用火煙狀況、人員受困，改用救護檢查（救護沒有這兩個關鍵要素）
         engine, _io = _engine([])
-        engine.case.main_category = "緊急救援"
-        engine._apply_extracted_fields({"fire_or_smoke": "有火有煙", "caller_location": "在現場"})
+        engine.case.main_category = "救護"
+        engine._apply_extracted_fields({"fire_or_smoke": "有火有煙", "trapped_status": "有人受困"})
         self.assertIsNone(engine.case.fire_or_smoke)
-        self.assertIsNone(engine.case.caller_location)
+        self.assertIsNone(engine.case.trapped_status)
 
     def test_switch_to_rescue_keeps_rescue_fields_only(self) -> None:
         engine, _io = _engine([])

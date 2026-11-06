@@ -251,18 +251,17 @@ class EmergencyRescueTests(unittest.TestCase):
         )
         with self.assertRaises(StopCall):
             JinJiJiuYuanGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.ai_lines, [RESCUE_LINE, "你是他的誰？"])
+        # 1106 xlsx 起照題目表問，派車後第一題是電梯受困的社區棟別
+        self.assertEqual(io.ai_lines, [RESCUE_LINE, "是哪個社區？哪一棟、哪一部電梯？"])
 
-    def test_unknown_sub_reasks_then_dispatch(self) -> None:
-        engine, io = self._engine(["電梯卡住，裡面有人", "還是電梯", "人出不來"])
-        with self.assertRaises(StopCall):
-            JinJiJiuYuanGenericHandler().run_generic_flow(engine)
+    def test_unknown_sub_asks_twice_then_dispatch(self) -> None:
+        # 判不出次案類：問兩句（使用者 11/05 決定的句子），派車後不再問
+        engine, io = self._engine(["電梯卡住，裡面有人", "人出不來"])
+        JinJiJiuYuanGenericHandler().run_generic_flow(engine)
         self.assertEqual(io.ai_lines, [
-            "請問發生什麼事情？",
-            "請問發生甚麼事？",
-            "請問發生甚麼事？",
+            "請描述發生什麼事需要救援？",
+            "是有人受傷，還是有人困住出不來嗎？",
             RESCUE_LINE,
-            "你是他的誰？",
         ])
 
     def test_caller_info_question_no_dispatch(self) -> None:
