@@ -8,9 +8,9 @@
   - C 裡問到的建築物類型（例如大樓 → 集合住宅）另外記，次案類維持警報器作響等，不換垂片
   - 警報器作響、查看案件看得到火或煙 → 換到建築物火警（A），次案類＝建築物類型；
     垃圾、電線桿有火照樣留在 C。A、C 之間只看火煙狀況，BERT 和 LLM 不能自己換
-  - 有無受困每通都問；答「有人受困」立刻轉人工
+  - 人員受困每通都問；答「有人受困」立刻轉人工
   - 來源確認：警報器作響、查看案件才問
-  - 燃燒範圍：垃圾、電線桿，而且看得到火才問
+  - 燃燒面積：垃圾、電線桿，而且看得到火才問
 
 這裡的 LLM 是假的：每一句回答要抽出什麼，都由測試事先指定。
 所以這些測試檢查的是「流程有沒有照規則問、跳過、換垂片、轉人工」，
@@ -152,7 +152,7 @@ class TabCQuestionOrderTests(unittest.TestCase):
     def test_alarm_without_fire_or_smoke(self) -> None:
         engine, io = _run_minor_fire(ALARM_CALL)
         self.assertEqual(_asked(io), HEAD + [
-            "警報器狀態", "氣味類型", "報案人身分", "有無受困", "來源確認",
+            "警報器狀態", "氣味類型", "報案身分", "人員受困", "來源確認",
         ])
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
         self.assertEqual(io.stages_when_asked[0], "輕微火警-火警類型")
@@ -178,14 +178,14 @@ class TabCQuestionOrderTests(unittest.TestCase):
             ("有看到火", {"fire_or_smoke": "有火有煙"}),
             ("黑煙", {"smoke_color": "黑色煙"}),
             ("沒有燒到旁邊", {"spread_reached": "無"}),
-            ("一小堆", {"burning_range": "一小堆"}),
+            ("一小堆", {"burning_area": "一小堆"}),
             ("我路過", {"caller_role": "路人"}),
             NOBODY_CALLING,
         ])
         self.assertEqual(engine.case.fire_tab, TAB_C)
         self.assertEqual(engine.case.sub_category, "垃圾")
         self.assertEqual(_asked(io)[5:], [
-            "濃煙顏色", "是否延燒", "燃燒範圍", "報案人身分", "有無受困",
+            "濃煙顏色", "是否延燒", "燃燒面積", "報案身分", "人員受困",
         ])
 
     def test_utility_pole_smoke_without_fire(self) -> None:
@@ -201,8 +201,8 @@ class TabCQuestionOrderTests(unittest.TestCase):
             NOBODY_CALLING,
         ])
         asked = _asked(io)
-        # 看不到火 → 不問是否延燒、燃燒範圍；不是警報器、查看案件 → 不問來源確認
-        for element in ("是否延燒", "燃燒範圍", "來源確認", "標的物"):
+        # 看不到火 → 不問是否延燒、燃燒面積；不是警報器、查看案件 → 不問來源確認
+        for element in ("是否延燒", "燃燒面積", "來源確認", "標的物"):
             self.assertNotIn(element, asked)
         # 標的物是被動題：報案人講到就記，但不問
         self.assertEqual(engine.case.target_object, "電線桿或電纜（變壓器）")
@@ -216,13 +216,13 @@ class MoveToBuildingFireTests(unittest.TestCase):
             ("有火有煙", {"fire_or_smoke": "有火有煙"}),
             ("黑煙", {"smoke_color": "黑色煙"}),
             ("三樓", {"fire_floor": "3樓"}),
-            ("會", {"spread_status": "極可能或已延燒"}),
+            ("會", {"spread_reached": "是"}),
             ("我住這裡", {"caller_role": "住戶(起火戶)"}),
             ("沒有", {"trapped_status": "無人受困"}),
         ])
         # 換到 A：前面答過的不重問，接著問 A 的濃煙顏色、起火樓層…
         self.assertEqual(_asked(io), HEAD + [
-            "A:濃煙顏色", "A:起火樓層", "A:延燒可能", "A:報案人身分", "A:有無受困",
+            "A:濃煙顏色", "A:起火樓層", "A:是否延燒", "A:報案身分", "A:人員受困",
         ])
         self.assertEqual(engine.case.fire_tab, TAB_A)
         self.assertEqual(engine.case.sub_category, "集合住宅")
@@ -241,7 +241,7 @@ class TabCTrappedTransferTests(unittest.TestCase):
         self.assertEqual(ctx.exception.result, "human_transfer")
 
     def test_garbage_also_asks_trapped(self) -> None:
-        # 1013 版：有無受困每通都問（以前只問警報器作響、查看案件）
+        # 1013 版：人員受困每通都問（以前只問警報器作響、查看案件）
         _, io = _run_minor_fire([
             _minor("有人在燒垃圾", "垃圾"),
             ("路邊空地", {"place_usage": "其他"}),
@@ -252,7 +252,7 @@ class TabCTrappedTransferTests(unittest.TestCase):
             ("我路過", {"caller_role": "路人"}),
             NOBODY_CALLING,
         ])
-        self.assertIn("有無受困", _asked(io))
+        self.assertIn("人員受困", _asked(io))
 
     def test_transfer_message_is_said(self) -> None:
         io = ScriptedIO(["有聽到有人在喊救命"])
@@ -271,7 +271,7 @@ class TabCTrappedTransferTests(unittest.TestCase):
         engine.case.caller_role = "住戶"
         with self.assertRaises(TransferToHumanError):
             HuoJingGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.messages, [Q["有無受困"], TRAPPED_TRANSFER_MESSAGE])
+        self.assertEqual(io.messages, [Q["人員受困"], TRAPPED_TRANSFER_MESSAGE])
 
 
 if __name__ == "__main__":

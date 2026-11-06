@@ -151,7 +151,7 @@ THREE_FLOORS = ("三層樓", {"building_total_floors": "3層樓"})
 FIRE_AND_SMOKE = ("火很大，煙也很多", {"fire_or_smoke": "有火有煙"})
 BLACK = ("黑煙", {"smoke_color": "黑色煙"})
 SECOND_FLOOR = ("二樓", {"fire_floor": "2樓"})
-NO_SPREAD = ("還好沒燒過去", {"spread_status": "延燒可能性低"})
+NO_SPREAD = ("還好沒燒過去", {"spread_reached": "無"})
 NEIGHBOR = ("我是隔壁鄰居", {"caller_role": "鄰居"})
 ALL_OUT = ("人都出來了", {"trapped_status": "無人受困"})
 TOWNHOUSE_CALL = [
@@ -159,7 +159,7 @@ TOWNHOUSE_CALL = [
     NO_SPREAD, NEIGHBOR, ALL_OUT,
 ]
 HEAD = ["場所用途", "建築物類型", "建物總樓層", "火煙狀況"]
-TAIL = ["報案人身分", "有無受困"]
+TAIL = ["報案身分", "人員受困"]
 
 
 class TabAQuestionOrderTests(unittest.TestCase):
@@ -167,7 +167,7 @@ class TabAQuestionOrderTests(unittest.TestCase):
     def test_house_with_fire_asks_in_xlsx_order(self) -> None:
         engine, io = _run(TOWNHOUSE_CALL)
         self.assertEqual(
-            _asked_elements(io), HEAD + ["濃煙顏色", "起火樓層", "延燒可能"] + TAIL,
+            _asked_elements(io), HEAD + ["濃煙顏色", "起火樓層", "是否延燒"] + TAIL,
         )
         # 透天厝不問構造、危險物品；有火不問氣味；沒人受困不問應門
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
@@ -192,7 +192,7 @@ class TabAQuestionOrderTests(unittest.TestCase):
         engine, io = _run(steps, place_usage="住宅", caller_role="路人")
         asked = _asked_elements(io)
         self.assertNotIn("場所用途", asked)
-        self.assertNotIn("報案人身分", asked)
+        self.assertNotIn("報案身分", asked)
         self.assertEqual(engine.case.caller_role, "路人")
 
     def test_subtype_known_from_bert_skips_building_type(self) -> None:
@@ -221,7 +221,7 @@ class FactoryTests(unittest.TestCase):
     def test_factory_asks_usage_and_burning_object_not_fire_floor(self) -> None:
         engine, io = self._factory_call(("放貨的倉庫", {"building_type_code": "12"}), [])
         self.assertEqual(_asked_elements(io), HEAD + [
-            "濃煙顏色", "燃燒物", "延燒可能",
+            "濃煙顏色", "燃燒物", "是否延燒",
         ] + TAIL)
         self.assertIn(QUESTION_FACTORY, io.messages)
         self.assertEqual(engine.case.sub_category, "倉庫")
@@ -256,14 +256,14 @@ class FireSmokeConditionTests(unittest.TestCase):
 
     def test_fire_and_smoke_asks_color_floor_spread(self) -> None:
         asked = self._asked(("火很大，煙也很多", "有火有煙"), [BLACK, SECOND_FLOOR, NO_SPREAD])
-        self.assertEqual(asked, HEAD + ["濃煙顏色", "起火樓層", "延燒可能"] + TAIL)
+        self.assertEqual(asked, HEAD + ["濃煙顏色", "起火樓層", "是否延燒"] + TAIL)
 
     def test_fire_no_smoke_skips_color(self) -> None:
         asked = self._asked(("有火，沒什麼煙", "有火無煙"), [SECOND_FLOOR, NO_SPREAD])
-        self.assertEqual(asked, HEAD + ["起火樓層", "延燒可能"] + TAIL)
+        self.assertEqual(asked, HEAD + ["起火樓層", "是否延燒"] + TAIL)
 
     def test_smoke_no_fire_asks_color_only(self) -> None:
-        # 看不到火 → 不問起火樓層、延燒可能
+        # 看不到火 → 不問起火樓層、是否延燒
         asked = self._asked(("只看到煙", "無火有煙"), [BLACK])
         self.assertEqual(asked, HEAD + ["濃煙顏色"] + TAIL)
 
@@ -292,7 +292,7 @@ class MoveBetweenBuildingAndMinorTests(unittest.TestCase):
         ])
         # 換到 C 後先問火警類型；建築物資料帶過去，不重問
         self.assertEqual(_asked_elements(io), HEAD + [
-            "C:火警類型", "C:警報器狀態", "C:氣味類型", "C:報案人身分", "C:有無受困", "C:來源確認",
+            "C:火警類型", "C:警報器狀態", "C:氣味類型", "C:報案身分", "C:人員受困", "C:來源確認",
         ])
         self.assertEqual(engine.case.fire_tab, TAB_C)
         self.assertEqual(engine.case.sub_category, "警報器作響")
@@ -329,7 +329,7 @@ class PeopleTrappedTransferTests(unittest.TestCase):
         with self.assertRaises(TransferToHumanError) as ctx:
             _run([
                 HOUSE, TOWNHOUSE, THREE_FLOORS, FIRE_AND_SMOKE, BLACK, SECOND_FLOOR,
-                ("會", {"spread_status": "極可能或已延燒"}),
+                ("會", {"spread_reached": "是"}),
                 ("三樓還有阿嬤出不來", {"trapped_status": "有人受困"}),
             ])
         self.assertEqual(ctx.exception.result, "human_transfer")
@@ -353,7 +353,7 @@ class PeopleTrappedTransferTests(unittest.TestCase):
 
     def test_unsure_trapped_does_not_transfer(self) -> None:
         steps = list(TOWNHOUSE_CALL)
-        steps[-1] = ("不清楚", {"trapped_status": "不確定"})
+        steps[-1] = ("不清楚", {"trapped_status": "未知"})
         _, io = _run(steps)
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
 
@@ -365,12 +365,12 @@ class PassiveAndFreeTextTests(unittest.TestCase):
         steps[3] = ("火很大，煙也很多", {
             "fire_or_smoke": "有火有煙",
             "explosion_status": "有爆炸",
-            "fire_extent": "整棟都在燒",
+            "burning_area": "整棟都在燒",
         })
         engine, io = _run(steps)
         self.assertEqual(engine.case.explosion_status, "有爆炸")
-        self.assertEqual(engine.case.fire_extent, "整棟都在燒")
-        for element in ("有無爆炸", "其他資訊", "延燒面積"):
+        self.assertEqual(engine.case.burning_area, "整棟都在燒")
+        for element in ("有無爆炸", "水源狀況", "燃燒面積"):
             self.assertEqual(Q[element], "")  # 被動題在題目表裡沒有問句，AI 不會問
 
     def test_answer_outside_reference_range_is_kept(self) -> None:
@@ -383,7 +383,7 @@ class PassiveAndFreeTextTests(unittest.TestCase):
 
 
 class FixedAnswerCheckTests(unittest.TestCase):
-    """火煙狀況、有無受困：LLM 寫錯格式就不記（不載入模型，直接模擬 LLM 的輸出）。"""
+    """火煙狀況、人員受困：LLM 寫錯格式就不記（不載入模型，直接模擬 LLM 的輸出）。"""
 
     def _extract(self, llm_output: dict) -> dict:
         ext = object.__new__(LLMExtractor119)

@@ -141,14 +141,9 @@ class SopElementIdTests(unittest.TestCase):
         from sop_element_id_119 import _XLSX, _SHEET
         from openpyxl import load_workbook
 
-        # 10/08 統一的關鍵要素名稱：垂片照 xlsx 原文，CaseTypeQA 用統一後的名稱
+        # 1106 xlsx 起兩邊名稱一致；只剩氣味類型在 CaseTypeQA 寫「氣味」（10/08 統一的名稱）
         unified = {
-            "延燒可能": "是否延燒",
-            "起火戶應門": "應門或聯絡狀況",
-            "無人應門或聯絡不上": "應門或聯絡狀況",
             "氣味類型": "氣味",
-            "延燒面積": "燃燒範圍",
-            "燃燒面積": "燃燒範圍",
         }
         rows: dict = {}
         sheet = load_workbook(_XLSX, read_only=True)[_SHEET]

@@ -107,7 +107,7 @@ class TabB2QuestionOrderTests(unittest.TestCase):
     def test_asks_in_xlsx_order(self) -> None:
         engine, io = _run_wildfire([WEEDS, FIRE, WHITE, PASSERBY, BIG, SPREADING])
         self.assertEqual(_asked(io), [
-            "燃燒物", "火煙狀況", "濃煙顏色", "報案人身分", "燃燒面積", "是否延燒",
+            "燃燒物", "火煙狀況", "濃煙顏色", "報案身分", "燃燒面積", "是否延燒",
         ])
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
         self.assertEqual(io.stages_when_asked[0], "山林田野火警-燃燒物")
@@ -138,13 +138,13 @@ class FireSmokeConditionTests(unittest.TestCase):
         _, io = _run_wildfire([
             WEEDS, ("只看到煙", {"fire_or_smoke": "無火有煙"}), WHITE, PASSERBY,
         ])
-        self.assertEqual(_asked(io), ["燃燒物", "火煙狀況", "濃煙顏色", "報案人身分"])
+        self.assertEqual(_asked(io), ["燃燒物", "火煙狀況", "濃煙顏色", "報案身分"])
 
     def test_fire_no_smoke_skips_color(self) -> None:
         _, io = _run_wildfire([
             WEEDS, ("有火，沒什麼煙", {"fire_or_smoke": "有火無煙"}), PASSERBY, BIG, SPREADING,
         ])
-        self.assertEqual(_asked(io), ["燃燒物", "火煙狀況", "報案人身分", "燃燒面積", "是否延燒"])
+        self.assertEqual(_asked(io), ["燃燒物", "火煙狀況", "報案身分", "燃燒面積", "是否延燒"])
 
     def test_far_away_caller_answers_are_recorded_as_unsure(self) -> None:
         engine, io = _run_wildfire([
@@ -152,7 +152,7 @@ class FireSmokeConditionTests(unittest.TestCase):
             ("遠遠的看不清楚", {"fire_or_smoke": "不確定"}),
             PASSERBY,
         ])
-        self.assertEqual(_asked(io), ["燃燒物", "火煙狀況", "報案人身分"])
+        self.assertEqual(_asked(io), ["燃燒物", "火煙狀況", "報案身分"])
         self.assertEqual(engine.case.burning_object, "其他(不確定)")
 
 

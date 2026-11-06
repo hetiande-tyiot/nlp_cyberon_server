@@ -230,7 +230,7 @@ class BackfillEarlierAnswersTests(unittest.TestCase):
             ("住家", {"place_usage": "住家"}),
             ("五層樓", {"building_total_floors": "5層樓"}),
             ("黑煙", {"smoke_color": "黑色煙"}),
-            ("會燒到隔壁", {"spread_status": "極可能或已延燒"}),
+            ("會燒到隔壁", {"spread_reached": "是"}),
             ("人都出來了", {"trapped_status": "無人受困"}),
             ("我是住戶", {"caller_role": "住戶(起火戶)"}),
         ]

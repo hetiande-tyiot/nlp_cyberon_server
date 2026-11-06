@@ -457,7 +457,6 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "smoke_color",
     "burning_object",
     "fire_trend",
-    "fire_extent",
     "fire_category",
     "fire_level",
     "fire_tab",
@@ -496,16 +495,13 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "vehicle_wildfire_code",
     "minor_fire_code",
     "place_usage",
-    "spread_status",
     "trapped_status",
     "door_response",
     "building_construction",
     "odor",
     "explosion_status",
-    "access_info",
     "fire_origin_part",
     "engine_off_status",
-    "occupants_status",
     "injury_status",
     "cargo",
     "extinguish_status",
@@ -514,11 +510,9 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "alarm_status",
     "source_located",
     "target_object",
-    # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+    # 各垂片共用的是否延燒、燃燒面積（1106 xlsx）
     "spread_reached",
     "burning_area",
-    "burning_range",
-    "door_unanswered",
     "power_outage",
     # 以下是火警照 1013 xlsx 新增的欄位（火警垂片在問）
     "building_type",
@@ -924,7 +918,6 @@ class SopEngine119:
             "smoke_color",
             "burning_object",
             "fire_trend",
-            "fire_extent",
             "fire_category",
             "caller_position",
             "caller_role",
@@ -961,17 +954,14 @@ class SopEngine119:
             "minor_fire_code",
             # 垂片 A 照 0929 xlsx 新增的文字欄位
             "place_usage",
-            "spread_status",
             "trapped_status",
             "door_response",
             "building_construction",
             "odor",
             "explosion_status",
-            "access_info",
             # 垂片 B1 照 0929 xlsx 新增的文字欄位
             "fire_origin_part",
             "engine_off_status",
-            "occupants_status",
             "injury_status",
             "cargo",
             "extinguish_status",
@@ -981,11 +971,9 @@ class SopEngine119:
             "alarm_status",
             "source_located",
             "target_object",
-            # 垂片名稱不同、各自一格的欄位（11/04 使用者決定）
+            # 各垂片共用的是否延燒、燃燒面積（1106 xlsx）
             "spread_reached",
             "burning_area",
-            "burning_range",
-            "door_unanswered",
             # 垂片 B1 照 1013 xlsx 新增（建築物類型由次案類代碼換算，不在這裡）
             "vehicle_kind",
             "vehicle_model",
@@ -4903,7 +4891,7 @@ class SopEngine119:
         from emergency_accident_119 import SUBCATEGORY
 
         self._debug_print("fire_to_vehicle_rescue", {
-            "火煙狀況": self.case.fire_or_smoke, "受困狀況": self.case.occupants_status,
+            "火煙狀況": self.case.fire_or_smoke, "人員受困": self.case.trapped_status,
         })
         self._apply_main_switch("火警", "緊急救援", 1.0)
         with self._case_lock:

@@ -10,9 +10,9 @@
   - 車輛動力分汽車、機車兩題；1104 拿掉車型
   - 載運物：聯結車、大客車、大貨車、小貨車才問
   - 看得到煙（有火有煙、無火有煙）才問濃煙顏色、熄火狀態；
-    看得到火（有火有煙、有火無煙）才問延燒、起火部位、車輛數量、受困狀況、滅火、行駛狀況
+    看得到火（有火有煙、有火無煙）才問延燒、起火部位、車輛數量、人員受困、滅火、行駛狀況
   - 聯結車、大客車(公車、遊覽車) → 轉人工
-  - 受困狀況答「仍有人在車上」→ 有火（或還不知道有沒有火）立刻轉人工；沒有火改判緊急救援-車禍救助
+  - 人員受困答「有人受困」→ 有火（或還不知道有沒有火）立刻轉人工；沒有火改判緊急救援-車禍救助
 
 這裡的 LLM 是假的：每一句回答要抽出什麼，都由測試事先指定。
 所以這些測試檢查的是「流程有沒有照規則問、跳過、轉人工」，
@@ -114,8 +114,8 @@ NO_SPREAD = ("沒有燒到旁邊", {"spread_reached": "無"})
 FRONT = ("引擎蓋那邊", {"fire_origin_part": "車頭或引擎"})
 ONE_CAR = ("一台", {"vehicle_count": "一台"})
 ENGINE_OFF = ("已經熄火了", {"engine_off_status": "已熄火"})
-ALL_OUT = ("人都下車了", {"occupants_status": "人已全部下車"})
-NO_INJURY = ("沒人受傷", {"injury_status": "無"})
+ALL_OUT = ("人都下車了", {"trapped_status": "無人受困"})
+NO_INJURY = ("沒人受傷", {"injury_status": "0 人"})
 NOBODY_FIGHTING = ("沒有人在滅火", {"extinguish_status": "無人"})
 PARKED = ("停在路邊", {"vehicle_motion": "停放路邊"})
 PETROL = ("油車", {"vehicle_power": "油車"})
@@ -132,9 +132,9 @@ class VehicleKindTests(unittest.TestCase):
             ONE_CAR, ENGINE_OFF, ALL_OUT, NO_INJURY, NOBODY_FIGHTING, PARKED,
         ])
         self.assertEqual(_asked(io), [
-            "交通工具", "車輛動力(汽車)", "火煙狀況", "濃煙顏色", "報案人身分",
-            "是否延燒", "起火部位", "起火車輛數量", "熄火狀態", "受困狀況",
-            "有無人員受傷", "滅火狀況", "車輛行駛狀況",
+            "交通工具", "車輛動力(汽車)", "火煙狀況", "濃煙顏色", "報案身分",
+            "是否延燒", "起火部位", "起火車輛數量", "熄火狀態", "人員受困",
+            "患者人數", "滅火狀況", "車輛行駛狀況",
         ])
         self.assertEqual(io.messages[-1], SAFETY_MESSAGE)
         self.assertEqual(engine.case.sub_category, "汽車")
@@ -162,8 +162,8 @@ class VehicleKindTests(unittest.TestCase):
             ONE_CAR, ENGINE_OFF, NO_INJURY, NOBODY_FIGHTING, PARKED,
         ])
         self.assertEqual(_asked(io), [
-            "交通工具", "車輛動力(機車)", "火煙狀況", "濃煙顏色", "報案人身分", "是否延燒",
-            "起火車輛數量", "熄火狀態", "有無人員受傷", "滅火狀況", "車輛行駛狀況",
+            "交通工具", "車輛動力(機車)", "火煙狀況", "濃煙顏色", "報案身分", "是否延燒",
+            "起火車輛數量", "熄火狀態", "患者人數", "滅火狀況", "車輛行駛狀況",
         ])
         self.assertEqual(engine.case.sub_category, "機車")
 
@@ -177,7 +177,7 @@ class VehicleKindTests(unittest.TestCase):
         asked = _asked(io)
         self.assertEqual(engine.case.sub_category, "機車")
         self.assertIn("腳踏車車型", asked)
-        for element in ("車輛動力(汽車)", "車輛動力(機車)", "起火部位", "受困狀況", "有無人員受傷"):
+        for element in ("車輛動力(汽車)", "車輛動力(機車)", "起火部位", "人員受困", "患者人數"):
             self.assertNotIn(element, asked)
 
     def test_boat_keeps_llm_subtype(self) -> None:
@@ -188,7 +188,7 @@ class VehicleKindTests(unittest.TestCase):
         ])
         self.assertEqual(engine.case.sub_category, "船舶")
         self.assertEqual(_asked(io), [
-            "交通工具", "火煙狀況", "濃煙顏色", "報案人身分", "是否延燒",
+            "交通工具", "火煙狀況", "濃煙顏色", "報案身分", "是否延燒",
             "起火車輛數量", "熄火狀態", "滅火狀況", "車輛行駛狀況",
         ])
 
@@ -208,7 +208,7 @@ class FireSmokeConditionTests(unittest.TestCase):
             [PASSERBY, NO_SPREAD, ONE_CAR, NOBODY_FIGHTING, PARKED],
         )
         self.assertEqual(asked, [
-            "交通工具", "火煙狀況", "報案人身分", "是否延燒", "起火車輛數量",
+            "交通工具", "火煙狀況", "報案身分", "是否延燒", "起火車輛數量",
             "滅火狀況", "車輛行駛狀況",
         ])
 
@@ -218,7 +218,7 @@ class FireSmokeConditionTests(unittest.TestCase):
             [BLACK, PASSERBY, ENGINE_OFF],
         )
         self.assertEqual(asked, [
-            "交通工具", "火煙狀況", "濃煙顏色", "報案人身分", "熄火狀態",
+            "交通工具", "火煙狀況", "濃煙顏色", "報案身分", "熄火狀態",
         ])
 
     def test_unsure_fire_skips_fire_and_smoke_questions(self) -> None:
@@ -231,7 +231,7 @@ class FireSmokeConditionTests(unittest.TestCase):
         ])
         asked = _asked(io)
         for element in ("濃煙顏色", "是否延燒", "起火部位", "起火車輛數量", "熄火狀態",
-                        "受困狀況", "滅火狀況", "車輛行駛狀況"):
+                        "人員受困", "滅火狀況", "車輛行駛狀況"):
             self.assertNotIn(element, asked)
 
     def test_answers_carried_from_other_tab_are_not_asked_again(self) -> None:
@@ -242,7 +242,7 @@ class FireSmokeConditionTests(unittest.TestCase):
         ], fire_or_smoke="有火有煙", caller_role="路人")
         asked = _asked(io)
         self.assertNotIn("火煙狀況", asked)
-        self.assertNotIn("報案人身分", asked)
+        self.assertNotIn("報案身分", asked)
 
 
 class OccupantsStillInsideTransferTests(unittest.TestCase):
@@ -253,13 +253,13 @@ class OccupantsStillInsideTransferTests(unittest.TestCase):
                 _kind("汽車燒起來", "汽車(轎車)"),
                 PETROL, FIRE, BLACK, PASSERBY, NO_SPREAD, FRONT,
                 ONE_CAR, ENGINE_OFF,
-                ("駕駛還卡在車上", {"occupants_status": "仍有人在車上"}),
+                ("駕駛還卡在車上", {"trapped_status": "有人受困"}),
             ])
         self.assertEqual(ctx.exception.result, "human_transfer")
 
     def test_transfer_message_is_said_before_transfer(self) -> None:
         io = ScriptedIO(["車上還有人出不來"])
-        llm = FakeLLM({"車上還有人出不來": {"occupants_status": "仍有人在車上"}})
+        llm = FakeLLM({"車上還有人出不來": {"trapped_status": "有人受困"}})
         engine = SopEngine119(io=io, llm_extractor=llm)  # type: ignore[arg-type]
         engine.case.main_category = "火警"
         with self.assertRaises(TransferToHumanError):
@@ -270,7 +270,7 @@ class OccupantsStillInsideTransferTests(unittest.TestCase):
         """沒有火、車上有人出不來 → 改判緊急救援-車禍救助，不轉人工、不講話。"""
         with self.assertRaises(MainCategorySwitched):
             _run_vehicle_fire([], vehicle_kind="汽車(轎車)", fire_or_smoke="無火有煙",
-                              occupants_status="仍有人在車上")
+                              trapped_status="有人受困")
 
     def test_switch_sets_emergency_vehicle_rescue(self) -> None:
         io = ScriptedIO([])
@@ -278,7 +278,7 @@ class OccupantsStillInsideTransferTests(unittest.TestCase):
         engine.case.main_category = "火警"
         engine.case.fire_tab = TAB_B1
         engine.case.fire_or_smoke = "無火無煙"
-        engine.case.occupants_status = "仍有人在車上"
+        engine.case.trapped_status = "有人受困"
         with self.assertRaises(MainCategorySwitched):
             HuoJingGenericHandler().run_generic_flow(engine)
         self.assertEqual(engine.case.main_category, "緊急救援")
@@ -316,7 +316,7 @@ class LargeVehicleTransferTests(unittest.TestCase):
 
 
 class FixedAnswerCheckTests(unittest.TestCase):
-    """受困狀況、交通工具：LLM 寫錯格式就不記（不載入模型，直接模擬 LLM 的輸出）。"""
+    """人員受困、交通工具：LLM 寫錯格式就不記（不載入模型，直接模擬 LLM 的輸出）。"""
 
     def _extract(self, llm_output: dict) -> dict:
         ext = object.__new__(LLMExtractor119)
@@ -328,12 +328,12 @@ class FixedAnswerCheckTests(unittest.TestCase):
 
     def test_valid_answer_kept(self) -> None:
         self.assertEqual(
-            self._extract({"occupants_status": "仍有人在車上"})["occupants_status"],
-            "仍有人在車上",
+            self._extract({"trapped_status": "有人受困"})["trapped_status"],
+            "有人受困",
         )
 
     def test_wrong_format_dropped(self) -> None:
-        self.assertNotIn("occupants_status", self._extract({"occupants_status": "還有一個人"}))
+        self.assertNotIn("trapped_status", self._extract({"trapped_status": "還有一個人"}))
 
     def test_vehicle_kind_must_be_one_of_the_choices(self) -> None:
         self.assertEqual(

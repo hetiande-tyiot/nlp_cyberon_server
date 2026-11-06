@@ -136,8 +136,7 @@ class CaseInfo119:
     smoke_color:         Optional[str] = None  # 黑煙/白煙/其他顏色
     burning_object:      Optional[str] = None  # 燒什麼（房子/車子/雜草…）
     fire_trend:          Optional[str] = None  # 變大/消退/穩定
-    fire_extent:         Optional[str] = None  # 延燒面積（垂片 A）：未知/0~50坪…500坪以上
-    fire_category:       Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
+    fire_category:      Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
 
     # 火警垂片代碼（0 為合法已填值）
     fire_tab:              Optional[str] = None  # A / B1 / B2 / C
@@ -159,18 +158,17 @@ class CaseInfo119:
 
     # 垂片 A（建築物火警）照 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
     # 其他 A 的關鍵要素沿用既有文字欄位：fire_or_smoke（火煙狀況）、
-    # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、fire_extent。
+    # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、
+    # nearby_water_source（水源狀況）。
     place_usage:           Optional[str] = None  # 場所用途：住宅/店家/工廠/辦公室…
     # 建築物類型（1013 xlsx，A、C 都問）：透天厝、集合住宅、倉庫…
     # 在 A 跟次案類相同；在 C 另外記，次案類仍是警報器作響等
     building_type:         Optional[str] = None
-    spread_status:         Optional[str] = None  # 延燒可能：延燒可能性低/極可能或已延燒…
-    trapped_status:        Optional[str] = None  # 有無受困：只記 有人受困/無人受困/不確定；有人受困就轉人工
-    door_response:         Optional[str] = None  # 起火戶應門：有人在或已聯絡上/敲門無回應或聯絡不上…
+    trapped_status:        Optional[str] = None  # 人員受困（A、B1、C）：只記 未知/無人受困/有人受困；有人受困就轉人工
+    door_response:         Optional[str] = None  # 起火戶應門（A、C）：有人應門/無人應門/已聯絡上/聯絡不上
     building_construction: Optional[str] = None  # 建物構造：木造屋/鐵皮屋/磚造屋/RC…
     odor:                  Optional[str] = None  # 氣味：燒焦味/塑膠味/瓦斯味…
     explosion_status:      Optional[str] = None  # 有無爆炸（被動，報案人講到才記）
-    access_info:           Optional[str] = None  # 其他資訊：消防車進不進得去、有沒有水源（被動）
 
     # 垂片 B1（交通工具火警）照 xlsx 新增的欄位，存文字。起火車輛數量沿用 vehicle_count。
     vehicle_kind:          Optional[str] = None  # 交通工具（1013）：聯結車/大小貨車/小客車/汽車/機車/腳踏車…
@@ -180,8 +178,7 @@ class CaseInfo119:
     bicycle_type:          Optional[str] = None  # 腳踏車車型（1013）：一般腳踏車/UBIKE/電輔車
     fire_origin_part:     Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
     engine_off_status:     Optional[str] = None  # 熄火狀態：已熄火/未熄火
-    occupants_status:      Optional[str] = None  # 受困狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上：有火轉人工、沒有火改判緊急救援
-    injury_status:         Optional[str] = None  # 有無人員受傷
+    injury_status:         Optional[str] = None  # 患者人數：記人數，例如 1 人、2 人
     cargo:                 Optional[str] = None  # 載運物：易燃物/化學品/鋰電池…
     extinguish_status:     Optional[str] = None  # 滅火狀況：無人/有人在場/已在自行滅火…（B2 也用）
     vehicle_motion:        Optional[str] = None  # 車輛行駛狀況：停放路邊/行駛中起火/停車場內
@@ -192,11 +189,9 @@ class CaseInfo119:
     alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
     source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
     target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
-    # 火警垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
-    spread_reached:        Optional[str] = None  # 是否延燒（B1、B2、C）：無/有（B2：無/是）
-    burning_area:          Optional[str] = None  # 燃燒面積（B2）：小於一個停車格/約一台車/約半個籃球場/一個籃球場以上/不確定
-    burning_range:         Optional[str] = None  # 燃燒範圍（C）：照報案人說的記
-    door_unanswered:       Optional[str] = None  # 無人應門或聯絡不上（C）：已聯絡上/無人應門或聯絡不上
+    # 各垂片共用（1106 xlsx），參考範圍不同的依垂片給抽取規則
+    spread_reached:        Optional[str] = None  # 是否延燒（A、B1、B2、C）：無/是/可能性高
+    burning_area:          Optional[str] = None  # 燃燒面積（A 坪數、B2 停車格或籃球場、C 照報案人說的記）
 
     # 建築物火災
     caller_position:      Optional[str] = None  # 報案人在建物內/外
@@ -221,7 +216,7 @@ class CaseInfo119:
 
     # 露天野外火災
     outdoor_fire_type:  Optional[str] = None  # 雜草垃圾/山林/高速公路
-    nearby_water_source: Optional[str] = None  # 水源或消防栓狀況
+    nearby_water_source: Optional[str] = None  # 水源狀況（A：一般情況/小巷/缺水/小巷且缺水；B2：無或未知/有）
     affected_targets:   Optional[str] = None  # 波及建物/車輛/人員
 
     # ── 災害通用流程（所有子類同一套題）──────────────────────────────────────
