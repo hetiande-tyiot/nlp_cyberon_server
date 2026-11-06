@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from emergency_tab_map_119 import FALL
 from ems_tab_map_119 import EMS_QUESTIONS, FALL_NOT_YET, FALL_POSITION_STUCK, FALL_STATUS_STUCK
 
 from .base import SubCategoryHandler
@@ -39,12 +40,12 @@ class ZhuiLuoShangHandler(SubCategoryHandler):
         self._ask_ems_questions(engine, ZHUI_LUO_QUESTIONS)
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
-        """xlsx 備註：尚未跳下、跳下來卡住 → 改判緊急救援（不講話）。報案人哪一句講到都算。"""
+        """xlsx 備註：尚未跳下、跳下來卡住 → 改判緊急救援-跳樓並轉真人。報案人哪一句講到都算。"""
         case = engine.case
         if case.fall_status == FALL_NOT_YET:
-            engine._escalate_main_to_emergency(reason="墜落傷尚未跳下", line=None)
+            engine._escalate_main_to_emergency(FALL, reason="墜落傷尚未跳下", line=None)
         elif case.fall_status == FALL_STATUS_STUCK or case.fall_position == FALL_POSITION_STUCK:
-            engine._escalate_main_to_emergency(reason="墜落傷卡住", line=None)
+            engine._escalate_main_to_emergency(FALL, reason="墜落傷卡住", line=None)
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """墜落傷使用基類預設：詢問姓名與聯繫方式（無住址）。"""

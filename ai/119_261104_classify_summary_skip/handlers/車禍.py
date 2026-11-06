@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from emergency_tab_map_119 import CRASH
 from ems_tab_map_119 import CRASH_TRAPPED_YES, EMS_QUESTIONS
 
 from .base import SubCategoryHandler
@@ -39,9 +40,9 @@ class CheHuoHandler(SubCategoryHandler):
         self._ask_ems_questions(engine, CHE_HUO_QUESTIONS)
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
-        """xlsx 備註：有人受困 → 改判緊急救援（不講話）。報案人哪一句講到都算。"""
+        """xlsx 備註：有人受困 → 改判緊急救援-車禍救助並轉真人。報案人哪一句講到都算。"""
         if engine.case.crash_trapped == CRASH_TRAPPED_YES:
-            engine._escalate_main_to_emergency(reason="車禍有人受困", line=None)
+            engine._escalate_main_to_emergency(CRASH, reason="車禍有人受困", line=None)
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """車禍使用基類預設：詢問姓名與聯繫方式（無住址）。"""

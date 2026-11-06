@@ -625,9 +625,6 @@ class SopEngine119:
         # 2026-09-06 04:46 實測，申訴案沒問到地址、沒派任何車，卻對報案人說「救護車已派出」，
         # 所以其他句子（轉人工、問姓名電話）都不再提派車，只有 _announce_dispatch 會講。
         self._dispatch_announced = False
-        # 救護流程中改判緊急救援（需要破門、墜落還沒跳下…）之後，救護的題目還會繼續問，
-        # 答案仍要照救護的欄位抽取、寫入（見 _fields_category）。
-        self._escalated_from_rescue = False
         self._dropped_details_asked = False
         self._probed_result = None
         # B：同一通內已被報案人否決過的模糊地標（matched/resolved），不再重複提案。
@@ -1993,16 +1990,7 @@ class SopEngine119:
 
         # ── 按主類別派遣 handler；進細類前可切大類後重入 ─────────────────────
         if self.case.main_category in _SWITCHABLE_MAIN_CATS:
-            while True:
-                try:
-                    self._dispatch_main_handler(self.case.main_category)
-                    break
-                except MainCategorySwitched as sw:
-                    self._debug_print(
-                        "main_switched_restart",
-                        {"old": sw.old, "new": sw.new},
-                    )
-                    continue
+            self._run_main_handler_until_settled()
             return
 
         # E2：其他案類轉出前先追問一次釐清，依『答案』改派救護/火警/緊急救援；
@@ -2256,6 +2244,19 @@ class SopEngine119:
             return "救護", 0.9, 1.0
         return "救護", 0.5, 0.0  # 預設（不確定）
 
+    def _run_main_handler_until_settled(self) -> None:
+        """跑目前主案類的流程；流程中改判別的主案類，就從新主案類的流程重新開始。"""
+        while True:
+            try:
+                self._dispatch_main_handler(self.case.main_category)
+                break
+            except MainCategorySwitched as sw:
+                self._debug_print(
+                    "main_switched_restart",
+                    {"old": sw.old, "new": sw.new},
+                )
+                continue
+
     def _dispatch_main_handler(self, main_cat: Optional[str]) -> None:
         if main_cat == "救護":
             self._run_救護()
@@ -2429,12 +2430,9 @@ class SopEngine119:
         with self._case_lock:
             self.case.main_category = new_cat
             self.case.main_conf     = 1.0
-        if answer is not None:
-            self._extract_all_fields_from_reply(answer, question=None)
-        else:
-            # 第一句話當時是用「其他案類」的欄位抽的；改成火警後，用火警的欄位再抽一次
-            for question, text in self._iter_caller_qa_pairs():
-                self._extract_all_fields_from_reply(text, question=question)
+        # 之前講的話都是用「其他案類」的欄位抽的；改派後用新主案類的欄位把整通再抽一次
+        for question, text in self._iter_caller_qa_pairs():
+            self._extract_all_fields_from_reply(text, question=question)
         if new_cat == "火警":
             self._refresh_fire_subtype_from_bert()
         if new_cat == "災害":
@@ -2452,13 +2450,7 @@ class SopEngine119:
         )
         self._notify_case_update()
         self._set_stage("main_classified")
-
-        if new_cat == "救護":
-            self._run_救護()
-        elif new_cat == "火警":
-            self._run_火警()
-        elif new_cat == "緊急救援":
-            self._run_緊急救援()
+        self._run_main_handler_until_settled()
         return True
 
     def _commit_hard_subcategory(self, label: str) -> None:
@@ -3055,11 +3047,12 @@ class SopEngine119:
         )
         self._notify_case_update()
 
-    def _reextract_for_new_sub(self) -> None:
+    def _reextract_for_new_sub(self, *, sub_fields_only: bool = True) -> None:
         """
         救護、緊急救援每輪只抽目前次案類的欄位，次案類換了之後，換之前講過的話裡
         屬於新次案類的內容（例如還在急病時說「喝了巴拉刈」）就沒抽到。
         這裡用新次案類的欄位把整通報案人講過的話再抽一次，只補還空著的欄位。
+        sub_fields_only=False 時連主案類共通的欄位也抽（從別的主案類改判過來時用）。
         抽取一次最多讀 600 字，整通較長時切成幾段分別抽。
         """
         category = self._fields_category()
@@ -3079,7 +3072,7 @@ class SopEngine119:
                     main_category=category,
                     call_type=self.case.call_type,
                     sub_category=self.case.sub_category,
-                    sub_fields_only=True,
+                    sub_fields_only=sub_fields_only,
                 )
             except Exception as e:
                 self._debug_print("sub_reextract_error", e)
@@ -4566,6 +4559,8 @@ class SopEngine119:
                 self.case.suspected_sub_category = (
                     sub_cat if sub_source == "hard_rule" else None
                 )
+            # 定次案類之前講的話是在還沒有次案類時抽的，次案類的欄位沒抽到
+            self._reextract_for_new_sub()
             self._emit_classification(
                 main=self.case.main_category,
                 main_conf=self.case.main_conf,
@@ -4801,22 +4796,25 @@ class SopEngine119:
         if not sub and not self.case.sub_category:
             self._ask_and_extract(INCIDENT_REASK_QUESTION)
             sub, conf, source = self._accepted_emergency_sub()
-        if not sub:
-            return
-        with self._case_lock:
-            self.case.sub_category = sub
-            self.case.sub_conf = conf
-            if source == "hard_rule":
-                self.case.suspected_sub_category = sub
-            elif self.case.suspected_sub_category not in (None, sub):
-                self.case.suspected_sub_category = None
-        self._emit_classification(
-            main=self.case.main_category,
-            main_conf=self.case.main_conf,
-            sub=sub,
-            sub_conf=conf,
-            sub_source=source,
-        )
+        if sub:
+            with self._case_lock:
+                self.case.sub_category = sub
+                self.case.sub_conf = conf
+                if source == "hard_rule":
+                    self.case.suspected_sub_category = sub
+                elif self.case.suspected_sub_category not in (None, sub):
+                    self.case.suspected_sub_category = None
+            self._emit_classification(
+                main=self.case.main_category,
+                main_conf=self.case.main_conf,
+                sub=sub,
+                sub_conf=conf,
+                sub_source=source,
+            )
+        # 次案類定了（這裡定的、前面硬規則先定的都算），
+        # 用這個次案類的欄位把整通報案人講過的話重抽一次：之前每輪抽取時還沒有這個次案類，它的欄位沒抽到
+        if self.case.sub_category:
+            self._reextract_for_new_sub()
         self._notify_case_update()
 
     def _run_緊急救援(self) -> None:
@@ -4907,35 +4905,44 @@ class SopEngine119:
         handler.collect_caller_info(self)
 
     def _fields_category(self) -> Optional[str]:
-        """
-        抽取、寫入欄位時用哪個大類的欄位。平常就是目前的主案類；
-        救護流程中改判緊急救援之後，救護的題目還在繼續問，仍用救護的欄位，
-        不然報案人後面回答的報案身分、性別年齡、意識呼吸都會被丟掉。
-        """
-        if self._escalated_from_rescue:
-            return "救護"
+        """抽取、寫入欄位時用哪個大類的欄位，就是目前的主案類。"""
         return self.case.main_category
 
     def _switch_fire_to_vehicle_rescue(self) -> None:
         """
-        火警 1104 xlsx 交通工具備註：沒有火、車上有人出不來 → 改判緊急救援-車禍救助（使用者 11/04 決定）。
-        中斷火警，改走緊急救援車禍救助的題目，跟一般換主案類一樣（清掉火警欄位、用新大類重抽報案人講過的話）。
-        地址已確認過不重問；派車整通只講一次，火警講過就不再講。
+        火警 1104 xlsx 交通工具備註：沒有火、車上有人出不來 → 改判緊急救援-車禍救助（使用者 11/04 決定），
+        並轉真人（見 _switch_to_emergency_and_transfer）。
         """
-        from emergency_tab_map_119 import CRASH as SUBCATEGORY
+        from emergency_tab_map_119 import CRASH
 
         self._debug_print("fire_to_vehicle_rescue", {
             "火煙狀況": self.case.fire_or_smoke, "人員受困": self.case.trapped_status,
         })
-        self._apply_main_switch("火警", "緊急救援", 1.0)
+        self._switch_to_emergency_and_transfer("火警", CRASH, "火警沒有火、車上有人出不來，改判緊急救援-車禍救助")
+
+    def _switch_to_emergency_and_transfer(self, old_cat: str, sub: str, reason: str) -> None:
+        """
+        照 xlsx 規則改判緊急救援（救護改判、火警轉車禍救助）時，案件太複雜，轉真人交給受理員（使用者 11/06 決定）：
+        - 原案類已經問到的關鍵要素全部留在案件裡，受理員才看得到已經問到的重點
+        - 次案類換成指定的緊急救援次案類，用緊急救援的欄位把整通報案人講過的話重抽一次，只補空的
+        - 火警垂片、火警派遣等級不是關鍵要素，換成緊急救援後清掉
+        已經轉接過（真人接手、系統只在旁聽）時只改案類、重抽，不再講話。
+        """
         with self._case_lock:
-            self.case.sub_category = SUBCATEGORY
+            self.case.main_category = "緊急救援"
+            self.case.main_conf = 1.0
+            self.case.sub_category = sub
             self.case.sub_conf = 1.0
+            self.case.suspected_sub_category = None
+            self.case.fire_tab = None
+            if old_cat == "火警":
+                self.case.level = 0
+        self._reextract_for_new_sub(sub_fields_only=False)
         self._emit_classification(
-            main="緊急救援", main_conf=1.0, sub=SUBCATEGORY, sub_conf=1.0, sub_source="hard_rule",
+            main="緊急救援", main_conf=1.0, sub=sub, sub_conf=1.0, sub_source="hard_rule",
         )
         self._notify_case_update()
-        raise MainCategorySwitched("火警", "緊急救援")
+        self._transfer_to_human(reason)
 
     def _switch_disaster_to_fire(self) -> None:
         """
@@ -4968,41 +4975,26 @@ class SopEngine119:
 
     def _escalate_main_to_emergency(
         self,
-        reason: str = "需破門",
+        sub: str,
+        reason: str,
         line: Optional[str] = "這需要破門，我已為您加派消防車前往。",
     ) -> bool:
         """
-        救護流程中發現需消防物理協助（如上吊者反鎖在家、需破門）→ 改判緊急救援、加派消防車。
-
-        地址與救護車已在救護流程處理，故不重跑緊急救援 SOP、不再問地址；僅：
-          - 改主類為緊急救援（case 記錄→派消防車）
-          - 停用救護子類自動重分類（避免改判後又被拉回救護子類）
-          - 告知報案人已加派消防車（line 是廠商原句，只用在破門）
-        不是破門的改判（墜落還沒跳下、卡住，上吊在橋墩電塔）line 傳 None，不對報案人講話：
-        轉緊急救援的銜接語還沒設計，使用者 10/28 決定先不講、照正常流程繼續問，待跟承辦討論。
-        回傳是否有實際改判（已是緊急救援則 False）。
+        救護 xlsx 備註要改判緊急救援時（車禍有人受困、墜落還沒跳下或卡住、上吊、溺水、需破門），
+        改判成緊急救援的 sub 次案類（各救護次案類對到哪一個，使用者 11/06 決定），並轉真人
+        （救護問到的關鍵要素留著、重抽，見 _switch_to_emergency_and_transfer）。
+        line 只有破門講（廠商原句），講完才講轉接句；其他改判傳 None：
+        轉緊急救援的銜接語還沒設計，使用者 10/28 決定先不講，待跟承辦討論。
+        已經是緊急救援就不改判，回傳 False。
         """
         if self.case.main_category == "緊急救援":
             return False
-        with self._case_lock:
-            self.case.main_category = "緊急救援"
-            self.case.main_conf     = 1.0
-        self._sub_reclassify_enabled = False
-        self._escalated_from_rescue = True
-        self._debug_print("escalate_to_emergency", {"reason": reason,
-                                                     "sub": self.case.sub_category})
-        self._emit_classification(
-            main="緊急救援",
-            main_conf=1.0,
-            sub=self.case.sub_category,
-            sub_conf=self.case.sub_conf,
-            sub_source=(
-                "hard_rule" if self.case.suspected_sub_category else None
-            ),
-        )
-        self._notify_case_update()
-        if line:
+        self._debug_print("escalate_to_emergency", {
+            "reason": reason, "救護次案類": self.case.sub_category, "緊急救援次案類": sub,
+        })
+        if line and not self._bridged:
             self._say(line)
+        self._switch_to_emergency_and_transfer("救護", sub, f"救護改判緊急救援-{sub}：{reason}")
         return True
 
 

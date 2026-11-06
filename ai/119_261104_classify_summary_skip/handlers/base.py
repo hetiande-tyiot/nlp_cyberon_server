@@ -649,7 +649,7 @@ class SubCategoryHandler:
 
     def _maybe_escalate_break_in(self, engine: "SopEngine119", text: str) -> bool:
         """
-        流程中發現需消防破門（如上吊者反鎖在家）→ 改判緊急救援、加派消防車。回傳是否改判。
+        流程中發現需消防破門（如燒炭者反鎖在家）→ 改判緊急救援-破門、加派消防車，並轉真人。
 
         判斷用「關鍵字召回 + LLM 精準確認」，避免純關鍵字誤判：
           1. 否定感知關鍵字當便宜預篩——沒有未否定的破門訊號就直接跳過（不呼叫 LLM）。
@@ -685,8 +685,10 @@ class SubCategoryHandler:
                     return False
             except Exception as e:
                 engine._debug_print("break_in_llm_error", e)
+        from emergency_tab_map_119 import DOOR
+
         return engine._escalate_main_to_emergency(
-            reason=f"{engine.case.sub_category or '救護'}需破門",
+            DOOR, reason=f"{engine.case.sub_category or '救護'}需破門",
         )
 
     # ── 意識異常情境：主動探問服藥/中毒（C）────────────────────────────────────

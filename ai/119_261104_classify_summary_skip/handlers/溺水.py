@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from emergency_tab_map_119 import DROWN
 from ems_tab_map_119 import DROWNING_NOT_RESCUED
 
 from .ems_table import EmsTableHandler
@@ -29,6 +30,6 @@ class NiShuiHandler(EmsTableHandler):
         super().__init__("溺水")
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
-        """還在水裡、看不到人 → 改判緊急救援（不講話）。報案人哪一句講到都算。"""
+        """還在水裡、看不到人 → 改判緊急救援-溺水並轉真人。報案人哪一句講到都算。"""
         if engine.case.drowning_status in DROWNING_NOT_RESCUED:
-            engine._escalate_main_to_emergency(reason=f"溺水{engine.case.drowning_status}", line=None)
+            engine._escalate_main_to_emergency(DROWN, reason=f"溺水{engine.case.drowning_status}", line=None)

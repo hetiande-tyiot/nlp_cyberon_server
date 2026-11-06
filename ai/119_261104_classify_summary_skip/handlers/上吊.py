@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from emergency_tab_map_119 import DOOR
 from ems_tab_map_119 import BREAK_IN_NEEDED, EMS_QUESTIONS, HANGING_REMOTE_PLACES
 
 from .base import SubCategoryHandler
@@ -40,14 +41,14 @@ class ShangDiaoHandler(SubCategoryHandler):
         self._ask_ems_questions(engine, SHANG_DIAO_QUESTIONS)
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
-        """xlsx 備註：需要破門 → 緊急救援-破門；在橋墩、山上電塔 → 緊急救援-其他。報案人哪一句講到都算。"""
+        """xlsx 備註：需要破門 → 緊急救援-破門；在橋墩、山上電塔 → 緊急救援-其他。都轉真人。報案人哪一句講到都算。"""
         case = engine.case
         if case.break_in_need == BREAK_IN_NEEDED:
-            engine._escalate_main_to_emergency(reason="上吊需破門")
+            engine._escalate_main_to_emergency(DOOR, reason="上吊需破門")
         elif any(
             place in (case.hanging_location or "") for place in HANGING_REMOTE_PLACES
         ):
-            engine._escalate_main_to_emergency(reason="上吊在橋墩或電塔", line=None)
+            engine._escalate_main_to_emergency("其他", reason="上吊在橋墩或電塔", line=None)
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """上吊使用基類預設：詢問姓名與聯繫方式（無住址）。"""
