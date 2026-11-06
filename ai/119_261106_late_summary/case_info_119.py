@@ -54,32 +54,40 @@ class CaseInfo119:
     is_ohca:       bool           = False  # 是否判斷為 OHCA
 
     # ── 患者基本資訊（救護專用）────────────────────────────────────────────
-    patient_count:        Optional[str] = None  # 傷病患人數
+    patient_count:        Optional[str] = None  # 患者人數
     patient_gender:       Optional[str] = None  # 性別
     patient_age:          Optional[str] = None  # 年齡
     caller_is_patient:    Optional[bool] = None  # True=報案人即患者
-    incident_description: Optional[str] = None  # 發生了什麼事
+    incident_description: Optional[str] = None  # 發生了什麼事（緊急救援用；救護的病徵、主訴各有自己的欄位）
     current_condition:    Optional[str] = None  # 目前狀況
     injury_cause:         Optional[str] = None  # 受傷原因（一般受傷專用）
     injury_location:      Optional[str] = None  # 受傷部位（一般受傷專用）
     injury_severity:      Optional[str] = None  # 傷勢（一般受傷專用）
+    injury_place:         Optional[str] = None  # 發生場所（一般受傷）：住家室內、戶外等，照報案人說的記
+    crash_vehicles:       Optional[str] = None  # 事故車種（救護-車禍）：照報案人說的記，例：汽車撞機車
+    crash_trapped:        Optional[str] = None  # 人員受困（救護-車禍）：未知/無人受困/有人受困
+    conflict_status:      Optional[str] = None  # 衝突狀況（打架受傷）：已停止/進行中
+    weapon_held:          Optional[str] = None  # 持械（打架受傷）：沒有/不確定/刀/棍棒/酒瓶/玻璃/其他照原話
     tocc:                 Optional[str] = None  # TOCC（旅遊/職業/接觸/群聚史）
     medical_history:      Optional[str] = None  # 過去病史（路倒專用）
     collapse_cause:       Optional[str] = None  # 路倒原因（路倒專用）
-    ingested_substance:   Optional[str] = None  # 服藥種類與數量（吞食藥物專用）
+    ingested_substance:   Optional[str] = None  # 服用藥物（吞食藥物）
     # 救護垂片 1018 xlsx 新增的文字欄位（急病、燒燙傷照題目表問）
-    consciousness_level:  Optional[str] = None  # 意識程度：未知/意識清醒/剛剛昏倒、現在已清醒/對聲音有反應/對疼痛有反應/昏迷
-    caller_relation:      Optional[str] = None  # 報案人與患者關係（報案身分）：本人/家人/朋友/路過/不認識…
+    consciousness_level:  Optional[str] = None  # 意識：未知/清醒/迷迷糊糊/沒有反應
+    caller_relation:      Optional[str] = None  # 報案身分：本人/家人/朋友/路過/不認識…
     caller_location:      Optional[str] = None  # 報案人位置：在現場/在患者旁邊/在遠處/不敢靠近/不在現場…
     drinking_status:      Optional[str] = None  # 是否飲酒：有喝酒/沒有喝酒/不清楚（被動）
+    collapse_status:      Optional[str] = None  # 路倒狀況：喝醉/睡著/身體不舒服/跌倒受傷/不清楚
+    patient_appearance:   Optional[str] = None  # 外觀特徵（路倒）：照報案人說的記，讓救護人員找得到人
+    companion_present:    Optional[str] = None  # 身旁親友（路倒舊欄位）：1106 xlsx 起路倒改問家屬陪同，這格沒有題目在用，要不要刪待決定
     mobility:             Optional[str] = None  # 平常行動能力：平常可以自己走/平常需要人扶/長期臥床或坐輪椅（被動）
     symptom_onset:        Optional[str] = None  # 症狀發生時間（被動）
     scene_access:         Optional[str] = None  # 現場進入條件：有沒有人開門、管理員、電梯（被動）
     # 救護垂片 1028 xlsx 燒炭OK 的文字欄位
     charcoal_status:      Optional[str] = None  # 炭盆狀況：尚未熄滅/已滅火
-    patient_location:     Optional[str] = None  # 患者所在位置：還在裡面/已在外面
+    patient_location:     Optional[str] = None  # 患者位置（燒炭）：還在裡面/已在外面
     # 救護垂片 1028 xlsx 墜落傷OK
-    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/已勸導離開
+    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/卡住/已勸導離開
     fall_height:          Optional[str] = None  # 墜落高度：幾樓或多高
     fall_position:        Optional[str] = None  # 患者位置：地面(一樓)/卡住/不清楚
     stuck_location:       Optional[str] = None  # 卡住位置：遮雨棚/女兒牆/屋頂或鐵皮屋/陽台/鷹架…
@@ -87,9 +95,9 @@ class CaseInfo119:
     hanging_status:       Optional[str] = None  # 上吊狀況：已解開繩子/還沒解開
     break_in_need:        Optional[str] = None  # 破門需求：需要破門/不需要破門
     hanging_location:     Optional[str] = None  # 患者位置：住家/橋墩/山上電塔
-    # 救護垂片 1028 xlsx 割腕OK（初步傷勢沿用 injury_severity）
-    cutting_tool:         Optional[str] = None  # 工具：美工刀/菜刀/玻璃…
-    tool_status:          Optional[str] = None  # 工具狀況：已移除/還在身上/不清楚
+    # 救護垂片 1104 xlsx 割腕OK（傷勢沿用 injury_severity）
+    cutting_tool:         Optional[str] = None  # 工具（割腕、刀傷）：美工刀/菜刀/玻璃…
+    tool_status:          Optional[str] = None  # 工具移除：已移除/還在身上/不清楚
     # 救護垂片 1028 xlsx 吞食藥物OK（服用藥物沿用 ingested_substance、病史沿用 medical_history）
     drug_amount:          Optional[str] = None  # 藥物數量：一整罐、大概 20 顆…
     medicine_bag:         Optional[str] = None  # 藥袋：有/無
@@ -99,14 +107,28 @@ class CaseInfo119:
     forced_admission:     Optional[str] = None  # 強制送醫：需要/不需要/不清楚
     forced_admission_reason: Optional[str] = None  # 強制送醫原因：大吼罵人/摔丟東西/胡言亂語…
     family_accompany:     Optional[str] = None  # 家屬陪同：有/沒有/家屬在路上
+    # 救護垂片 1102 xlsx 電擊傷、溺水
+    electric_type:        Optional[str] = None  # 電擊種類：高壓電/雷擊/家用電/其他
+    power_off:            Optional[str] = None  # 現場是否已斷電：已斷電/未斷電
+    patient_identity:     Optional[str] = None  # 傷患身分（電擊傷）：照報案人說的記，例：工地工人、外籍移工
+    drowning_status:      Optional[str] = None  # 溺水狀況：還在水裡/看不到人/已拉上岸
+    # 救護垂片名稱不同的關鍵要素各自一格（11/04 使用者決定）
+    symptoms:             Optional[str] = None  # 病徵：全身無力/昏倒/喘/頭暈…
+    chief_complaint:      Optional[str] = None  # 主訴（其它）：身體不舒服/受傷/想自殺…
+    burn_cause:           Optional[str] = None  # 燒燙傷原因：熱水/熱油/火燒/化學藥劑/電
+    burn_severity:        Optional[str] = None  # 燙傷傷勢：燙到哪裡、範圍多大、有沒有起水泡
+    drowning_cause:       Optional[str] = None  # 溺水原因（救護、緊急救援共用）：照報案人說的記，例：失足落水/游泳抽筋/翻船
+    pesticide_type:       Optional[str] = None  # 農藥種類：除草劑/巴拉刈/清潔劑…
+    pesticide_amount:     Optional[str] = None  # 農藥劑量：半瓶/一整瓶…
 
     # ── 孕婦急產專用 ─────────────────────────────────────────────────────────────
-    pregnancy_week:        Optional[str] = None  # 胎次與孕週（如「第1胎32週」）
+    # 下面幾個欄位照 1028 xlsx「12-孕婦待產」的關鍵要素記（題目表見 ems_tab_map_119）
+    pregnancy_week:        Optional[str] = None  # 懷孕週數（如「39週」）
     due_date:              Optional[str] = None  # 預產期
-    multiple_pregnancy:    Optional[str] = None  # 單或雙胞胎
+    multiple_pregnancy:    Optional[str] = None  # 胎次與胎數（如「第2胎、單胞胎」）
     water_broken_bleeding: Optional[str] = None  # 破水/出血狀況
-    contractions:          Optional[str] = None  # 宮縮情況（如「5分鐘一次」）
-    prenatal_history:      Optional[str] = None  # 產檢異常史
+    contractions:          Optional[str] = None  # 陣痛狀況：沒有陣痛/不規則陣痛/規則陣痛/已經破水/落紅
+    prenatal_history:      Optional[str] = None  # 產檢狀況：產檢正常/產檢有異常/沒產檢或不知道
     prenatal_clinic:       Optional[str] = None  # 產檢醫院/診所
 
     # ── 火警 SOP 要素 ────────────────────────────────────────────────────────
@@ -114,8 +136,7 @@ class CaseInfo119:
     smoke_color:         Optional[str] = None  # 黑煙/白煙/其他顏色
     burning_object:      Optional[str] = None  # 燒什麼（房子/車子/雜草…）
     fire_trend:          Optional[str] = None  # 變大/消退/穩定
-    fire_extent:         Optional[str] = None  # 火勢大約範圍
-    fire_category:       Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
+    fire_category:      Optional[str] = None  # 舊四分類：建築物/工廠/車輛/露天野外
 
     # 火警垂片代碼（0 為合法已填值）
     fire_tab:              Optional[str] = None  # A / B1 / B2 / C
@@ -137,38 +158,40 @@ class CaseInfo119:
 
     # 垂片 A（建築物火警）照 xlsx 新增的欄位，存文字（參考範圍不是選擇題）。
     # 其他 A 的關鍵要素沿用既有文字欄位：fire_or_smoke（火煙狀況）、
-    # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、fire_extent。
+    # smoke_color、fire_floor、building_total_floors、caller_role、hazardous_materials、
+    # nearby_water_source（水源狀況）。
     place_usage:           Optional[str] = None  # 場所用途：住宅/店家/工廠/辦公室…
     # 建築物類型（1013 xlsx，A、C 都問）：透天厝、集合住宅、倉庫…
     # 在 A 跟次案類相同；在 C 另外記，次案類仍是警報器作響等
     building_type:         Optional[str] = None
-    spread_status:         Optional[str] = None  # 延燒可能：延燒可能性低/極可能或已延燒…
-    trapped_status:        Optional[str] = None  # 有無受困：只記 有人受困/無人受困/不確定；有人受困就轉人工
-    door_response:         Optional[str] = None  # 起火戶應門：有人在或已聯絡上/敲門無回應或聯絡不上…
+    trapped_status:        Optional[str] = None  # 人員受困（A、B1、C）：只記 未知/無人受困/有人受困；有人受困就轉人工
+    door_response:         Optional[str] = None  # 起火戶應門（A、C）：有人應門/無人應門/已聯絡上/聯絡不上
     building_construction: Optional[str] = None  # 建物構造：木造屋/鐵皮屋/磚造屋/RC…
     odor:                  Optional[str] = None  # 氣味：燒焦味/塑膠味/瓦斯味…
     explosion_status:      Optional[str] = None  # 有無爆炸（被動，報案人講到才記）
-    access_info:           Optional[str] = None  # 其他資訊：消防車進不進得去、有沒有水源（被動）
 
     # 垂片 B1（交通工具火警）照 xlsx 新增的欄位，存文字。起火車輛數量沿用 vehicle_count。
     vehicle_kind:          Optional[str] = None  # 交通工具（1013）：聯結車/大小貨車/小客車/汽車/機車/腳踏車…
-    vehicle_model:         Optional[str] = None  # 車型（1013）：小客車/休旅車/計程車/貨車…
-    vehicle_power:         Optional[str] = None  # 車輛動力（1013）：油車/油電車/電動車
+    vehicle_model:         Optional[str] = None  # 車型（1013）：1104 xlsx 拿掉，不問也不抽
+    vehicle_power:         Optional[str] = None  # 車輛動力(汽車)：不確定/油車/油電車/電動車(Tesla)
+    vehicle_power_motorcycle: Optional[str] = None  # 車輛動力(機車)：不確定/油車/電動車(GOGORO)
     bicycle_type:          Optional[str] = None  # 腳踏車車型（1013）：一般腳踏車/UBIKE/電輔車
     fire_origin_part:     Optional[str] = None  # 起火部位：車頭或引擎/車廂或車斗/車底/電瓶…
-    engine_off_status:     Optional[str] = None  # 車輛是否已熄火：已熄火/未熄火…
-    occupants_status:      Optional[str] = None  # 乘客下車狀況：只記 人已全部下車/仍有人在車上/不確定；仍有人在車上就轉人工
-    injury_status:         Optional[str] = None  # 有無人員受傷
+    engine_off_status:     Optional[str] = None  # 熄火狀態：已熄火/未熄火
+    injury_status:         Optional[str] = None  # 患者人數：記人數，例如 1 人、2 人
     cargo:                 Optional[str] = None  # 載運物：易燃物/化學品/鋰電池…
     extinguish_status:     Optional[str] = None  # 滅火狀況：無人/有人在場/已在自行滅火…（B2 也用）
     vehicle_motion:        Optional[str] = None  # 車輛行駛狀況：停放路邊/行駛中起火/停車場內
     plate_number:          Optional[str] = None  # 車牌號碼（被動）
 
     # 垂片 C（輕微火警）照 0929 xlsx 新增的欄位，存文字。
-    # 氣味類型沿用 odor、無人應門沿用 door_response、燃燒範圍沿用 fire_extent（都跟 A 共用）。
+    # 氣味類型沿用 odor（跟 A 共用）。
     alarm_status:          Optional[str] = None  # 警報器狀態：已停止/仍在響/疑似誤報…
     source_located:        Optional[str] = None  # 來源確認：已確認位置/聞得到但找不到來源…
     target_object:         Optional[str] = None  # 標的物：電線桿或電纜/電表/電箱/人孔蓋/招牌…（被動）
+    # 各垂片共用（1106 xlsx），參考範圍不同的依垂片給抽取規則
+    spread_reached:        Optional[str] = None  # 是否延燒（A、B1、B2、C）：無/是/可能性高
+    burning_area:          Optional[str] = None  # 燃燒面積（A 坪數、B2 停車格或籃球場、C 照報案人說的記）
 
     # 建築物火災
     caller_position:      Optional[str] = None  # 報案人在建物內/外
@@ -193,100 +216,46 @@ class CaseInfo119:
 
     # 露天野外火災
     outdoor_fire_type:  Optional[str] = None  # 雜草垃圾/山林/高速公路
-    nearby_water_source: Optional[str] = None  # 水源或消防栓狀況
+    nearby_water_source: Optional[str] = None  # 水源狀況（A：一般情況/小巷/缺水/小巷且缺水；B2：無或未知/有）
     affected_targets:   Optional[str] = None  # 波及建物/車輛/人員
 
     # ── 災害通用流程（所有子類同一套題）──────────────────────────────────────
-    disaster_injury_or_trapped: Optional[str] = None  # 受傷受困：無人受傷/有人受傷/有人受困
-    disaster_trapped_count:     Optional[str] = None  # 受困人數（照報案人的話記）
-    traffic_impact:             Optional[str] = None  # 交通影響：未影響交通/佔用部分車道/完全無法通行
-    electrical_hazard:          Optional[str] = None  # 有無火花冒煙或帶電：沒有/有火花或冒煙/不確定
-    disaster_caller_role:       Optional[str] = None  # 報案人身分：屋主或住戶/鄰居或附近店家/路過/里長或管理員/其他
+    # 人員受困、火煙狀況、報案人位置、報案身分跟火警、救護共用欄位
+    #（trapped_status、fire_or_smoke、caller_location、caller_relation）
+    disaster_injury:        Optional[str] = None  # 人員受傷：未知/無人受傷/有人受傷
+    disaster_trapped_count: Optional[str] = None  # 受困人數（照報案人的話記）
+    traffic_impact:         Optional[str] = None  # 交通影響：未影響交通/佔用部分車道/完全無法通行
 
-    # ── 緊急救援・車禍救助 ────────────────────────────────────────────────────
-    accident_vehicle_type:    Optional[str] = None  # 事故車種（固定九種）
-    accident_injury:          Optional[str] = None  # 受傷情形（固定八種，含無）
-    accident_trapped:         Optional[str] = None  # 有無受困：無人受困/有人受困
-    accident_casualty_count:  Optional[str] = None  # 受傷、受困人數（照報案人的話記）
-    accident_consciousness:   Optional[str] = None  # 當事人意識：意識清醒/對聲音有反應/對疼痛有反應/昏迷
-    accident_burning:         Optional[str] = None  # 燃燒情形（照原話記煙、火、延燒）
-    accident_caller_role:     Optional[str] = None  # 報案身分：當事人(本人)/路過/其他原話
-    accident_traffic_impact:  Optional[str] = None  # 影響範圍（照原話記）
-
-    # ── 緊急救援・溺水 / 跳水 / 跳樓 ─────────────────────────────────────────
-    drown_caller_role:    Optional[str] = None  # 路人/家屬/海巡/其他原話
-    drown_cause:          Optional[str] = None  # 戲水/釣魚/失足/其他
-    drown_count:          Optional[str] = None  # 落水人數（照原話）
-    drown_sight:          Optional[str] = None  # 還在水裡/看不到人/已經救起
-    drown_distance:       Optional[str] = None  # 離岸距離（照原話）
-    drown_flotation:      Optional[str] = None  # 有/沒有救生衣或泳圈
-    drown_consciousness:  Optional[str] = None  # 意識四種固定說法
-    drown_gender:         Optional[str] = None  # 男性/女性
-    drown_age:            Optional[str] = None  # 年齡；未滿一歲用 .01 這種小數
-    drown_clothing:       Optional[str] = None  # 衣著（照原話）
-    drown_group:          Optional[str] = None  # 團體帶隊（被動，照原話）
-    dive_status:          Optional[str] = None  # 已經跳下/還沒跳（還在橋上、欄杆外）
-    dive_sight:           Optional[str] = None  # 還在水裡/看不到人/已經救起
-    dive_caller_role:     Optional[str] = None  # 路人/家屬/朋友/其他原話
-    dive_gender:          Optional[str] = None  # 男性/女性
-    dive_age:             Optional[str] = None
-    dive_clothing:        Optional[str] = None
-    dive_count:           Optional[str] = None
-    dive_consciousness:   Optional[str] = None
-    fall_caller_role:     Optional[str] = None  # 當事人(本人)/家人/鄰居或住戶/路人
-    high_fall_status:     Optional[str] = None  # 還在高處/已經掉下來
-    fall_intent:          Optional[str] = None  # 輕生意圖（照原話）
-    fall_floor:           Optional[str] = None
-    fall_gender:          Optional[str] = None
-    fall_age:             Optional[str] = None
-
-    # ── 緊急救援・山難 / 卡住夾住 / 瓦斯漏氣 ──────────────────────────────
-    mountain_cause:          Optional[str] = None  # 迷路/受傷/身體不舒服/失聯沒下山/其他原話
-    mountain_injury:         Optional[str] = None  # 受傷部位固定說法
-    mountain_count:          Optional[str] = None
-    mountain_location:       Optional[str] = None
-    mountain_caller_role:    Optional[str] = None  # 本人/代為報案/其他原話
-    mountain_gender:         Optional[str] = None
-    mountain_age:            Optional[str] = None
-    mountain_consciousness:  Optional[str] = None
-    mountain_entry:          Optional[str] = None
-    mountain_route:          Optional[str] = None
-    mountain_supplies:       Optional[str] = None
-    mountain_leader:         Optional[str] = None  # 帶隊人員（被動）
-    trap_body_part:          Optional[str] = None
-    trap_object:             Optional[str] = None
-    trap_freed:              Optional[str] = None  # 還卡著/已經出來了
-    trap_injury:             Optional[str] = None  # 有/沒有
-    trap_place:              Optional[str] = None
-    trap_gender:             Optional[str] = None
-    trap_age:                Optional[str] = None
-    trap_caller_role:        Optional[str] = None  # 當事人(本人)/家人/同事/路人
-    trap_consciousness:      Optional[str] = None
-    gas_building_use:        Optional[str] = None
-    gas_caller_role:         Optional[str] = None
-    gas_flame:               Optional[str] = None  # 有/沒有
-    gas_smell_place:         Optional[str] = None
-    gas_smell_strength:      Optional[str] = None  # 很濃/淡淡的/一陣一陣
-    gas_type:                Optional[str] = None  # 天然氣/瓦斯桶
-    gas_adjacent:            Optional[str] = None  # 鄰接建物（被動）
-    gas_discomfort:          Optional[str] = None  # 身體不適（被動）：有/沒有
-
-    # ── 緊急救援・電梯受困 / 破門 ─────────────────────────────────────────
-    lift_caller_role:     Optional[str] = None  # 受困者本人/管理員或警衛/其他
-    lift_building:        Optional[str] = None  # 社區、棟別、哪一部電梯
-    lift_floor:           Optional[str] = None  # 停在幾樓
-    lift_count:           Optional[str] = None  # 受困人數（照原話）
-    lift_company:         Optional[str] = None  # 已經聯絡/還沒聯絡
-    lift_consciousness:   Optional[str] = None
-    lift_discomfort:      Optional[str] = None  # 有/沒有/不知道（被動）
-    door_caller_role:     Optional[str] = None  # 本人/家人/房客/朋友/同事/其他原話
-    door_reason:          Optional[str] = None  # 擔心原因（照原話或常見說法）
-    knock_response:       Optional[str] = None  # 有回應/沒有回應/有聲音但叫不應
-    door_kind:            Optional[str] = None  # 大門/房門/浴室門/鐵門
-    door_locksmith:       Optional[str] = None  # 有鑰匙但打不開/沒有鑰匙/已找鎖匠
-    door_consent:         Optional[str] = None  # 同意/不同意/家屬或屋主還沒到
-    door_gender:          Optional[str] = None
-    door_age:             Optional[str] = None
+    # ── 緊急救援（1106 xlsx）自己的關鍵要素 ──────────────────────────────────
+    # 跟救護、火警、災害名稱一樣的關鍵要素共用那邊的欄位（見 emergency_tab_map_119.EMERGENCY_SHARED_FIELDS）
+    drown_distance:       Optional[str] = None  # 離岸距離（照報案人說的記）
+    drown_flotation:      Optional[str] = None  # 救生裝備：有/沒有
+    drown_group:          Optional[str] = None  # 團體帶隊（被動）：個人/公司/社團（溺水、山難共用）
+    dive_status:          Optional[str] = None  # 跳水狀況：尚未跳下/已跳下/已勸導離開
+    fall_intent:          Optional[str] = None  # 輕生意圖（照報案人說的記）
+    fall_floor:           Optional[str] = None  # 所在樓層
+    mountain_cause:       Optional[str] = None  # 山難原因：迷路/受傷/身體不舒服/失聯沒下山/其他照報案人說的記
+    mountain_location:    Optional[str] = None  # 位置座標
+    mountain_entry:       Optional[str] = None  # 入山資訊
+    mountain_route:       Optional[str] = None  # 登山路線
+    mountain_supplies:    Optional[str] = None  # 隨身物資
+    trap_body_part:       Optional[str] = None  # 卡住部位
+    trap_object:          Optional[str] = None  # 卡住物品
+    trap_freed:           Optional[str] = None  # 是否脫困：還卡著/已經出來了
+    gas_smell_place:      Optional[str] = None  # 聞到位置
+    gas_smell_strength:   Optional[str] = None  # 味道濃淡：很濃/淡淡的/一陣一陣
+    gas_type:             Optional[str] = None  # 瓦斯種類：天然氣/瓦斯桶
+    gas_adjacent:         Optional[str] = None  # 鄰接建物（被動）
+    gas_discomfort:       Optional[str] = None  # 身體不適（被動）：有/沒有/不知道（瓦斯漏氣、電梯受困共用）
+    lift_building:        Optional[str] = None  # 社區棟別
+    lift_floor:           Optional[str] = None  # 受困樓層
+    lift_count:           Optional[str] = None  # 受困人數（照報案人說的記）
+    lift_company:         Optional[str] = None  # 電梯公司：已經聯絡/還沒聯絡
+    door_reason:          Optional[str] = None  # 擔心原因
+    knock_response:       Optional[str] = None  # 有無回應：有回應/沒有回應/有聲音但叫不應
+    door_kind:            Optional[str] = None  # 門的種類：大門/房門/浴室門/鐵門
+    door_locksmith:       Optional[str] = None  # 鑰匙鎖匠：有鑰匙但打不開/沒有鑰匙/已找鎖匠
+    door_consent:         Optional[str] = None  # 同意破門：同意/不同意/家屬或屋主還沒到
 
     # ── 觸發情境（急病 / 火警通用）────────────────────────────────────────────
     triggered_scenarios: List[int]  = field(default_factory=list)  # 已觸發情境編號清單
@@ -344,8 +313,8 @@ class CaseInfo119:
     #   → 火警_summary_confirm → 火警_caller_info → completed
     #   緊急救援：緊急救援_location → 緊急救援_location_confirm
     #   → 緊急救援_incident → 緊急救援_summary_confirm → 緊急救援_caller_info → completed
-    #   災害：災害_location → 災害_location_confirm → 災害-受傷受困 → 災害-受困人數
-    #   → 災害-交通影響 → 災害-有無火花冒煙或帶電 → 災害-報案人身分
+    #   災害：災害_location → 災害_location_confirm → 災害-人員受傷 → 災害-受困人數
+    #   → 災害-交通影響 → 災害-火煙狀況 → 災害-報案人位置
     #   → 災害_summary_confirm → 災害_caller_info → completed
     #   局內回報：局內回報_need → 局內回報_location
     #   → 局內回報_field_content | 局內回報_support_detail

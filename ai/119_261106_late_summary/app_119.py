@@ -269,9 +269,17 @@ _CSS = """
 # ─── 流程階段定義（用於右欄進度顯示）────────────────────────────────────────
 
 from disaster_flow_119 import DISASTER_QUESTIONS
-from emergency_accident_119 import ACCIDENT_QUESTIONS
-from emergency_rescue_subs_119 import ASKED_SUB_QUESTIONS
+from emergency_tab_map_119 import EMERGENCY_QUESTIONS
 from fire_tab_map_119 import MODE_PASSIVE, TAB_QUESTIONS
+
+# 緊急救援各次案類會問到的題目（被動題、沒有問句跟上一題一起問的不列）：[(流程階段名稱, 關鍵要素)]
+# 直接取自 emergency_tab_map_119 的題目表（1106 xlsx）。
+_EMERGENCY_ASKED_LABELS: List[tuple[str, str]] = list(dict.fromkeys(
+    (item.stage, item.element)
+    for questions in EMERGENCY_QUESTIONS.values()
+    for item in questions
+    if item.mode != MODE_PASSIVE and item.question
+))
 
 # 各垂片會問到的題目（被動題 AI 不問，不列入進度）：{垂片: [(流程階段名稱, 畫面上顯示的文字)]}
 # 直接取自 fire_tab_map_119 的題目表，xlsx 改題目時這裡會自動跟著變。
@@ -327,12 +335,7 @@ _STAGE_LABELS: List[tuple[str, str]] = [
     ("緊急救援_location",        "確認地址"),
     ("緊急救援_location_confirm", "地址確認中"),
     ("緊急救援_incident",        "詢問事發經過"),
-    *((item.stage, item.element) for item in ACCIDENT_QUESTIONS),
-    *((item.stage, item.element) for item in ASKED_SUB_QUESTIONS),
-    ("緊急救援_relation",        "詢問關係"),
-    ("緊急救援_patient",         "詢問患者性別年齡"),
-    ("緊急救援_consciousness",   "確認意識"),
-    ("緊急救援_breathing",       "確認呼吸"),
+    *_EMERGENCY_ASKED_LABELS,
     ("緊急救援_summary_confirm", "案情摘要回填"),
     ("緊急救援_caller_info",     "收集報案人訊息"),
     ("災害_location",            "確認地址"),
@@ -400,10 +403,7 @@ _EMERGENCY_STAGES: List[str] = [
     "location_validation_reask",
     "緊急救援_location_confirm",
     "緊急救援_incident",
-    *(item.stage for item in ACCIDENT_QUESTIONS),
-    *(item.stage for item in ASKED_SUB_QUESTIONS),
-    "緊急救援_relation", "緊急救援_patient",
-    "緊急救援_consciousness", "緊急救援_breathing",
+    *(stage for stage, _ in _EMERGENCY_ASKED_LABELS),
     "緊急救援_summary_confirm", "緊急救援_caller_info",
     "completed", "human_transfer",
 ]

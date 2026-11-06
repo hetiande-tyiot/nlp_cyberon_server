@@ -6,7 +6,7 @@ handlers/精神異常.py
 照 1028 xlsx「13-精神異常OK」的題目表逐題問（ems_tab_map_119.EMS_QUESTIONS["精神異常"]、
 base._ask_ems_questions）。
 意識、呼吸是被動題（承辦：精神異常有動作行為，基本上不用再問意識呼吸），
-所以不問、也不做 OHCA 判定。
+所以不問；報案人自己講到呼吸不正常、無呼吸時，一樣轉真人（見 base._check_breathing_transfer）。
 OK 表的案類不用觸發情境，所以這裡沒有。
 
 報案人訊息沿用基類預設（姓名 + 聯繫方式，無住址）。
@@ -30,11 +30,8 @@ JING_SHEN_QUESTIONS = EMS_QUESTIONS["精神異常"]
 class JingShenYiChangHandler(SubCategoryHandler):
     """精神異常次類別 Handler。"""
 
-    # 題目表的欄位，加上「是否有意識」
-    # （切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
-    SOP_SLOTS: tuple[str, ...] = tuple(
-        item.field for item in JING_SHEN_QUESTIONS
-    ) + ("consciousness",)
+    # 題目表的欄位（切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
+    SOP_SLOTS: tuple[str, ...] = tuple(item.field for item in JING_SHEN_QUESTIONS)
 
     def run_subtype_flow(self, engine: "SopEngine119") -> None:
         """照題目表逐題問（見 base._ask_ems_questions）。"""

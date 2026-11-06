@@ -31,14 +31,11 @@ SHANG_DIAO_QUESTIONS = EMS_QUESTIONS["上吊"]
 class ShangDiaoHandler(SubCategoryHandler):
     """上吊次類別 Handler。"""
 
-    # 題目表的欄位，加上 OHCA 判定用的「是否有意識」
-    # （切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
-    SOP_SLOTS: tuple[str, ...] = tuple(
-        item.field for item in SHANG_DIAO_QUESTIONS
-    ) + ("consciousness",)
+    # 題目表的欄位（切換次案類時用：沒列在這裡的欄位，從別的次案類切過來時會被清掉）
+    SOP_SLOTS: tuple[str, ...] = tuple(item.field for item in SHANG_DIAO_QUESTIONS)
 
     def run_subtype_flow(self, engine: "SopEngine119") -> None:
-        """照題目表逐題問；問完呼吸做 OHCA 判定（見 base._ask_ems_questions）。"""
+        """照題目表逐題問；呼吸不正常、無呼吸轉真人（見 base._ask_ems_questions）。"""
         engine._ensure_known_fields_from_history()
         self._ask_ems_questions(engine, SHANG_DIAO_QUESTIONS)
 

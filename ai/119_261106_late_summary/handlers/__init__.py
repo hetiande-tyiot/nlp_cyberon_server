@@ -25,6 +25,8 @@ from .燒燙傷 import ShaoTangShangHandler
 from .割腕 import GeWanHandler
 from .上吊 import ShangDiaoHandler
 from .車禍 import CheHuoHandler
+from .溺水 import NiShuiHandler
+from .ems_table import EmsTableHandler
 
 _REGISTRY: dict[str, SubCategoryHandler] = {
     "急病":    JiBingHandler(),
@@ -34,19 +36,28 @@ _REGISTRY: dict[str, SubCategoryHandler] = {
     "打架受傷": DaJiaShouShangHandler(),
     "吞食藥物": TunShiYaoWuHandler(),
     "墜落傷":  ZhuiLuoShangHandler(),
-    "孕婦急產": YunFuJiChanHandler(),
+    "孕婦待產": YunFuJiChanHandler(),
     "燒炭":    ShaoTanHandler(),
     "燒燙傷":  ShaoTangShangHandler(),
     "割腕":    GeWanHandler(),
     "上吊":    ShangDiaoHandler(),
     "車禍":    CheHuoHandler(),
+    "溺水":    NiShuiHandler(),
+    # 只照題目表問、沒有提醒語和改判的次案類共用一個 Handler
+    "刀傷(切割傷)": EmsTableHandler("刀傷(切割傷)"),
+    "槍傷":    EmsTableHandler("槍傷"),
+    "壓傷":    EmsTableHandler("壓傷"),
+    "電擊傷":  EmsTableHandler("電擊傷"),
+    "喝農藥":  EmsTableHandler("喝農藥"),
+    "吸入廢氣": EmsTableHandler("吸入廢氣"),
+    "其它":    EmsTableHandler("其它"),
 }
 
 _DEFAULT_HANDLER = SubCategoryHandler()
 
 # 切類時可直接保留的同義槽（兩邊都用且語義相同）。同名異義槽不在此列。
 SHARED_SEMANTIC_SLOTS = frozenset({
-    "incident_description",
+    "symptoms",
     "consciousness",
     "breathing",
     "abdomen_rise",

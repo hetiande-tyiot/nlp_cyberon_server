@@ -21,7 +21,9 @@ SIMULATED_INCOMING_CALLER: Dict[str, Optional[str]] = {
 
 def fetch_incoming_caller() -> Dict[str, Any]:
     """取得本通來電的號碼與地址。失敗時由呼叫端當成空號。"""
-    return dict(SIMULATED_INCOMING_CALLER)
+    # 還沒接上真正的來電資料前先回傳空的，當成沒有號碼，照原本流程問地址。
+    # 不回傳上面的模擬資料，否則每通電話都會先問「是不是文化路一段100號」。
+    return {}
 
 
 def classify_incoming_line(phone: Any) -> str:

@@ -3,34 +3,23 @@ handlers/緊急救援通用.py
 ━━━━━━━━━━━━━━━━━━━━━━━━
 119 SOP — 緊急救援大類
 
-  run_generic_flow — 定次案類後，車禍救助走八題，再問關係、性別年齡、呼吸
-  collect_caller_info — 救援人員話術收集報案人訊息
+  run_generic_flow — 定次案類、講派車，有次案類就照 1106 xlsx 題目表問（emergency_tab_map_119）
+  collect_caller_info — 收集報案人訊息
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from emergency_accident_119 import (
-    ACCIDENT_QUESTIONS,
-    BREATHING_QUESTION,
-    CONSCIOUSNESS_QUESTION,
+from emergency_tab_map_119 import (
     DISPATCH_LINE,
-    MODE_CONDITIONAL,
-    PATIENT_QUESTION,
-    RELATION_QUESTION,
-    SUBCATEGORY,
-    AccidentQuestion,
+    PARTY_SINGLE_MISSING_QUESTIONS,
+    PARTY_SUBS,
+    TRANSFER_SUBS,
+    questions_for_subtype,
+    should_switch_to_fire,
 )
-from emergency_rescue_subs_119 import (
-    GENDER_AGE_SUBS,
-    MODE_PASSIVE,
-    OWN_CONSCIOUSNESS_SUBS,
-    SUB_QUESTIONS,
-    RescueSubQuestion,
-)
-from sop_utils_119 import parse_yes_no_for_question
-from .base import SubCategoryHandler
+from .base import RESCUE_CLOSING_LINE, SubCategoryHandler
 
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
@@ -40,17 +29,22 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
     """緊急救援大類通用 Handler（不登記於子類 registry）。"""
 
     def run_generic_flow(self, engine: "SopEngine119") -> None:
-        """次案類定了才派車。題目進行中若換成別的次案類，從新次案類重問還沒填的題。"""
+        """
+        次案類定了才派車。有次案類就照題目表問，判不出來就轉真人（使用者 11/07 決定）。
+        題目進行中若換成別的次案類，從新次案類的題目表重問還沒填的題。
+        """
         from sop_119_engine import SubCategorySwitched
 
         engine._ensure_known_fields_from_history()
         engine._settle_emergency_subcategory()
+        self._transfer_if_needed(engine)
         engine._announce_dispatch(DISPATCH_LINE)
         engine._sub_reclassify_enabled = True
         try:
             while True:
                 try:
-                    self._ask_current_subtype(engine)
+                    self._transfer_if_needed(engine)
+                    self._ask_ems_questions(engine, questions_for_subtype(engine.case.sub_category))
                     break
                 except SubCategorySwitched as sw:
                     engine._debug_print(
@@ -61,120 +55,30 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
         finally:
             engine._sub_reclassify_enabled = False
 
-    def _ask_current_subtype(self, engine: "SopEngine119") -> None:
-        if engine.case.sub_category == SUBCATEGORY:
-            self._ask_accident(engine)
-        elif engine.case.sub_category in SUB_QUESTIONS:
-            self._ask_sub(engine, SUB_QUESTIONS[engine.case.sub_category])
-        self._ask_tail(engine)
+    def _transfer_if_needed(self, engine: "SopEngine119") -> None:
+        """
+        判到要轉真人的次案類（見 TRANSFER_SUBS），或兩句都問完還判不出次案類，就轉。
+        定完次案類、題目進行中換次案類，都會檢查。
+        """
+        if not engine.case.sub_category:
+            engine._transfer_to_human("緊急救援次案類判不出來")
+        if engine.case.sub_category in TRANSFER_SUBS:
+            engine._transfer_to_human(f"緊急救援次案類轉真人：{engine.case.sub_category}")
 
-    def _ask_accident(self, engine: "SopEngine119") -> None:
-        for item in ACCIDENT_QUESTIONS:
-            engine._ensure_known_fields_from_history()
-            if item.mode == MODE_CONDITIONAL and not item.condition(engine.case):
-                engine._debug_print(
-                    f"skip_{item.stage}", {"前置條件不成立": item.condition_text},
-                )
-                continue
-            self._ask_missing(engine, item)
+    def _check_escalation(self, engine: "SopEngine119") -> None:
+        """車禍救助、瓦斯漏氣：報案人哪一句講到有火或有煙都改判火警，不限問到火煙狀況那一題。"""
+        tab = should_switch_to_fire(engine.case)
+        if tab:
+            engine._switch_emergency_to_fire(tab)
 
-    def _ask_missing(
-        self,
-        engine: "SopEngine119",
-        item: AccidentQuestion,
-    ) -> Optional[str]:
-        engine._ensure_known_fields_from_history()
-        engine._set_stage(item.stage)
-        if engine._is_field_filled(item.field):
-            engine._debug_print(
-                f"skip_{item.stage}",
-                {item.field: getattr(engine.case, item.field)},
-            )
-            return None
-        return engine._ask_and_extract(item.question)
-
-    def _ask_sub(
-        self,
-        engine: "SopEngine119",
-        questions: tuple,
-    ) -> None:
-        for item in questions:
-            engine._ensure_known_fields_from_history()
-            if item.mode == MODE_PASSIVE:
-                continue
-            if item.mode == MODE_CONDITIONAL and not item.condition(engine.case):
-                engine._debug_print(
-                    f"skip_{item.stage}", {"前置條件不成立": item.condition_text},
-                )
-                continue
-            self._ask_sub_missing(engine, item)
-
-    def _ask_sub_missing(
-        self,
-        engine: "SopEngine119",
-        item: RescueSubQuestion,
-    ) -> Optional[str]:
-        engine._ensure_known_fields_from_history()
-        engine._set_stage(item.stage)
-        if engine._is_field_filled(item.field):
-            engine._debug_print(
-                f"skip_{item.stage}",
-                {item.field: getattr(engine.case, item.field)},
-            )
-            return None
-        return engine._ask_and_extract(item.question)
-
-    def _ask_tail(self, engine: "SopEngine119") -> None:
-        """關係、必要時的性別年齡與意識、呼吸。專用題問過的不再問。"""
-        engine._ensure_known_fields_from_history()
-        self._ask_text_field(
-            engine, "緊急救援_relation", "caller_relation", RELATION_QUESTION,
-        )
-        if engine.case.sub_category not in GENDER_AGE_SUBS and not (
-            engine._is_field_filled("patient_gender")
-            and engine._is_field_filled("patient_age")
+    def _single_missing_questions(self, engine: "SopEngine119", fields) -> Optional[dict]:
+        """山難、卡住夾住、破門的整句用「當事人」，補問句也用「當事人」（使用者 11/05 決定）。"""
+        if (
+            engine.case.sub_category in PARTY_SUBS
+            and tuple(fields) == ("patient_gender", "patient_age")
         ):
-            engine._set_stage("緊急救援_patient")
-            engine._ask_and_extract(PATIENT_QUESTION)
-        if engine.case.sub_category not in OWN_CONSCIOUSNESS_SUBS:
-            self._ask_bool_field(
-                engine, "緊急救援_consciousness", "consciousness", CONSCIOUSNESS_QUESTION,
-            )
-        self._ask_bool_field(
-            engine, "緊急救援_breathing", "breathing", BREATHING_QUESTION,
-        )
-
-    def _ask_text_field(
-        self,
-        engine: "SopEngine119",
-        stage: str,
-        field: str,
-        question: str,
-    ) -> None:
-        engine._set_stage(stage)
-        if engine._is_field_filled(field):
-            return
-        engine._ask_and_extract(question)
-
-    def _ask_bool_field(
-        self,
-        engine: "SopEngine119",
-        stage: str,
-        field: str,
-        question: str,
-    ) -> None:
-        engine._set_stage(stage)
-        if engine._is_field_filled(field):
-            return
-        answer = engine._ask_and_extract(question)
-        if engine._is_field_filled(field):
-            return
-        parsed = parse_yes_no_for_question(question, answer)
-        if parsed is None:
-            return
-        with engine._case_lock:
-            setattr(engine.case, field, parsed)
-        engine._notify_case_update()
+            return PARTY_SINGLE_MISSING_QUESTIONS
+        return super()._single_missing_questions(engine, fields)
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """救援人員話術收集報案人姓名與聯繫方式。"""
@@ -215,9 +119,11 @@ class JinJiJiuYuanGenericHandler(SubCategoryHandler):
             parts.append(f"姓名：{caller_name}")
         if caller_contact:
             parts.append(f"聯繫方式：{caller_contact}")
-        engine._say("，".join(parts) + "，已為您記錄。")
-
-        engine._say("請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。")
+        # 11/02 使用者決定暫時不唸姓名、聯繫方式，也不講「耐心等待」那句，
+        # 要恢復就把下面兩行的註解拿掉
+        # engine._say("，".join(parts) + "，已為您記錄。")
+        # engine._say("請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。")
+        engine._say(RESCUE_CLOSING_LINE)
         with engine._case_lock:
             engine.case.result = "dispatched"
         engine._set_stage("completed")

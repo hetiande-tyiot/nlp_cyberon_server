@@ -60,15 +60,12 @@ from sop_utils_119 import (
     parse_yes_no_for_question,
 )
 from disaster_flow_119 import DISASTER_FIXED_ANSWERS, disaster_schema_and_rules
-from emergency_accident_119 import (
-    ACCIDENT_FIXED_ANSWERS,
-    accident_schema_and_rules,
-    normalize_accident_caller_role,
-)
-from emergency_rescue_subs_119 import (
-    SUB_FIXED_ANSWERS,
-    normalize_sub_field,
-    subs_schema_and_rules,
+from emergency_tab_map_119 import (
+    BREATHING_OPTIONS,
+    EMERGENCY_FIRE_RULE_FIELDS,
+    EMERGENCY_FIXED_ANSWERS,
+    emergency_fields_to_extract,
+    emergency_schema_and_rules,
 )
 from fire_tab_map_119 import (
     FIRE_CODE_FIELDS,
@@ -289,6 +286,8 @@ def _compose_summary_body(
     incident = (
         filled_fields.get("事件描述")
         or filled_fields.get("incident_description")
+        or filled_fields.get("symptoms")
+        or filled_fields.get("chief_complaint")
     )
     condition = (
         filled_fields.get("目前狀況")
@@ -368,7 +367,11 @@ def build_fallback_summary(
     if addr:
         parts.append(f"地點{addr}")
 
-    incident = filled_fields.get("incident_description")
+    incident = (
+        filled_fields.get("incident_description")
+        or filled_fields.get("symptoms")
+        or filled_fields.get("chief_complaint")
+    )
     if incident:
         parts.append(str(incident))
 
@@ -573,17 +576,13 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     # 轉人工要看的欄位
     "trapped_status": (
-        "有人受困|無人受困|不確定|null",
-        "- trapped_status 有無受困（固定說法）：只能填 有人受困、無人受困、不確定。"
-        "有人受困＝還有人在裡面出不來、沒出來、有人呼救"
-        "（例如「三樓還有阿嬤出不來」）；無人受困＝人都出來了、裡面沒人；"
-        "不確定＝報案人說不知道或不清楚。"
-        "只說陸續有人出來 → 不確定。",
-    ),
-    "occupants_status": (
-        "人已全部下車|仍有人在車上|不確定|null",
-        "- occupants_status 乘客下車狀況（固定說法）：只能填 人已全部下車、仍有人在車上、不確定。"
-        "仍有人在車上＝車上還有人沒下來或出不來。",
+        "未知|無人受困|有人受困|null",
+        "- trapped_status 人員受困（固定說法）：只能填 未知、無人受困、有人受困。"
+        "有人受困＝還有人在裡面或車上出不來、沒出來、有人呼救"
+        "（例如「三樓還有阿嬤出不來」「駕駛還卡在車上」）；"
+        "無人受困＝人都出來了、都下車了、裡面沒人；"
+        "未知＝報案人說不知道或不清楚。"
+        "只說陸續有人出來 → 未知。",
     ),
     # 多張垂片共用
     "fire_or_smoke": (
@@ -599,21 +598,16 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "無火有煙＝報案人明確說看到煙、而且沒看到火；"
         "無火無煙＝明確說沒看到火也沒看到煙（例如只聞到味道、只聽到警報器）；"
         "不確定＝人不在現場、沒去看、聽別人說的、說不知道。"
-        "只說「失火了、火災、燒起來了」而沒說看到什麼 → null。"
         "回答煙的顏色（例如「黑煙」）不代表沒看到火，不可因此填「無火有煙」。"
         "「不確定」不可填成「無火無煙」。"
         "例句（受理員問題｜報案人回答 → 要填的值）："
         "「是火災還是救護｜對面麵包店燒起來」→ null；"
-        "「是火災還是救護｜機車燒起來了」→ null；"
-        "「是火災還是救護｜那間工廠起火了」→ null；"
-        "「是火災還是救護｜後面的鐵皮工廠燒起來了」→ null；"
         "「是黑煙還是白煙｜有黑煙」→ null；"
         "「是火災還是救護｜廚房燒起來了，火很大」→ 有火有煙；"
         "「有看到火嗎｜有火，沒什麼煙」→ 有火無煙；"
         "「有看到火嗎｜只看到一直冒煙，沒看到火」→ 無火有煙；"
         "「有看到火嗎｜電線桿上面一直在噴火花」→ 只有火花；"
-        "「有看到火嗎｜我人不在現場」→ 不確定。"
-        "「燒起來了、起火了、失火了、火災」只是說發生火災，不是描述看到什麼，不能填有火。",
+        "「有看到火嗎｜我人不在現場」→ 不確定。",
     ),
     "smoke_color": (
         "string|null",
@@ -622,14 +616,9 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "報案人說有煙或在冒煙、但沒說顏色 → null；"
         "說黑白都有 → 填「黑煙、白煙都有」，不填null或其他色煙。",
     ),
-    "spread_status": (
-        "string|null",
-        "- spread_status 延燒：參考 延燒可能性低、極可能或已延燒、無、有；"
-        "報案人描述火勢大小也記在這裡。",
-    ),
     "caller_role": (
         "string|null",
-        "- caller_role 報案人身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、里長、"
+        "- caller_role 報案身分：參考住戶(起火戶)、鄰居、路人、管理員或警衛、里長、"
         "車主或駕駛、同車乘客、後方或路過駕駛、附近住戶或商家、當地住戶、"
         "掃墓或作業民眾、其他。",
     ),
@@ -638,17 +627,20 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "- odor 氣味：參考 無、燒焦味、塑膠味、瓦斯味、其他；"
         "報案人說沒聞到任何味道時一定要填「無」。",
     ),
-    "fire_extent": (
-        "string|null",
-        "- fire_extent 燃燒範圍：建築物參考 未知、0~50坪、50~100坪、100~300坪、"
-        "300~500坪、500坪以上；山林田野參考 小於一個停車格、約一台車、"
-        "約半個籃球場、一個籃球場以上、不確定；報案人用其他方式形容範圍也照記；"
-        "報案人說看不清楚、離太遠不知道多大 → 不確定。",
-    ),
     "door_response": (
         "string|null",
-        "- door_response 應門狀況（起火戶或負責人有沒有應門、聯絡上）：參考 "
-        "有人在或已聯絡上、敲門無回應或聯絡不上。",
+        "- door_response 起火戶應門（有沒有敲門或聯絡到起火戶、負責人）："
+        "參考 有人應門、無人應門、已聯絡上、聯絡不上。",
+    ),
+    # 下面幾個欄位各垂片共用（1106 xlsx）；參考範圍不同的見 _FIRE_TAB_RULES
+    "spread_reached": (
+        "string|null",
+        "- spread_reached 是否延燒：火有沒有燒到旁邊的東西，只能填 無、是、可能性高。"
+        "是＝已經燒到旁邊；可能性高＝還沒燒到、但很可能會燒過去；無＝沒有燒到也不會。",
+    ),
+    "burning_area": (
+        "string|null",
+        "- burning_area 燃燒面積：燒起來的範圍大概多大，照報案人說的記。",
     ),
     "extinguish_status": (
         "string|null",
@@ -669,6 +661,8 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "string|null",
         "- building_total_floors 建物總樓層：整棟建築物一共有幾層。參考 不確定、1層樓、2~3層樓、"
         "4~10層樓、11~15層樓、16層樓以上；報案人講到整棟有幾層才記（例如「總共5層」記「5層樓」）。"
+        "報案人只講大概、沒講確切層數，就記它落在的參考範圍（例如「二十幾吧」記「16層樓以上」、"
+        "「七八層」記「4~10層樓」）。"
         "「幾樓」是位置（哪一樓在燒、地址在幾樓），不是總樓層，不要記在這裡；沒講整棟幾層就填 null。",
     ),
     "building_construction": (
@@ -685,26 +679,20 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "string|null",
         "- explosion_status 有無爆炸：參考 無爆炸、有爆炸。",
     ),
-    "access_info": (
-        "string|null",
-        "- access_info 其他資訊：消防車進不進得去、附近有沒有水源；"
-        "參考 一般情況、小巷、缺水、小巷且缺水。",
-    ),
     # 垂片 B1（交通工具火警）
     "vehicle_kind": (
-        "聯結車|大客車|大貨車|小貨車|小客車(轎車)|汽車|機車(摩托車)|腳踏車(自行車)|電輔車|其他|null",
-        "- vehicle_kind 交通工具（固定說法）：只能填 聯結車、大客車、大貨車、小貨車、"
-        "小客車(轎車)、汽車、機車(摩托車)、腳踏車(自行車)、電輔車、其他；"
-        "只說「車子」填汽車；船、飛機、火車等填其他。",
-    ),
-    "vehicle_model": (
-        "string|null",
-        "- vehicle_model 車型：參考 不確定、小客車、休旅車、計程車、貨車、大貨車、"
-        "公車、遊覽車、油罐車、垃圾車、其他。",
+        "聯結車|大客車(公車、遊覽車)|大貨車|小貨車(發財車)|汽車(轎車)|機車(摩托車)|腳踏車(自行車)|其他|null",
+        "- vehicle_kind 交通工具（固定說法）：只能填 聯結車、大客車(公車、遊覽車)、大貨車、"
+        "小貨車(發財車)、汽車(轎車)、機車(摩托車)、腳踏車(自行車)、其他；"
+        "只說「車子」填汽車(轎車)；電輔車填腳踏車(自行車)；船、飛機、火車等填其他。",
     ),
     "vehicle_power": (
         "string|null",
-        "- vehicle_power 車輛動力：參考 不確定、油車、油電車、電動車。",
+        "- vehicle_power 車輛動力(汽車)：參考 不確定、油車、油電車、電動車(Tesla)。",
+    ),
+    "vehicle_power_motorcycle": (
+        "string|null",
+        "- vehicle_power_motorcycle 車輛動力(機車)：參考 不確定、油車、電動車(GOGORO)。",
     ),
     "bicycle_type": (
         "string|null",
@@ -720,11 +708,12 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
     "engine_off_status": (
         "string|null",
-        "- engine_off_status 車輛是否已熄火：參考 已熄火、未熄火。",
+        "- engine_off_status 熄火狀態：參考 已熄火、未熄火。",
     ),
     "injury_status": (
         "string|null",
-        "- injury_status 有無人員受傷：參考 無、有；有的話記下幾個人受傷、受傷情形。",
+        "- injury_status 患者人數：有幾個人受傷，記人數，例如 1 人、2 人；"
+        "報案人說沒有人受傷 → 0 人。",
     ),
     "cargo": (
         "string|null",
@@ -738,13 +727,10 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
         "string|null",
         "- plate_number 車牌號碼：照報案人說的記。",
     ),
-    # 垂片 A（工廠）、B2（山林田野）共用
+    # 垂片 A、B2 共用；選項各張垂片不同，見 _FIRE_TAB_RULES
     "burning_object": (
         "string|null",
-        "- burning_object 燃燒物：什麼東西在燒；工廠參考 不確定、雜物、廢棄物、垃圾、"
-        "回收物、機台、電線、塑膠、木材、紙箱、化學品、鋰電池、食品、其他；"
-        "山林田野參考 雜草、樹木、公墓或墳墓、農作物、垃圾雜物、其他(不確定)；"
-        "報案人說看不清楚、離太遠不知道在燒什麼 → 其他(不確定)。",
+        "- burning_object 燃燒物：什麼東西在燒。",
     ),
     "nearby_water_source": (
         "string|null",
@@ -767,6 +753,37 @@ _FIRE_FIELD_RULES: Dict[str, Tuple[str, str]] = {
     ),
 }
 
+# 同一個欄位在不同垂片的參考範圍不一樣時，照那張垂片的 xlsx 只給它自己的選項（火警 1106 xlsx）。
+# 沒列在這裡的就用上面 _FIRE_FIELD_RULES 的說明（報案身分還不知道垂片時給全部選項）。
+_FIRE_TAB_RULES: Dict[Tuple[str, str], str] = {
+    ("A", "burning_object"): (
+        "- burning_object 燃燒物：什麼東西在燒；參考 不確定、雜物、廢棄物、垃圾、"
+        "回收物、機台、電線、塑膠、木材、紙箱、化學品、鋰電池、食品、其他。"
+    ),
+    ("B2", "burning_object"): (
+        "- burning_object 燃燒物：什麼東西在燒；參考 雜草、樹木、公墓或墳墓、農作物、"
+        "垃圾雜物、其他(不確定)；報案人說看不清楚、離太遠不知道在燒什麼 → 其他(不確定)。"
+    ),
+    ("A", "caller_role"): "- caller_role 報案身分：參考 住戶(起火戶)、鄰居、路人、管理員或警衛、里長、其他。",
+    ("B1", "caller_role"): "- caller_role 報案身分：參考 車主或駕駛、同車乘客、後方或路過駕駛、附近住戶或商家、其他。",
+    ("B2", "caller_role"): "- caller_role 報案身分：參考 當地住戶、路過、掃墓或作業民眾、其他。",
+    ("C", "caller_role"): "- caller_role 報案身分：參考 住戶、管理員或警衛、路人、其他。",
+    # 燃燒面積：C 照報案人說的記（用上面的說明）
+    ("A", "burning_area"): (
+        "- burning_area 燃燒面積：參考 未知、0~50坪、50~100坪、100~300坪、300~500坪、500坪以上；"
+        "報案人說看不清楚、離太遠不知道多大 → 未知。"
+    ),
+    ("B2", "burning_area"): (
+        "- burning_area 燃燒面積：只能填 小於一個停車格、約一台車、約半個籃球場、一個籃球場以上、不確定；"
+        "報案人說看不清楚、離太遠不知道多大 → 不確定。"
+    ),
+    # 水源狀況：B2 用上面的說明
+    ("A", "nearby_water_source"): (
+        "- nearby_water_source 水源狀況：消防車進不進得去、附近有沒有水源；"
+        "參考 一般情況、小巷、缺水、小巷且缺水。"
+    ),
+}
+
 
 def _build_fire_schema_and_rules(
     fire_tab: Optional[str],
@@ -774,8 +791,56 @@ def _build_fire_schema_and_rules(
     """依目前垂片挑出這一輪要抽的火警欄位，組成 JSON Schema 與規則文字。"""
     fields = fire_fields_to_extract(fire_tab)
     schema = {field: _FIRE_FIELD_RULES[field][0] for field in fields}
-    rules = _FIRE_RULES_HEADER + "\n".join(_FIRE_FIELD_RULES[field][1] for field in fields)
+    rules = _FIRE_RULES_HEADER + "\n".join(
+        _FIRE_TAB_RULES.get((fire_tab, field), _FIRE_FIELD_RULES[field][1]) for field in fields
+    )
     return schema, rules
+
+
+# 報案人位置只收這四種（xlsx 參考範圍；沒講到就是空的，等於「未提到」）。
+# LLM 曾把地址填進來，條件就當成不在現場而跳過意識，所以每輪抽取和換次案類搬欄位都要檢查
+CALLER_LOCATION_OPTIONS = ("在現場", "在遠處", "不敢靠近", "不在現場")
+
+
+def _rules_for_fields(rules: str, fields) -> str:
+    """規則文字只留下標題行，以及有提到要抽的欄位的那幾行。"""
+    kept = []
+    for line in rules.split("\n"):
+        if not line.startswith("- ") or any(
+            re.search(rf"(?<![A-Za-z_]){f}(?![A-Za-z_])", line) for f in fields
+        ):
+            kept.append(line)
+    return "\n".join(kept)
+
+
+def _pick_fields(schema: Dict[str, str], rules: str, fields) -> Tuple[Dict[str, str], str]:
+    """從整組欄位挑出要抽的那幾個，組成這一組的 JSON Schema 與規則文字。"""
+    picked = [f for f in schema if f in fields]
+    return {f: schema[f] for f in picked}, _rules_for_fields(rules, picked)
+
+
+def _ems_sub_fields(sub_category: Optional[str]) -> Optional[set]:
+    """救護次案類題目表用到的欄位；次案類還沒判出來（或沒有題目表）回傳 None，代表全部都抽。"""
+    from ems_tab_map_119 import questions_for_subtype
+
+    questions = questions_for_subtype(sub_category)
+    return {q.field for q in questions} if questions else None
+
+
+def _emergency_sub_groups(sub_category: Optional[str]) -> list:
+    """緊急救援照 1106 xlsx 題目表抽：次案類知道了就只抽那張表的欄位（含發生什麼事），
+    還不知道就抽全部的表。火煙狀況、人員受困、場所用途跟火警共用欄位，抽取規則也用火警的。"""
+    emergency_schema, emergency_rules = emergency_schema_and_rules(sub_category)
+    fire_fields = [
+        field for field in EMERGENCY_FIRE_RULE_FIELDS
+        if field in emergency_fields_to_extract(sub_category)
+    ]
+    return [(
+        {**emergency_schema, **{field: _FIRE_FIELD_RULES[field][0] for field in fire_fields}},
+        "\n".join([emergency_rules, *(_FIRE_FIELD_RULES[field][1] for field in fire_fields)]),
+    )]
+
+
 
 
 class LLMExtractor119:
@@ -1173,11 +1238,8 @@ class LLMExtractor119:
             "  • 未提及可定位地點 → null；嚴禁「未知」「不明」「不詳」等佔位字。"
         )
         if use_question:
-            question = (
-                "請先告訴我地址？幾樓？"
-                if include_floor
-                else "請先告訴我地址？"
-            )
+            # 跟實際問報案人的第一句一致（見 sop_utils_119.build_address_ask_questions）
+            question = "請先告訴我詳細的地址"
         else:
             question = None
         out = self.extract_slots(caller_text, schema, rules, question=question)
@@ -1466,12 +1528,18 @@ class LLMExtractor119:
         main_category: Optional[str] = None,
         call_type: Optional[str] = None,
         fire_tab: Optional[str] = None,
+        sub_category: Optional[str] = None,
+        sub_fields_only: bool = False,
         allowed_fields: Optional[Collection[str]] = None,
     ) -> Dict[str, Any]:
         """
         每輪輸入後依案件類型跨欄位抽取業務欄位。
         火警時 fire_tab 是目前的垂片（A / B1 / B2 / C，還不知道就是 None），
         只抽這張垂片用得到的火警欄位。
+        救護、緊急救援時 sub_category 是目前的次案類（還不知道就是 None）：只抽這個次案類
+        用得到的欄位；同一個欄位在不同次案類參考範圍不同時
+        （例如刀傷的受傷原因只能記四個選項之一），照目前次案類給規則。
+        sub_fields_only=True 時只抽次案類專屬的那幾組，給換次案類後補抽用。
         allowed_fields 有值時，救護專屬欄位只留這份白名單；通用欄位仍全部抽取。
 
         設計原則：
@@ -1491,21 +1559,34 @@ class LLMExtractor119:
             "caller_salutation":    "先生|小姐|null",
             "caller_address":       "string|null",
         }
+        # 病徵、主訴是不同的關鍵要素，各記在自己的欄位：其它問主訴，其他案類（含還沒判出次案類）問病徵
+        if sub_category == "其它":
+            complaint_field = "chief_complaint"
+            complaint_rule = (
+                "- chief_complaint：主訴，記成下列一種："
+                "身體不舒服、受傷、想自殺、已經過世、情緒失控、誤食或中毒、被動物咬傷；"
+                "不屬於這些的照報案人說的記。沒講到 → null。\n"
+            )
+        else:
+            complaint_field = "symptoms"
+            # 病徵照 xlsx 參考範圍（救護各案類統一同一份清單）
+            complaint_rule = (
+                "- symptoms：病徵。報案人明確講到下列症狀才記，用清單裡的詞（可以記多個）："
+                "全身無力、昏倒、喘、頭暈、嘔吐、發燒、疑似中風、跌倒、血壓血糖異常、肚子痛、抽搐、"
+                "胸痛、出血、發抖、冒冷汗、手腳腰背痛、頭痛、心悸、拉肚子、過敏；"
+                "講到清單以外的具體症狀照報案人說的記。"
+                "只說不舒服、身體不舒服、要救護車，沒講是什麼症狀 → null，"
+                "不可以換成清單裡意思相近的詞（例如全身無力）。沒講到 → null。\n"
+            )
+        # 救護照 1028 xlsx 垂片關鍵要素抽取（11/02 使用者決定）：一個關鍵要素一個欄位，
+        # 跟關鍵要素重複的廠商欄位（是否有意識、報案人是否即患者、肚子起伏、目前狀況、路倒原因）不再抽。
         rescue_core_schema = {
-            "consciousness":        "true|false|null",
-            "breathing":            "true|false|null",
-            "abdomen_rise":         "true|false|null",
+            "breathing":            "未知|有呼吸|呼吸不正常|無呼吸|null",
             "patient_count":        "string|null",
-            "patient_gender":       "string|null",
+            "patient_gender":       "男性|女性|null",
             "patient_age":          "string|null",
-            "caller_is_patient":    "true|false|null",
-            "incident_description": "string|null",
-            "current_condition":    "string|null",
+            complaint_field:        "string|null",
             "medical_history":      "string|null",
-            "collapse_cause":       "string|null",
-        }
-        rescue_incident_schema = {
-            "incident_description": "string|null",
         }
         location_schema = {
             "location_type":      "address|intersection|landmark|highway|mrt|null",
@@ -1522,24 +1603,25 @@ class LLMExtractor119:
             "injury_cause":          "string|null",
             "injury_location":       "string|null",
             "injury_severity":       "string|null",
-            "tocc":                  "string|null",
+            "injury_place":          "string|null",
+            "crash_vehicles":        "string|null",
+            "crash_trapped":         "string|null",
+            "conflict_status":       "string|null",
+            "weapon_held":           "string|null",
             "ingested_substance":    "string|null",
-            "blood_glucose":         "string|null",
-            "blood_pressure":        "string|null",
-            "seizure_info":          "string|null",
             "pregnancy_week":        "string|null",
             "due_date":              "string|null",
             "multiple_pregnancy":    "string|null",
-            "water_broken_bleeding": "string|null",
             "contractions":          "string|null",
             "prenatal_history":      "string|null",
-            "prenatal_clinic":       "string|null",
             "consciousness_level":   "string|null",
             "caller_relation":       "string|null",
             "caller_location":       "string|null",
             "drinking_status":       "string|null",
             "mobility":              "string|null",
-            "symptom_onset":         "string|null",
+            "collapse_status":       "string|null",
+            "patient_appearance":    "string|null",
+            "companion_present":     "string|null",
             "scene_access":          "string|null",
             "charcoal_status":       "string|null",
             "patient_location":      "string|null",
@@ -1559,6 +1641,15 @@ class LLMExtractor119:
             "forced_admission":      "string|null",
             "forced_admission_reason": "string|null",
             "family_accompany":      "string|null",
+            "electric_type":         "string|null",
+            "power_off":             "string|null",
+            "patient_identity":      "string|null",
+            "drowning_status":       "string|null",
+            "burn_cause":            "string|null",
+            "burn_severity":         "string|null",
+            "drowning_cause":        "string|null",
+            "pesticide_type":        "string|null",
+            "pesticide_amount":      "string|null",
         }
         # 火警：只請 LLM 抽這一輪用得到的欄位（依目前垂片挑選，見 _build_fire_schema_and_rules）
         fire_schema, fire_rules = _build_fire_schema_and_rules(fire_tab)
@@ -1616,27 +1707,21 @@ class LLMExtractor119:
         )
         rescue_core_rules = (
             "【抽取原則】結合問題語義，從報警人回答抽取；長答可同時填多欄；"
-            "問題主題不同也不得漏抽。\n"
-            "【示例】問「請問發生了什麼事？」"
-            "答「男生 75 歲左右，說話口語含糊、腳沒力走不了」→\n"
-            "patient_gender=男, patient_age=75歲, "
-            "incident_description=說話口語含糊、腳沒力走不了, "
-            "current_condition=口語含糊、腳沒力、走不了；其餘 null。\n"
-            "- consciousness/breathing/abdomen_rise：僅明確提及時填 true/false。\n"
-            "- patient_count/patient_gender/patient_age：提及就填；"
-            "男生→男；75歲左右→75歲；"
-            "描述他人「一位先生/女士」→ patient_gender；"
-            "「我是先生/小姐」只填 caller_salutation，不填 patient_gender。\n"
-            "- caller_is_patient：報案人描述自身症狀/自傷（我自己/我割腕/我頭痛）→ true；"
-            "代他人報案（我媽媽/一位路人/我先生）→ false；未提及 → null。\n"
-            "- incident_description：事件經過/主要病情；症狀描述也要填。\n"
-            "- current_condition：目前症狀/狀況。\n"
-            "- medical_history/collapse_cause：有才填，否則 null。"
-        )
-        rescue_incident_rules = (
-            "【緊急救援案情】只依報警人本輪實際回答抽取；未提及 → null。\n"
-            "- incident_description：發生的事件、現場狀況或需要救援的原因，"
-            "使用最短且完整的描述。"
+            "問題主題不同也不得漏抽。報案人只回「有」「沒有」「對」時，看問題問的是哪一項才填那一項。\n"
+            # 下面各欄照 1102 xlsx 垂片的參考範圍；舉的說法是廠商原本關鍵字規則裡的詞
+            "- breathing：患者呼吸，只能填這幾種之一："
+            "未知（不知道、看不到）；"
+            "有呼吸（有呼吸、還在呼吸、會呼吸、正常呼吸、胸口或肚子有起伏、肚子有在動）；"
+            "呼吸不正常；"
+            "無呼吸（沒有呼吸、停止呼吸、呼吸停止、沒在呼吸、胸口肚子沒有起伏、肚子不動）。"
+            "清醒的人喘、呼吸不順不填這裡，記在 symptoms 或 chief_complaint。沒講到 → null。\n"
+            "- patient_count：需要救護的人數（例：1人、2人）。沒講到 → null。\n"
+            "- patient_gender：患者性別，只能填 男性 或 女性"
+            "（男生、男的、一位先生、阿公 → 男性；女生、女的、一位小姐、阿嬤 → 女性）。"
+            "「我是先生／小姐」講的是報案人自己，報案人不是患者時不填。沒講到 → null。\n"
+            "- patient_age：患者年齡（例：75歲左右 → 75歲）；未滿一歲記月份（例：3個月）。沒講到 → null。\n"
+            + complaint_rule +
+            "- medical_history：患者病史，照報案人說的記。沒講到 → null。"
         )
         location_rules = (
             "【地點結構化抽取】每一欄只依報警人本輪實際說出的內容填寫，未提及 → null。\n"
@@ -1654,34 +1739,73 @@ class LLMExtractor119:
             "- 回答只是補充「板橋區」「文化路」「北向32.5公里」時，即使無法單獨判定"
             " location_type，也要抽取能確定的元件。"
         )
+        # 受傷原因：刀傷照 1102 xlsx 只能記四個選項之一；一般受傷、槍傷、壓傷照報案人說的記
+        if sub_category == "刀傷(切割傷)":
+            injury_cause_rule = "- injury_cause：怎麼受傷的，只能填：不小心割到、被別人砍傷、自殘、不清楚。\n"
+        else:
+            injury_cause_rule = "- injury_cause：受傷原因或機制。燒燙傷、溺水不填這裡。\n"
+        # 服用藥物：吞食藥物照 xlsx 參考範圍（含農藥）；其他案類喝的農藥記在農藥種類
+        if sub_category == "吞食藥物":
+            ingested_rule = "- ingested_substance：吃了什麼藥，照報案人說的記（常見：安眠藥、精神科藥、止痛藥、農藥）。\n"
+        else:
+            ingested_rule = ("- ingested_substance：吃了什麼藥，照報案人說的記（常見：安眠藥、精神科藥、止痛藥）。"
+                             "喝的農藥、清潔劑不填這裡。\n")
         rescue_ext_rules = (
             "【抽取原則】從報警人回答抽取下列欄位；未提及 → null。\n"
-            "- injury_cause：受傷原因或機制。\n"
+            + injury_cause_rule +
             "- injury_location：只填身體受傷的位置（頭、胸、手、腳、左腿等）。"
             "「在右邊那一棟／那邊／對面」是事發地點，必須 null；"
             "只有「左／右邊」、沒說哪個身體部位，也填 null。\n"
-            "- injury_severity：傷勢。\n"
-            "- tocc：旅遊/職業/接觸/群聚史。\n"
-            "- ingested_substance：服藥種類數量。\n"
-            "- blood_glucose/blood_pressure/seizure_info：血糖/血壓/抽搐。\n"
-            "- pregnancy_week/due_date/multiple_pregnancy/"
-            "water_broken_bleeding/contractions/prenatal_history/prenatal_clinic：孕產資訊。\n"
+            "- injury_severity：傷勢。燒燙傷不填這裡。\n"
+            "- injury_place：在什麼場所受傷，照報案人說的記（例：住家室內、戶外、樓梯、路邊）；"
+            "沒講到 → null。\n"
+            "- crash_vehicles：車禍是什麼車跟什麼車，照報案人說的記（例：汽車撞機車、機車自摔、車撞行人）；"
+            "沒講到 → null。\n"
+            "- crash_trapped：車禍有沒有人被卡在車子裡面或車子底下，只能填：未知、無人受困、有人受困。"
+            "沒講到 → null。\n"
+            "- conflict_status：打架、衝突現在是不是還在打，只能填：已停止、進行中。沒講到 → null。\n"
+            "- weapon_held：打架的人手上有沒有拿東西，填：沒有、不確定、刀、棍棒、酒瓶、玻璃；"
+            "其他東西照報案人說的記。沒講到 → null。\n"
+            + ingested_rule +
+            # 孕婦待產題目表（1028 xlsx 12-孕婦待產）用到的孕產欄位，照 xlsx 參考範圍記
+            "- contractions：孕婦陣痛狀況，只能填：沒有陣痛、不規則陣痛、規則陣痛、已經破水、落紅。"
+            "沒講到 → null。\n"
+            "- due_date：預產期日期。\n"
+            "- pregnancy_week：懷孕幾週（例：39週），只記週數。\n"
+            "- multiple_pregnancy：第幾胎、單胞胎還是多胞胎（例：第2胎、單胞胎）。\n"
+            "- prenatal_history：產檢狀況，只能填：產檢正常、產檢有異常、沒產檢或不知道。"
+            "沒講到 → null。\n"
             # 下面三個欄位會拿來判斷要不要問下一題，只能記成固定說法（見 ems_tab_map_119）
+            # 意識照 1104 xlsx（11/05 版）參考範圍與備註欄的說法；報案身分照 1102 xlsx 參考範圍
             "- consciousness_level：患者意識，只能填這幾種之一："
-            "未知（報案人說不知道、看不到）、意識清醒、剛剛昏倒、現在已清醒、"
-            "對聲音有反應、對疼痛有反應（要捏、拍才有反應）、昏迷（叫不醒、沒反應）。"
-            "沒講到意識 → null。\n"
-            # 報案身分、報案人位置的選項照 1028 xlsx OK 表的參考範圍
+            "清醒（清醒、醒著、會講話、會回答、會動）；"
+            "迷迷糊糊（意識不清、昏昏沉沉、講話不清楚、叫了才有反應、要捏才有反應）；"
+            "沒有反應（沒反應、叫不醒、叫不起來、昏迷、不省人事）；"
+            "未知（不知道、看不到、不敢靠近）。"
+            "「人不清楚」記迷迷糊糊，「我不清楚」記未知。沒講到意識 → null。\n"
             "- caller_relation：報案人和患者的關係（報案身分），只能填這幾種之一："
-            "本人、家人、朋友、同事、房東、110、里長、鄰居、工人、路過、看護、管理室、警衛、不認識。"
-            "報案人自己就是患者 → 本人；爸媽、兄弟姊妹、先生太太、子女等親屬 → 家人；"
-            "工地主任 → 工人；保全 → 警衛。沒講到 → null。\n"
-            "- caller_location：報案人現在在哪裡（報案人位置），只能填這幾種之一："
-            "在現場、在遠處、不敢靠近、不在現場。在患者身邊也算在現場。沒講到 → null。\n"
+            "本人、家人、朋友、同事、老闆、房東、110、里長、鄰居、工人、工地主任、路過、看護、管理室、"
+            "警衛(保全)、不認識。"
+            "報案人講自己的狀況就是本人（我自己、我本人、我割腕、我吞藥、我受傷、我跌倒、我昏倒、"
+            "我頭痛、我胸口痛、我呼吸困難、我想不開、我羊水破了）；"
+            "爸媽、兄弟姊妹、先生太太、老公老婆、子女等親屬 → 家人（我媽、我爸、我先生、我老婆、我孩子）；"
+            "我朋友 → 朋友；我同事 → 同事；我鄰居 → 鄰居；警衛、保全 → 警衛(保全)；"
+            "路人、經過看到 → 路過。沒講到 → null。\n"
+            "- caller_location：報案人自己現在在哪裡（報案人位置），只能填這幾種之一："
+            "在現場（在患者旁邊、跟患者在同一個地方、本人報案）、"
+            "在遠處（人在附近看得到，但離患者有段距離，例如在對面、在樓上往下看）、"
+            "不敢靠近（怕危險不敢過去看）、"
+            "不在現場（人不在那裡，例如在外地、聽別人轉述才打來、已經離開）。"
+            "地址、路名不是報案人位置，不要填在這裡。沒講自己在哪裡就是未提到 → null。\n"
             "- drinking_status：患者有沒有喝酒（有喝酒/沒有喝酒/不清楚）。\n"
-            "- mobility：患者平常的行動能力（平常可以自己走/平常需要人扶/長期臥床或坐輪椅）；"
-            "突然走不動不算，不要填。\n"
-            "- symptom_onset：症狀什麼時候開始或什麼時候被發現。\n"
+            "- mobility：患者平常的行動能力，只能填：平常可以自己走、平常需要人扶、長期臥床或坐輪椅。"
+            "突然走不動、站不起來不填這裡。沒講到 → null。\n"
+            "- collapse_status：倒在路邊的人看起來是什麼狀況，只能填：喝醉、睡著、身體不舒服、跌倒受傷、不清楚。"
+            "沒講到 → null。\n"
+            "- patient_appearance：患者的外觀特徵，讓救護人員到現場認得出來，照報案人說的記"
+            "（例：穿紅色外套、戴帽子）。沒講到 → null。\n"
+            "- companion_present：患者旁邊有沒有家人朋友，只能填：有家人或朋友在旁邊、只有他一個人、不清楚。"
+            "沒講到 → null。\n"
             "- scene_access：現場有沒有人能開門、有沒有管理員或警衛、有沒有電梯、"
             "救護人員進不進得去、需不需要破門（例：需要破門、有人可以開門、門沒鎖）。\n"
             # 燒炭：下面兩個欄位的答案決定要不要講提醒，只能記成固定說法（見 ems_tab_map_119）
@@ -1690,25 +1814,40 @@ class LLMExtractor119:
             "沒講到 → null。\n"
             # 下面是 1028 xlsx 墜落傷、上吊、割腕、吞食藥物、精神異常 OK 表的欄位；
             # 寫「只能填」的會拿來判斷要不要問下一題或改判，只能記成固定說法（見 ems_tab_map_119）
-            "- fall_status：墜落的人是不是已經掉下來，只能填：尚未跳下、已跳下、已勸導離開。"
-            "已經掉下來也算已跳下。沒講到 → null。\n"
+            "- fall_status：墜落的人是不是已經掉下來，只能填：尚未跳下、已跳下、卡住、已勸導離開。"
+            "還在高處是尚未跳下；已經掉下來也算已跳下；跳下來卡住記卡住。沒講到 → null。\n"
             "- fall_height：從幾樓或多高掉下來（不是地址的樓層），例：5樓、約3公尺。\n"
             "- fall_position：墜落的患者現在在哪裡，只能填：地面(一樓)、卡住、不清楚。\n"
-            "- stuck_location：墜落卡住的地方，例：遮雨棚、女兒牆、屋頂或鐵皮屋、陽台、鷹架、A字梯、水溝。\n"
+            "- stuck_location：墜落卡住的地方，例：遮雨棚、女兒牆、屋頂或鐵皮屋、陽台、鷹架、A字梯、水溝、其他。\n"
             "- hanging_status：上吊的繩子解開了沒，只能填：已解開繩子、還沒解開。\n"
             "- break_in_need：上吊現場救護人員要不要破門才進得去，只能填：需要破門、不需要破門。\n"
             "- hanging_location：上吊的患者在哪裡，例：住家、橋墩、山上電塔。\n"
-            "- cutting_tool：割腕用的工具，例：美工刀、菜刀、玻璃。\n"
-            "- tool_status：割腕的刀具移除了沒，只能填：已移除、還在身上、不清楚。\n"
-            "- drug_amount：吃了多少藥，例：一整罐、大概20顆。\n"
+            "- cutting_tool：割傷用的工具，常見：刀子、菜刀、水果刀、美工刀；其他照報案人說的記。\n"
+            "- tool_status：割腕的刀具還在不在患者身上，只能填：已移除、還在身上、不清楚。\n"
+            "- drug_amount：吃了多少藥，例：一整罐、大概20顆；說藥罐、藥袋已經空了、整排吃光，"
+            "也算回答了吃多少，照報案人說的記。喝的農藥、清潔劑不填這裡。\n"
             "- medicine_bag：現場有沒有藥袋，只能填：有、無。\n"
             "- aggression：精神異常的患者有沒有攻擊或自傷，只能填：攻擊他人、自傷、無。"
             "用頭撞牆這類自殘算自傷。\n"
             "- injured_count：精神異常現場有幾個人受傷。\n"
             "- forced_admission：需不需要強制送醫（強送），只能填：需要、不需要、不清楚。\n"
             "- forced_admission_reason：為什麼要強制送醫，例：大吼罵人、摔丟東西、胡言亂語、"
-            "行為怪異、沒吃藥、不睡不吃、已有醫院或衛生局評估。\n"
-            "- family_accompany：精神異常的患者身邊有沒有家屬陪同，只能填：有、沒有、家屬在路上。\n"
+            "行為怪異、沒吃藥、不睡不吃、已有醫院或衛生局評估；不屬於這些的記其他。\n"
+            "- family_accompany：患者身邊有沒有家屬陪同（精神異常、路倒），只能填：有、沒有、家屬在路上。\n"
+            # 1102 xlsx 電擊傷、溺水；溺水狀況會拿來判斷要不要改判緊急救援，只能記成固定說法
+            "- electric_type：被什麼電到，只能填：高壓電、雷擊、家用電、其他。\n"
+            "- power_off：電擊現場的電源關掉了沒，只能填：已斷電、未斷電。\n"
+            "- patient_identity：電擊傷的患者是什麼身分，照報案人說的記（例：工地工人、外籍移工、一般民眾）。\n"
+            "- drowning_status：溺水的人拉上岸了沒，只能填：還在水裡、看不到人、已拉上岸。\n"
+            # 下面是垂片名稱不同、各自一格的關鍵要素（11/04 使用者決定），照 xlsx 參考範圍記
+            "- burn_cause：燒燙傷是被什麼燙到或燒到，照報案人說的記（常見：熱水、熱油、火燒、化學藥劑、電）。\n"
+            "- burn_severity：燒燙傷的傷勢，照報案人說的記（例：燙到哪裡、範圍多大、有沒有起水泡）。\n"
+            "- drowning_cause：怎麼落水的，照報案人說的記（例：失足落水、游泳抽筋、翻船）；"
+            "落水後清醒但喘、呼吸不順也記在這裡。\n"
+            "- pesticide_type：喝了什麼農藥或清潔劑（例：除草劑、巴拉刈、鹽酸）；"
+            "只說農藥、沒講是哪一種 → null。\n"
+            "- pesticide_amount：喝了多少農藥或清潔劑（例：半瓶、一整瓶）；說瓶子已經空了、整瓶喝光，"
+            "也算回答了喝多少，照報案人說的記。\n"
         )
         # 只給 LLM 選案情標籤；系統狀態標籤（地址搜尋失敗、火災類別無法確認…）只由程式寫入
         allowed_tags = "、".join(CASE_CONTENT_TAGS)
@@ -1753,33 +1892,50 @@ class LLMExtractor119:
             k in question for k in _aggressive_q
         ) else _STRICT_TAIL
 
+        # 次案類專屬的欄位：救護、緊急救援只抽目前次案類用得到的，次案類換了就換成新的
+        sub_groups = []
+        if main_category == "救護":
+            ems_fields = _ems_sub_fields(sub_category)
+            ext_schema, ext_rules = _pick_fields(
+                rescue_ext_schema, rescue_ext_rules,
+                rescue_ext_schema.keys() if ems_fields is None else ems_fields,
+            )
+            if ext_schema:
+                sub_groups.append((ext_schema, ext_rules))
+        if main_category == "緊急救援":
+            sub_groups.extend(_emergency_sub_groups(sub_category))
+
         schema_groups = [
             (common_schema, common_rules),
             (location_schema, location_rules),
             (universal_schema, universal_rules),
         ]
         if main_category == "救護":
-            core_schema = rescue_core_schema
-            ext_schema = rescue_ext_schema
+            core_schema, core_rules = rescue_core_schema, rescue_core_rules
             if allowed_fields is not None:
+                # 回報對上案件後，救護欄位只抽該案類會問的那幾個（白名單），基本欄位和次案類欄位都篩
                 allow = set(allowed_fields)
-                core_schema = {k: v for k, v in core_schema.items() if k in allow}
-                ext_schema = {k: v for k, v in ext_schema.items() if k in allow}
+                core_schema, core_rules = _pick_fields(core_schema, core_rules, allow)
+                sub_groups = [_pick_fields(schema, rules, allow) for schema, rules in sub_groups]
             if core_schema:
-                schema_groups.append((core_schema, rescue_core_rules))
-            if ext_schema:
-                schema_groups.append((ext_schema, rescue_ext_rules))
-        if main_category == "緊急救援":
-            schema_groups.append((rescue_incident_schema, rescue_incident_rules))
-            schema_groups.append(accident_schema_and_rules())
-            schema_groups.append(subs_schema_and_rules())
+                schema_groups.append((core_schema, core_rules))
+        # 緊急救援的「發生什麼事」併在題目表那一組（_emergency_sub_groups）
+        schema_groups.extend(group for group in sub_groups if group[0])
         if main_category == "火警":
             schema_groups.append((fire_schema, fire_rules))
             schema_groups.append((fire_level_schema, fire_level_rules))
         if main_category == "災害":
-            schema_groups.append(disaster_schema_and_rules())
+            # 火煙狀況跟火警共用欄位，抽取規則也用火警的
+            disaster_schema, disaster_rules = disaster_schema_and_rules()
+            smoke_type, smoke_rule = _FIRE_FIELD_RULES["fire_or_smoke"]
+            schema_groups.append((
+                {**disaster_schema, "fire_or_smoke": smoke_type},
+                disaster_rules + "\n" + smoke_rule,
+            ))
         if call_type == "局內回報":
             schema_groups.append((internal_report_schema, internal_report_rules))
+        if sub_fields_only:
+            schema_groups = sub_groups
 
         merged: Dict[str, Any] = {}
         for out in self._extract_groups(
@@ -1792,6 +1948,7 @@ class LLMExtractor119:
         _need_patient_retry = (
             allowed_fields is None
             and main_category == "救護"
+            and not sub_fields_only
             and
             len((caller_text or "").strip()) >= 6
             and (
@@ -1820,21 +1977,25 @@ class LLMExtractor119:
             val = merged.get(key)
             if val is None:
                 continue
-            if key in ("consciousness", "breathing", "abdomen_rise"):
+            if key == "breathing":
+                # 呼吸照 xlsx 存文字（救護、緊急救援共用這一格），只收四個選項，選項以外的當沒講到。
+                # 不再套用下面舊的是／否判斷：舊判斷會把「無呼吸」改成 False、把「呼吸不正常」丟掉，
+                # 轉真人（呼吸不正常、無呼吸）就觸發不了（11/06 使用者決定）
+                text = _clean_str(val)
+                if text in BREATHING_OPTIONS:
+                    result[key] = text
+            elif key in ("consciousness", "abdomen_rise"):
                 from sop_utils_119 import parse_vital_slot
                 rule_val = parse_vital_slot(key, caller_text, question or "")
                 bool_val = _coerce_bool(val)
                 if rule_val is not None:
                     result[key] = rule_val
                 elif bool_val is not None:
-                    if (
-                        key == "breathing"
-                        and bool_val is True
-                        and "呼吸" not in (caller_text or "")
-                        and parse_vital_slot("consciousness", caller_text, "") is True
-                    ):
-                        continue
                     result[key] = bool_val
+            elif key == "caller_location":
+                # 選項以外的一律當沒講到（見 CALLER_LOCATION_OPTIONS）
+                if str(val).strip() in CALLER_LOCATION_OPTIONS:
+                    result[key] = str(val).strip()
             elif key == "NeedPolice":
                 bool_val = _coerce_bool(val)
                 if bool_val is not None:
@@ -1893,29 +2054,12 @@ class LLMExtractor119:
                     and cleaned not in DISASTER_FIXED_ANSWERS[key]
                 ):
                     cleaned = None
+                # 緊急救援 xlsx 寫「只能填」的欄位（含跟救護共用的意識、性別、溺水狀況、墜落狀況）：
+                # 不是選項裡的說法就不記，避免前置條件比對不到、該問的題沒問（11/06 使用者決定）
                 if (
                     cleaned
-                    and key in ACCIDENT_FIXED_ANSWERS
-                    and cleaned not in ACCIDENT_FIXED_ANSWERS[key]
-                ):
-                    cleaned = None
-                if cleaned and key == "accident_caller_role":
-                    cleaned = normalize_accident_caller_role(cleaned)
-                if cleaned and key in {
-                    "drown_caller_role", "dive_caller_role", "fall_caller_role",
-                    "mountain_caller_role", "trap_caller_role", "gas_caller_role",
-                    "drown_age", "dive_age", "fall_age", "mountain_age",
-                    "drown_gender", "dive_gender", "fall_gender",
-                    "mountain_gender", "trap_gender",
-                    "mountain_cause", "gas_building_use",
-                    "lift_caller_role", "door_caller_role", "door_reason",
-                    "door_gender", "lift_discomfort",
-                }:
-                    cleaned = normalize_sub_field(key, cleaned)
-                if (
-                    cleaned
-                    and key in SUB_FIXED_ANSWERS
-                    and cleaned not in SUB_FIXED_ANSWERS[key]
+                    and key in EMERGENCY_FIXED_ANSWERS
+                    and cleaned not in EMERGENCY_FIXED_ANSWERS[key]
                 ):
                     cleaned = None
                 if cleaned and key == "call_type" and cleaned not in {
@@ -1938,6 +2082,15 @@ class LLMExtractor119:
                     "先生", "小姐",
                 }:
                     cleaned = None
+                # 報案人只說不舒服時，LLM 曾自己換成「全身無力」（11/06 承辦反映）：
+                # 這句話沒講到無力、虛弱這類字就拿掉全身無力，同一句的其他症狀照收
+                if cleaned and key == "symptoms" and not any(
+                    word in (caller_text or "") for word in ("無力", "沒力", "沒有力", "虛弱", "軟")
+                ):
+                    cleaned = "、".join(
+                        item.strip() for item in re.split(r"[、,，]", cleaned)
+                        if item.strip() and item.strip() != "全身無力"
+                    ) or None
                 if cleaned and key == "location_type":
                     cleaned = cleaned.lower()
                     if cleaned not in {
@@ -2262,6 +2415,8 @@ class LLMExtractor119:
                     result[slot] = normalized
                 continue
             cleaned = _clean_str(val)
+            if slot == "caller_location" and cleaned not in CALLER_LOCATION_OPTIONS:
+                continue  # 搬過來的報案人位置也只收四種選項
             if cleaned is not None:
                 result[slot] = cleaned
         return result

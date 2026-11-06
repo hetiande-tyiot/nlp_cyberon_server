@@ -3,19 +3,22 @@ handlers/災害通用.py
 ━━━━━━━━━━━━━━━━━━━━
 119 SOP — 災害大類通用流程
 
-所有子類問同一套題。受困人數、火花兩題有前置條件。
+所有子類問同一套題（1106 xlsx 7 項）。受困人數、火煙狀況兩題有前置條件。
+火煙狀況是有火有煙、有火無煙、無火有煙 → 改判火警。
+題目開始前先確定次案類：判不出來追問兩句，還判不出來就轉真人；確定了才講派車（使用者 11/07 決定）。
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from disaster_flow_119 import (
     DISASTER_QUESTIONS,
-    MODE_CONDITIONAL,
-    DisasterQuestion,
+    DISPATCH_LINE,
+    SUB_REASK_QUESTIONS,
+    should_switch_to_fire,
 )
-from .base import SubCategoryHandler
+from .base import RESCUE_CLOSING_LINE, SubCategoryHandler
 
 if TYPE_CHECKING:
     from sop_119_engine import SopEngine119
@@ -25,18 +28,12 @@ class ZaiHaiGenericHandler(SubCategoryHandler):
     """災害大類通用 Handler（不登記於子類 registry）。"""
 
     def run_generic_flow(self, engine: "SopEngine119") -> None:
-        """照題目順序問。主動題已有答案就跳過；條件不成立就不問。"""
-        engine._ensure_known_fields_from_history()
-        for item in DISASTER_QUESTIONS:
-            engine._ensure_known_fields_from_history()
-            if item.mode == MODE_CONDITIONAL and not item.condition(engine.case):
-                engine._debug_print(
-                    f"skip_{item.stage}", {"前置條件不成立": item.condition_text},
-                )
-                continue
-            self._ask_missing(engine, item)
-        # 火花題可能在問完身分之後，子類才辨成電線掉落等。那時補問一次。
-        spark = next(item for item in DISASTER_QUESTIONS if item.field == "electrical_hazard")
+        """照 xlsx 題目順序問，做法跟救護題目表一樣（主動題已有答案就跳過；條件不成立就不問）。"""
+        self._settle_subcategory(engine)
+        engine._announce_dispatch(DISPATCH_LINE)
+        self._ask_ems_questions(engine, DISASTER_QUESTIONS)
+        # 火煙狀況可能在問完報案身分之後，子類才辨成電線掉落等。那時補問一次。
+        spark = next(item for item in DISASTER_QUESTIONS if item.field == "fire_or_smoke")
         already_asked = any(
             turn.get("role") == "assistant" and (turn.get("text") or "") == spark.question
             for turn in engine.case.transcript
@@ -46,23 +43,29 @@ class ZaiHaiGenericHandler(SubCategoryHandler):
             and spark.condition(engine.case)
             and not engine._is_field_filled(spark.field)
         ):
-            self._ask_missing(engine, spark)
+            engine._set_stage(spark.stage)
+            engine._ask_and_extract(spark.question)
+            self._check_escalation(engine)
 
-    def _ask_missing(
-        self,
-        engine: "SopEngine119",
-        item: DisasterQuestion,
-    ) -> Optional[str]:
-        """答案還不知道才問，並走 LLM 抽取。"""
-        engine._ensure_known_fields_from_history()
-        engine._set_stage(item.stage)
-        if engine._is_field_filled(item.field):
-            engine._debug_print(
-                f"skip_{item.stage}",
-                {item.field: getattr(engine.case, item.field)},
-            )
-            return None
-        return engine._ask_and_extract(item.question)
+    def _settle_subcategory(self, engine: "SopEngine119") -> None:
+        """
+        前面講的話判得出次案類就不問；判不出來依序問兩句，每問一句重判一次，
+        兩句問完還判不出來就轉真人（判斷門檻見 engine._refresh_disaster_subtype_from_bert）。
+        """
+        for question in SUB_REASK_QUESTIONS:
+            if engine.case.sub_category:
+                return
+            engine._set_stage("災害_incident")
+            engine._ask_and_extract(question)
+            self._check_escalation(engine)
+            engine._refresh_disaster_subtype_from_bert()
+        if not engine.case.sub_category:
+            engine._transfer_to_human("災害次案類判不出來")
+
+    def _check_escalation(self, engine: "SopEngine119") -> None:
+        """報案人哪一句講到有火或有煙都改判火警，不限問到火煙狀況那一題。"""
+        if should_switch_to_fire(engine.case):
+            engine._switch_disaster_to_fire()
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """收報案人姓名與聯繫方式。記不到就轉專人。"""
@@ -101,9 +104,11 @@ class ZaiHaiGenericHandler(SubCategoryHandler):
             parts.append(f"姓名：{caller_name}")
         if caller_contact:
             parts.append(f"聯繫方式：{caller_contact}")
-        engine._say("，".join(parts) + "，已為您記錄。")
-
-        engine._say("請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。")
+        # 11/02 使用者決定暫時不唸姓名、聯繫方式，也不講「耐心等待」那句，
+        # 要恢復就把下面兩行的註解拿掉
+        # engine._say("，".join(parts) + "，已為您記錄。")
+        # engine._say("請在現場耐心等待，確認入口通暢，並引導救援人員，謝謝。")
+        engine._say(RESCUE_CLOSING_LINE)
         with engine._case_lock:
             engine.case.result = "dispatched"
         engine._set_stage("completed")

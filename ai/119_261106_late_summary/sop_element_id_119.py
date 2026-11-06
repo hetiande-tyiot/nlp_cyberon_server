@@ -17,27 +17,17 @@ from case_field_labels_119 import LABELS
 _XLSX = Path(__file__).resolve().parent / "scripts" / "CaseTypeQA.xlsx"
 _SHEET = "次案類問題"
 
-# 代碼裡的次案類名稱 → Excel「次案類」橫線後面的名稱
-_SUBCATEGORY_ALIASES = {
-    "孕婦急產": "孕婦待產",
-}
-
 # 欄位中文名（LABELS）→ Excel「關鍵要素」。用字相同的不必寫在這裡。
 _LABEL_TO_ELEMENT = {
     "是否有意識": "意識",
     "是否有呼吸": "呼吸",
-    "傷病患人數": "患者人數",
-    "過去病史": "病史",
-    "發生了什麼事": "病徵",
-    "延燒可能": "是否延燒",
-    "應門狀況（起火戶或負責人）": "應門或聯絡狀況",
     "報案人是否即患者": "報案人與患者關係",
-    "宮縮情況": "陣痛狀況",
     "預產期": "預產期與懷孕週數",
-    "產檢異常史": "產檢狀況",
-    # LABELS 寫「看到火還是煙」，表裡的關鍵要素是「火煙狀況」（透天厝第 4 題）。
-    "看到火還是煙": "火煙狀況",
 }
+
+# 程式裡的次案類名稱跟 Excel「次案類」欄寫法不同的：
+# 卡住夾住在 Excel 是 309「緊急救援-其他」（垂片 309-其他(卡住夾住)）。
+_CASE_TYPE_ALIASES = {"緊急救援-其他(卡住夾住)": "緊急救援-其他"}
 
 
 def case_type_key(main_category: Optional[str], sub_category: Optional[str]) -> Optional[str]:
@@ -45,10 +35,10 @@ def case_type_key(main_category: Optional[str], sub_category: Optional[str]) -> 
     main = (main_category or "").strip()
     sub = (sub_category or "").strip()
     if sub:
-        sub = _SUBCATEGORY_ALIASES.get(sub, sub)
         if not main:
             return None
-        return f"{main}-{sub}"
+        key = f"{main}-{sub}"
+        return _CASE_TYPE_ALIASES.get(key, key)
     if main == "救護":
         return "救護"
     return None
@@ -145,7 +135,7 @@ def _answer_text(value: Any) -> str:
 # 跟文字的 building_construction 同樣叫「建物構造」，這一題用文字版。
 _SKIP_FIELDS = {"building_structure"}
 
-# 火警、照題目表問的救護次案類「還沒答、但要問」的題目放的內容。下游拿到的值一律是字串，用這兩個字判斷要問。
+# 火警、緊急救援、災害、照題目表問的救護次案類「還沒答、但要問」的題目放的內容。下游拿到的值一律是字串，用這兩個字判斷要問。
 PENDING_ANSWER = "待問"
 
 
@@ -153,7 +143,7 @@ def sop_element_ids(case: Mapping[str, Any]) -> Dict[str, str]:
     """已填且對得上表的欄位 → {編號: 抽到的內容}。
 
     例如 {"102-5": "有火有煙"}。
-    火警、照題目表問的救護次案類另外把「還沒答、但要問」的題目也列出來，
+    火警、緊急救援、災害、照題目表問的救護次案類另外把「還沒答、但要問」的題目也列出來，
     內容是「待問」（見 _ordered_element_ids）。
     """
     subtype = case_type_key(case.get("main_category"), case.get("sub_category"))
@@ -179,18 +169,22 @@ def sop_element_ids(case: Mapping[str, Any]) -> Dict[str, str]:
 def _ordered_element_ids(
     case: Mapping[str, Any], subtype: str, table: Mapping[Tuple[str, str], str],
 ) -> Optional[Dict[str, str]]:
-    """火警、照題目表問的救護次案類：照題目的順序給編號，第 N 題就是「次案類編號-N」。
+    """火警、緊急救援、災害、照題目表問的救護次案類：照題目的順序給編號，第 N 題就是「次案類編號-N」。
 
-    題目表（火警 fire_tab_map_119.TAB_QUESTIONS、救護 ems_tab_map_119.EMS_QUESTIONS）
+    題目表（火警 fire_tab_map_119.TAB_QUESTIONS、救護 ems_tab_map_119.EMS_QUESTIONS、
+    緊急救援 emergency_tab_map_119.EMERGENCY_QUESTIONS、災害 disaster_flow_119.DISASTER_QUESTIONS）
     跟 CaseTypeQA.xlsx 的題號一題一題對得上，所以直接用位置，不用名稱去對
-    （同一個垂片有兩題都叫「建築物類型」）。
+    （同一個垂片有兩題都叫「建築物類型」；災害的人員受困、報案身分沒有自己的問句，跟上一題同一句問，
+    但還是各自一題、有自己的題號）。
     - 有答案：放答案
     - 還沒答案，但要問（主動題、前置條件成立的條件題）：放「待問」，由下游判斷這題要問
     - 不用問（前置條件不成立、被動題還沒人講到）：不放
     要不要問，跟引擎追問用的是同一份前置條件。
     次案類沒有題目表（例如瓦斯漏氣、還沒照 xlsx 改寫的救護次案類）時回傳 None，
-    交給原本用名稱對的做法。
+    交給原本用名稱對的做法。緊急救援沒有題目表的次案類（例如「其他」、CO中毒）會轉真人，不給編號。
     """
+    from disaster_flow_119 import DISASTER_QUESTIONS
+    from emergency_tab_map_119 import questions_for_subtype as emergency_questions
     from ems_tab_map_119 import questions_for_subtype
     from fire_tab_map_119 import (
         MODE_ACTIVE, MODE_CONDITIONAL, TAB_QUESTIONS, tab_for_subtype,
@@ -201,6 +195,13 @@ def _ordered_element_ids(
         questions = TAB_QUESTIONS.get(tab_for_subtype(case.get("sub_category")) or "")
     elif main == "救護":
         questions = questions_for_subtype(case.get("sub_category"))
+    elif main == "緊急救援":
+        questions = emergency_questions(case.get("sub_category"))
+        if not questions:
+            return {}
+    elif main == "災害":
+        # 災害所有次案類共用同一張題目表
+        questions = DISASTER_QUESTIONS
     else:
         return None
     case_type_id = next(

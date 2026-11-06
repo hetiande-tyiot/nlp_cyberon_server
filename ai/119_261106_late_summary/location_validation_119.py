@@ -27,7 +27,10 @@ DEFAULT_LANDMARK_XLSX = BASE_DIR / "scripts" / "landmarks.xlsx"
 # ── addrCheck 地址驗測（地址確認全面改走 addrCheck /Verify）──
 # env：ADDRCHECK_API_URL / ADDRCHECK_API_TOKEN（Bearer，與 ACRC 共用 Ingest__Token）
 #      / ADDRCHECK_API_TIMEOUT（預設 2.5）
-DEFAULT_ADDRCHECK_BASE_URL = "http://192.168.5.120:8088"
+#      / ADDRCHECK_API_FALLBACK_URL（備用位址：主位址連線被拒、HTTP 錯誤或回應格式不對時改打這個；
+#        主位址等滿逾時秒數都沒回應就直接放棄，不再打備用位址，免得通話多等一輪）
+DEFAULT_ADDRCHECK_BASE_URL = "http://192.168.5.85:8088"
+DEFAULT_ADDRCHECK_FALLBACK_URL = "http://100.107.145.7:8088"
 ADDRCHECK_VERIFY_PATH = "/api/AddrCheck/Verify"
 
 # 內部地點型態 → addrCheck API 的 type（帶 type 只查該層；None 讓後端自動判斷）
@@ -110,7 +113,11 @@ def verify_address_detail(
     if not address:
         return False, "尚未取得地址", None
     base = (url or os.getenv("ADDRCHECK_API_URL", DEFAULT_ADDRCHECK_BASE_URL)).rstrip("/")
-    endpoint = f"{base}{ADDRCHECK_VERIFY_PATH}"
+    bases = [base]
+    # 呼叫端自己指定 url（測試、離線腳本）時只打那一個，不用備用位址
+    fallback = os.getenv("ADDRCHECK_API_FALLBACK_URL", DEFAULT_ADDRCHECK_FALLBACK_URL).rstrip("/")
+    if not url and fallback and fallback != base:
+        bases.append(fallback)
     if timeout is None:
         try:
             timeout = float(os.getenv("ADDRCHECK_API_TIMEOUT", "2.5"))
@@ -124,30 +131,38 @@ def verify_address_detail(
     token = _addrcheck_token()
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    request = Request(
-        endpoint,
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
-    _t0 = time.perf_counter()
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception as exc:
-        # 逾時/連不上的耗時照樣記——外部 API 慢是常見的延遲來源
+    for base in bases:
+        request = Request(
+            f"{base}{ADDRCHECK_VERIFY_PATH}",
+            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        _t0 = time.perf_counter()
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("回應格式非物件")
+        except Exception as exc:
+            # 逾時/連不上的耗時照樣記——外部 API 慢是常見的延遲來源
+            timing_119.emit("addrcheck", api_type or "address",
+                            (time.perf_counter() - _t0) * 1000.0, extra="error=1")
+            # 等滿逾時秒數都沒回應：直接當 API 無法使用，不再打備用位址；
+            # 其他失敗（連線被拒、HTTP 錯誤、回應格式不對）才換下一個位址
+            timed_out = isinstance(exc, TimeoutError) or isinstance(
+                getattr(exc, "reason", None), TimeoutError
+            )
+            if timed_out or base == bases[-1]:
+                return None, str(exc), None
+            continue
         timing_119.emit("addrcheck", api_type or "address",
-                        (time.perf_counter() - _t0) * 1000.0, extra="error=1")
-        return None, str(exc), None
-    timing_119.emit("addrcheck", api_type or "address",
-                    (time.perf_counter() - _t0) * 1000.0)
-    if not isinstance(payload, dict):
-        return None, "回應格式非物件", None
-    return (
-        bool(payload.get("status")),
-        payload.get("hint"),
-        payload.get("reason"),
-    )
+                        (time.perf_counter() - _t0) * 1000.0)
+        return (
+            bool(payload.get("status")),
+            payload.get("hint"),
+            payload.get("reason"),
+        )
 
 
 def verify_address_status(

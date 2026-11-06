@@ -594,9 +594,9 @@ def build_classifiers(
         "救護": "TW-119-BERT-sub_救護",
         "火警": "TW-119-BERT-sub_火警",
         # 8 類：其他、山難、瓦斯漏氣(建築物)、跳樓、跳水、車禍救助、開瓦斯自殺、電梯受困。
-        "緊急救援": "TW-119-BERT-sub_緊急救援_v2",
+        "緊急救援": "TW-119-BERT-sub_緊急救援",
         # 目錄不存在就跳過；災害流程不靠子類才能問。
-        "災害": "TW-119-BERT-sub_災害_v2",
+        "災害": "TW-119-BERT-sub_災害",
     }
     _llm_path = llm_model_path if enable_llm else None
 

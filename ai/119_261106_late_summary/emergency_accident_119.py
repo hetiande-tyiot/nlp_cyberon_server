@@ -56,7 +56,7 @@ CONSCIOUSNESS_QUESTION = "請問人是否還有意識？"
 BREATHING_QUESTION = "請你看一下他是否有呼吸？"
 INCIDENT_QUESTION = "請問發生什麼事情？"
 INCIDENT_REASK_QUESTION = "請問發生甚麼事？"
-DISPATCH_LINE = "救援人員已派出了喔。"
+DISPATCH_LINE = "救護人員已經派出了歐。"
 
 ACCIDENT_FIXED_ANSWERS: Dict[str, Tuple[str, ...]] = {
     "accident_vehicle_type": VEHICLE_TYPES,
