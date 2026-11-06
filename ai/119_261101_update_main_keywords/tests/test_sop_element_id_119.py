@@ -155,6 +155,61 @@ class SopElementIdTests(unittest.TestCase):
                 expected = [unified.get(q.element, q.element) for q in TAB_QUESTIONS[tab]]
                 self.assertEqual(rows[subtype], expected)
 
+    def test_emergency_questions_match_case_type_qa_order(self) -> None:
+        # 緊急救援也用「題目表第幾題」當題號，題目表要跟 CaseTypeQA.xlsx 一題一題對得上
+        from emergency_tab_map_119 import EMERGENCY_QUESTIONS, TRAPPED_ALIAS
+        from sop_element_id_119 import _XLSX, _SHEET
+        from openpyxl import load_workbook
+
+        rows: dict = {}
+        sheet = load_workbook(_XLSX, read_only=True)[_SHEET]
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            rows.setdefault(row[1], []).append(row[5])  # 次案類 → 關鍵要素（依題號）
+        for sub, questions in EMERGENCY_QUESTIONS.items():
+            if sub == TRAPPED_ALIAS:
+                continue
+            with self.subTest(sub=sub):
+                self.assertEqual(rows[f"緊急救援-{sub}"], [q.element for q in questions])
+
+    def test_emergency_lists_questions_still_to_ask_as_pending(self) -> None:
+        # 車禍救助，報案人位置還沒講到（算未提到）：要在現場才問的題目都列「待問」；
+        # 意識要等報案身分確定不是本人、患者人數要等確定有人受傷或受困，所以不列
+        case = CaseInfo119(
+            main_category="緊急救援",
+            sub_category="車禍救助",
+            crash_vehicles="汽車撞機車",
+        )
+
+        ids = case.to_dict()["sop_element_ids"]
+
+        self.assertEqual(ids, {
+            "301-1": "汽車撞機車",
+            "301-2": "待問",   # 受傷部位
+            "301-3": "待問",   # 傷勢
+            "301-4": "待問",   # 人員受困
+            "301-6": "待問",   # 報案身分
+            "301-9": "待問",   # 火煙狀況
+            "301-10": "待問",  # 交通影響
+        })
+
+    def test_emergency_caller_far_away_skips_on_scene_questions(self) -> None:
+        case = CaseInfo119(
+            main_category="緊急救援",
+            sub_category="車禍救助",
+            crash_vehicles="汽車撞機車",
+            caller_relation="路過",
+            caller_location="在遠處",
+        )
+
+        ids = case.to_dict()["sop_element_ids"]
+
+        self.assertEqual(ids, {
+            "301-1": "汽車撞機車",
+            "301-6": "路過",
+            "301-10": "待問",
+            "301-11": "在遠處",
+        })
+
     def test_empty_case_has_no_ids(self) -> None:
         self.assertEqual(CaseInfo119().to_dict()["sop_element_ids"], {})
 

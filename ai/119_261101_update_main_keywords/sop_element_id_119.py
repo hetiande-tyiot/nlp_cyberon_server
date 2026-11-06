@@ -130,7 +130,7 @@ def _answer_text(value: Any) -> str:
 # 跟文字的 building_construction 同樣叫「建物構造」，這一題用文字版。
 _SKIP_FIELDS = {"building_structure"}
 
-# 火警、照題目表問的救護次案類「還沒答、但要問」的題目放的內容。下游拿到的值一律是字串，用這兩個字判斷要問。
+# 火警、緊急救援、照題目表問的救護次案類「還沒答、但要問」的題目放的內容。下游拿到的值一律是字串，用這兩個字判斷要問。
 PENDING_ANSWER = "待問"
 
 
@@ -138,7 +138,7 @@ def sop_element_ids(case: Mapping[str, Any]) -> Dict[str, str]:
     """已填且對得上表的欄位 → {編號: 抽到的內容}。
 
     例如 {"102-5": "有火有煙"}。
-    火警、照題目表問的救護次案類另外把「還沒答、但要問」的題目也列出來，
+    火警、緊急救援、照題目表問的救護次案類另外把「還沒答、但要問」的題目也列出來，
     內容是「待問」（見 _ordered_element_ids）。
     """
     subtype = case_type_key(case.get("main_category"), case.get("sub_category"))
@@ -164,9 +164,10 @@ def sop_element_ids(case: Mapping[str, Any]) -> Dict[str, str]:
 def _ordered_element_ids(
     case: Mapping[str, Any], subtype: str, table: Mapping[Tuple[str, str], str],
 ) -> Optional[Dict[str, str]]:
-    """火警、照題目表問的救護次案類：照題目的順序給編號，第 N 題就是「次案類編號-N」。
+    """火警、緊急救援、照題目表問的救護次案類：照題目的順序給編號，第 N 題就是「次案類編號-N」。
 
-    題目表（火警 fire_tab_map_119.TAB_QUESTIONS、救護 ems_tab_map_119.EMS_QUESTIONS）
+    題目表（火警 fire_tab_map_119.TAB_QUESTIONS、救護 ems_tab_map_119.EMS_QUESTIONS、
+    緊急救援 emergency_tab_map_119.EMERGENCY_QUESTIONS）
     跟 CaseTypeQA.xlsx 的題號一題一題對得上，所以直接用位置，不用名稱去對
     （同一個垂片有兩題都叫「建築物類型」）。
     - 有答案：放答案
@@ -176,6 +177,7 @@ def _ordered_element_ids(
     次案類沒有題目表（例如瓦斯漏氣、還沒照 xlsx 改寫的救護次案類）時回傳 None，
     交給原本用名稱對的做法。
     """
+    from emergency_tab_map_119 import questions_for_subtype as emergency_questions
     from ems_tab_map_119 import questions_for_subtype
     from fire_tab_map_119 import (
         MODE_ACTIVE, MODE_CONDITIONAL, TAB_QUESTIONS, tab_for_subtype,
@@ -186,6 +188,8 @@ def _ordered_element_ids(
         questions = TAB_QUESTIONS.get(tab_for_subtype(case.get("sub_category")) or "")
     elif main == "救護":
         questions = questions_for_subtype(case.get("sub_category"))
+    elif main == "緊急救援":
+        questions = emergency_questions(case.get("sub_category"))
     else:
         return None
     case_type_id = next(
