@@ -53,6 +53,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from address_mapper_119 import get_location_mapper
 from case_info_119 import CaseInfo119
+from emergency_tab_map_119 import EMERGENCY_OWN_FIELDS, EMERGENCY_SHARED_FIELDS
 from handlers import get_handler, sop_slots_for, SHARED_SEMANTIC_SLOTS
 from important_tags_119 import match_important_tags, merge_important_tags
 from llm_extractor_119 import LLMExtractor119, build_fallback_summary
@@ -341,6 +342,10 @@ OTHER_CLARIFY_EMERGENCY_KW: Tuple[str, ...] = (
 )
 
 
+# 轉接真人時對報案人講的話，整個系統統一這一句（11/06 使用者決定）。見 SopEngine119._transfer_to_human。
+TRANSFER_LINE = "請不要掛斷電話，我馬上幫您轉接專人。"
+
+
 class TransferToHumanError(Exception):
     """觸發時立即中止 handler 並轉接真人接線員。"""
 
@@ -539,94 +544,10 @@ DISASTER_SHARED_FIELDS = frozenset({
     "caller_location",
     "caller_relation",
 })
-# 車禍救助、溺水、跳水、跳樓。切離緊急救援時清空。
-EMERGENCY_EXCLUSIVE_FIELDS = frozenset({
-    "accident_vehicle_type",
-    "accident_injury",
-    "accident_trapped",
-    "accident_casualty_count",
-    "accident_consciousness",
-    "accident_burning",
-    "accident_caller_role",
-    "accident_traffic_impact",
-    "drown_caller_role",
-    "drown_cause",
-    "drown_count",
-    "drown_sight",
-    "drown_distance",
-    "drown_flotation",
-    "drown_consciousness",
-    "drown_gender",
-    "drown_age",
-    "drown_clothing",
-    "drown_group",
-    "dive_status",
-    "dive_sight",
-    "dive_caller_role",
-    "dive_gender",
-    "dive_age",
-    "dive_clothing",
-    "dive_count",
-    "dive_consciousness",
-    "mountain_cause",
-    "mountain_injury",
-    "mountain_count",
-    "mountain_location",
-    "mountain_caller_role",
-    "mountain_gender",
-    "mountain_age",
-    "mountain_consciousness",
-    "mountain_entry",
-    "mountain_route",
-    "mountain_supplies",
-    "mountain_leader",
-    "trap_body_part",
-    "trap_object",
-    "trap_freed",
-    "trap_injury",
-    "trap_place",
-    "trap_gender",
-    "trap_age",
-    "trap_caller_role",
-    "trap_consciousness",
-    "gas_building_use",
-    "gas_caller_role",
-    "gas_flame",
-    "gas_smell_place",
-    "gas_smell_strength",
-    "gas_type",
-    "gas_adjacent",
-    "gas_discomfort",
-    "lift_caller_role",
-    "lift_building",
-    "lift_floor",
-    "lift_count",
-    "lift_company",
-    "lift_consciousness",
-    "lift_discomfort",
-    "door_caller_role",
-    "door_reason",
-    "knock_response",
-    "door_kind",
-    "door_locksmith",
-    "door_consent",
-    "door_gender",
-    "door_age",
-    "fall_caller_role",
-    "high_fall_status",
-    "fall_intent",
-    "fall_floor",
-    "fall_gender",
-    "fall_age",
-})
-# 大類收尾寫進救護既有欄位。主類是緊急救援時也允許寫入。
-EMERGENCY_TAIL_FIELDS = frozenset({
-    "caller_relation",
-    "patient_gender",
-    "patient_age",
-    "breathing",
-    "consciousness",
-})
+# 緊急救援題目表（1106 xlsx）自己的欄位。切離緊急救援時清空。
+# 跟救護、火警、災害共用的欄位見 EMERGENCY_SHARED_FIELDS（emergency_tab_map_119）：
+# 主類是緊急救援時也可以寫入；切大類時新大類也用到就保留，用不到就清空。
+EMERGENCY_EXCLUSIVE_FIELDS = EMERGENCY_OWN_FIELDS
 
 
 # ─── SOP 引擎 ─────────────────────────────────────────────────────────────────
@@ -805,23 +726,40 @@ class SopEngine119:
             parts.append(self.case.incident_description)
         full_text = "\n".join(p for p in parts if p)
 
-        # 救護照 xlsx 垂片：性別記「男性／女性」；報案人是不是患者記在「報案身分」，
-        # 由模型照規則抽，不另外判廠商的「報案人是否即患者」（11/02 使用者決定）
-        is_rescue = self._fields_category() == "救護"
+        # 救護、緊急救援照 xlsx 垂片：性別記「男性／女性」；報案人是不是患者記在「報案身分」，
+        # 由模型照規則抽，不另外判廠商的「報案人是否即患者」（救護 11/02、緊急救援 11/06 使用者決定）
+        xlsx_fields = self._fields_category() in ("救護", "緊急救援")
         with self._case_lock:
             if not self.case.patient_gender and full_text:
                 gender = infer_patient_gender_from_honorific(full_text)
-                if gender and is_rescue:
+                if gender and xlsx_fields:
                     gender = {"男": "男性", "女": "女性"}.get(gender, gender)
                 if gender:
                     self.case.patient_gender = gender
 
-            if not is_rescue and self.case.caller_is_patient is None and full_text:
+            if not xlsx_fields and self.case.caller_is_patient is None and full_text:
                 is_patient = infer_caller_is_patient(full_text)
                 if is_patient is not None:
                     self.case.caller_is_patient = is_patient
 
         self._notify_case_update()
+
+    def _transfer_to_human(self, reason: str) -> None:
+        """
+        轉接真人。各垂片在 xlsx 規定要轉真人的條件成立時呼叫，條件本身寫在各垂片。
+        1. 已經轉接過就什麼都不做：轉接後真人接手，系統還在旁邊聽、照樣抽欄位，
+           條件可能再成立一次，這時不能再講話或再轉，否則會打斷真人的通話。
+        2. 講統一的那句話（TRANSFER_LINE），同時記進對話紀錄。
+        3. 丟出 TransferToHumanError，立刻停下目前在問的題目，交給報案流程最外層收尾：
+           標記已轉接、流程階段與結果記成「human_transfer」、通知前端 AI 不再問問題。
+           通話不會結束；下游看到結果是 human_transfer 會跳轉接提示、不掛電話。
+        reason 只記在 log，方便事後查是哪個條件觸發的，不會講給報案人聽。
+        """
+        if self._bridged:
+            return
+        self._debug_print("transfer_to_human", reason)
+        self._say(TRANSFER_LINE)
+        raise TransferToHumanError(reason, result="human_transfer")
 
     def _check_ohca_and_transfer(self, vital_val: Optional[bool], slot: str) -> None:
         """任一生命征象非 True → OHCA 轉人工。"""
@@ -1014,24 +952,19 @@ class SopEngine119:
             if key in ("level", "fire_level_signals"):
                 continue
             current = getattr(self.case, key, None)
-            shared_in_disaster = (
-                key in DISASTER_SHARED_FIELDS and self.case.main_category == "災害"
+            shared_here = (
+                (key in DISASTER_SHARED_FIELDS and self.case.main_category == "災害")
+                or (key in EMERGENCY_SHARED_FIELDS and self.case.main_category == "緊急救援")
             )
 
             # 專屬欄位只允許在對應案件流程寫入，避免 LLM 跨類型污染 JSON。
-            # 災害共用的欄位（DISASTER_SHARED_FIELDS）在災害案件也可以寫入。
-            if (
-                key in EMERGENCY_TAIL_FIELDS
-                and self.case.main_category == "緊急救援"
-            ):
-                setattr(self.case, key, val)
-                continue
+            # 災害、緊急救援共用的欄位（DISASTER_SHARED_FIELDS、EMERGENCY_SHARED_FIELDS）在該大類也可以寫入。
             if key in EMERGENCY_EXCLUSIVE_FIELDS and self.case.main_category != "緊急救援":
                 continue
             if (
                 key in _RESCUE_FIELDS
                 and self._fields_category() != "救護"
-                and not shared_in_disaster
+                and not shared_here
             ):
                 continue
             # 救護的病徵、主訴各有自己的欄位，「發生了什麼事」只給緊急救援
@@ -1040,10 +973,14 @@ class SopEngine119:
             if (
                 key in _FIRE_OVERWRITE_FIELDS
                 and self.case.main_category != "火警"
-                and not shared_in_disaster
+                and not shared_here
             ):
                 continue
-            if key in DISASTER_EXCLUSIVE_FIELDS and self.case.main_category != "災害":
+            if (
+                key in DISASTER_EXCLUSIVE_FIELDS
+                and self.case.main_category != "災害"
+                and not shared_here
+            ):
                 continue
 
             # 胎數不是傷病患人數（「三胞胎」屬 multiple_pregnancy）。
@@ -1112,33 +1049,8 @@ class SopEngine119:
                 setattr(self.case, key, val)
                 continue
 
-            if key in EMERGENCY_EXCLUSIVE_FIELDS - {
-                "accident_casualty_count", "drown_count", "dive_count",
-                "mountain_count", "lift_count",
-            }:
-                from emergency_accident_119 import normalize_accident_caller_role
-                from emergency_rescue_subs_119 import normalize_sub_field
-                if key == "accident_caller_role":
-                    val = normalize_accident_caller_role(str(val))
-                else:
-                    val = normalize_sub_field(key, str(val))
-                setattr(self.case, key, val)
-                continue
-            if key in {
-                "accident_casualty_count", "drown_count", "dive_count",
-                "mountain_count", "lift_count",
-            }:
-                from emergency_accident_119 import COUNT_QUESTION
-                from emergency_rescue_subs_119 import COUNT_FIELD_QUESTIONS
-                lock_questions = {
-                    "accident_casualty_count": COUNT_QUESTION,
-                    **COUNT_FIELD_QUESTIONS,
-                }
-                asking_count = (getattr(self, "_pending_extract_question", None) or "") == (
-                    lock_questions[key]
-                )
-                if current and not asking_count:
-                    continue
+            if key in EMERGENCY_EXCLUSIVE_FIELDS:
+                # 緊急救援跟救護一樣以報案人最新講的為準，報案人改口要跟著改。
                 setattr(self.case, key, val)
                 continue
 
@@ -1815,16 +1727,17 @@ class SopEngine119:
                 self._apply_extracted_fields({"ImportantTag": matched_tags})
 
         # 3) 生命征象規則校正（僅填補空值 / 校正明顯誤填風險）
-        # 救護照 xlsx 垂片抽取，這段關鍵字的詞已經寫進意識、呼吸的抽取規則，救護不跑（11/02 使用者決定）
-        vital_hints = (
-            extract_vital_signs_hint(caller_text) if self._fields_category() != "救護" else {}
-        )
+        # 救護、緊急救援照 xlsx 垂片抽取，這段關鍵字的詞已經寫進意識、呼吸的抽取規則，不跑
+        #（救護 11/02、緊急救援 11/06 使用者決定）
+        xlsx_vitals = self._fields_category() in ("救護", "緊急救援")
+        vital_hints = extract_vital_signs_hint(caller_text) if not xlsx_vitals else {}
         if vital_hints:
             with self._case_lock:
                 self._apply_extracted_fields(vital_hints)
 
-        # 救護照 xlsx 垂片抽取，不用這段關鍵字補是／否（11/02 使用者決定）
-        if qa_question and self._fields_category() != "救護":
+        # 救護、緊急救援照 xlsx 垂片抽取，不用這段關鍵字補是／否：
+        # 呼吸要存 xlsx 的文字（未知／有呼吸／呼吸不正常／無呼吸），不能被改寫成是／否
+        if qa_question and not xlsx_vitals:
             for slot, keywords in (
                 ("consciousness", ("意識", "意识", "清醒", "反應", "反应", "捏", "肩膀")),
                 ("breathing", ("呼吸",)),
@@ -2354,7 +2267,7 @@ class SopEngine119:
         if main_cat == "災害":
             return DISASTER_EXCLUSIVE_FIELDS | DISASTER_SHARED_FIELDS
         if main_cat == "緊急救援":
-            return EMERGENCY_EXCLUSIVE_FIELDS
+            return EMERGENCY_EXCLUSIVE_FIELDS | EMERGENCY_SHARED_FIELDS
         return frozenset()
 
     def _migrate_case_for_main_switch(self, old_cat: Optional[str], new_cat: str) -> None:
@@ -3036,7 +2949,7 @@ class SopEngine119:
             slot_meanings = dict(FIELD_LABELS_ZH)
         elif main_cat == "緊急救援":
             from case_field_labels_119 import LABELS
-            from emergency_rescue_subs_119 import emergency_slots_for
+            from emergency_tab_map_119 import emergency_slots_for
 
             old_slots = set(emergency_slots_for(old_sub))
             new_slots = list(emergency_slots_for(new_sub))
@@ -3063,10 +2976,10 @@ class SopEngine119:
                 ambiguous &= FIRE_IDENTITY_CODE_FIELDS
                 exclusive_old &= FIRE_IDENTITY_CODE_FIELDS
             elif main_cat == "緊急救援":
-                from emergency_rescue_subs_119 import EMERGENCY_KEEP_SLOTS
+                from emergency_tab_map_119 import EMERGENCY_KEEP_SLOTS
 
                 # 舊次案類專屬欄，以及這一輪抽進其他次案類的欄，都清掉。
-                # 案情、關係、性別年齡、呼吸、意識留著。
+                # 案情、報案身分、報案人位置、性別年齡、意識、呼吸留著。
                 exclusive_old = (
                     EMERGENCY_EXCLUSIVE_FIELDS | set(old_slots)
                 ) - set(new_slots) - set(EMERGENCY_KEEP_SLOTS)
@@ -4849,18 +4762,22 @@ class SopEngine119:
         return None, None, None
 
     def _settle_emergency_subcategory(self) -> None:
-        """先有事件描述，次案類不夠就再問，最多兩次。已有次案類就不追問。"""
-        from emergency_accident_119 import INCIDENT_QUESTION, INCIDENT_REASK_QUESTION
+        """
+        判次案類（使用者 11/05 決定的問法），次案類還判不出來才問：
+        - 報案人還沒講發生什麼事 → 問「請描述發生什麼事需要救援？」
+        - 還是判不出來 → 再問「是有人受傷，還是有人困住出不來嗎？」
+        - 兩句都問完還是判不出來就不再問。已有次案類（例如從火警轉過來的車禍救助）兩句都不問。
+        """
+        from emergency_tab_map_119 import INCIDENT_QUESTION, INCIDENT_REASK_QUESTION
 
         self._set_stage("緊急救援_incident")
-        if not self._is_field_filled("incident_description"):
-            self._ask_and_extract(INCIDENT_QUESTION)
-        for _ in range(MAX_SUB_REASK):
-            sub, conf, source = self._accepted_emergency_sub()
-            if sub or self.case.sub_category:
-                break
-            self._ask_and_extract(INCIDENT_REASK_QUESTION)
         sub, conf, source = self._accepted_emergency_sub()
+        if not sub and not self.case.sub_category and not self._is_field_filled("incident_description"):
+            self._ask_and_extract(INCIDENT_QUESTION)
+            sub, conf, source = self._accepted_emergency_sub()
+        if not sub and not self.case.sub_category:
+            self._ask_and_extract(INCIDENT_REASK_QUESTION)
+            sub, conf, source = self._accepted_emergency_sub()
         if not sub:
             return
         with self._case_lock:
@@ -4880,7 +4797,7 @@ class SopEngine119:
         self._notify_case_update()
 
     def _run_緊急救援(self) -> None:
-        """緊急救援：地址之後定次案類，車禍救助才走八題，最後收關係、性別年齡、呼吸。"""
+        """緊急救援：地址之後定次案類，有次案類就照 1106 xlsx 題目表問，最後收報案人資訊。"""
         from handlers.緊急救援通用 import JinJiJiuYuanGenericHandler
 
         # ════════════════════════════════════════════════════════
@@ -4983,7 +4900,7 @@ class SopEngine119:
         中斷火警，改走緊急救援車禍救助的題目，跟一般換主案類一樣（清掉火警欄位、用新大類重抽報案人講過的話）。
         地址已確認過不重問；派車整通只講一次，火警講過就不再講。
         """
-        from emergency_accident_119 import SUBCATEGORY
+        from emergency_tab_map_119 import CRASH as SUBCATEGORY
 
         self._debug_print("fire_to_vehicle_rescue", {
             "火煙狀況": self.case.fire_or_smoke, "人員受困": self.case.trapped_status,
@@ -5009,6 +4926,23 @@ class SopEngine119:
         })
         self._apply_main_switch("災害", "火警", 1.0)
         raise MainCategorySwitched("災害", "火警")
+
+    def _switch_emergency_to_fire(self, tab: str) -> None:
+        """
+        緊急救援 1106 xlsx 火煙狀況備註：車禍救助、瓦斯漏氣看得到火或煙（有火有煙、有火無煙、無火有煙）
+        → 改判火警，直接走指定的垂片（車禍救助 B1、瓦斯漏氣 A），不再問「什麼東西在燒」（使用者 11/05 決定）。
+        中斷緊急救援，改走火警的題目，跟一般換主案類一樣（清掉緊急救援欄位、用新大類重抽報案人講過的話）；
+        火煙狀況、人員受困、場所用途跟火警共用欄位，帶過去不重問。
+        地址已確認過不重問；派車整通只講一次，緊急救援講過就不再講；改判時不對報案人講話。
+        """
+        self._debug_print("emergency_to_fire", {
+            "火煙狀況": self.case.fire_or_smoke, "次案類": self.case.sub_category, "垂片": tab,
+        })
+        # 垂片先設好：換大類時會用火警的欄位重抽報案人講過的話，抽哪些欄位要看垂片
+        with self._case_lock:
+            self.case.fire_tab = tab
+        self._apply_main_switch("緊急救援", "火警", 1.0)
+        raise MainCategorySwitched("緊急救援", "火警")
 
     def _escalate_main_to_emergency(
         self,

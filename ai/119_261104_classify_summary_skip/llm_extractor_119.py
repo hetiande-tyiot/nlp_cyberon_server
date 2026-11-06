@@ -60,15 +60,12 @@ from sop_utils_119 import (
     parse_yes_no_for_question,
 )
 from disaster_flow_119 import DISASTER_FIXED_ANSWERS, disaster_schema_and_rules
-from emergency_accident_119 import (
-    ACCIDENT_FIXED_ANSWERS,
-    accident_schema_and_rules,
-    normalize_accident_caller_role,
-)
-from emergency_rescue_subs_119 import (
-    SUB_FIXED_ANSWERS,
-    normalize_sub_field,
-    subs_schema_and_rules,
+from emergency_tab_map_119 import (
+    BREATHING_OPTIONS,
+    EMERGENCY_FIRE_RULE_FIELDS,
+    EMERGENCY_FIXED_ANSWERS,
+    emergency_fields_to_extract,
+    emergency_schema_and_rules,
 )
 from fire_tab_map_119 import (
     FIRE_CODE_FIELDS,
@@ -826,17 +823,19 @@ def _ems_sub_fields(sub_category: Optional[str]) -> Optional[set]:
 
 
 def _emergency_sub_groups(sub_category: Optional[str]) -> list:
-    """緊急救援只抽目前次案類的欄位。次案類還沒判出來時，車禍救助和其他次案類的欄位都抽；
-    判出來之後只抽那個次案類的；沒有專屬欄位的次案類（其他、氣爆等）就不送這組。"""
-    from emergency_accident_119 import SUBCATEGORY as ACCIDENT_SUB
-    from emergency_rescue_subs_119 import emergency_slots_for
+    """緊急救援照 1106 xlsx 題目表抽：次案類知道了就只抽那張表的欄位（含發生什麼事），
+    還不知道就抽全部的表。火煙狀況、人員受困、場所用途跟火警共用欄位，抽取規則也用火警的。"""
+    emergency_schema, emergency_rules = emergency_schema_and_rules(sub_category)
+    fire_fields = [
+        field for field in EMERGENCY_FIRE_RULE_FIELDS
+        if field in emergency_fields_to_extract(sub_category)
+    ]
+    return [(
+        {**emergency_schema, **{field: _FIRE_FIELD_RULES[field][0] for field in fire_fields}},
+        "\n".join([emergency_rules, *(_FIRE_FIELD_RULES[field][1] for field in fire_fields)]),
+    )]
 
-    if not sub_category:
-        return [accident_schema_and_rules(), subs_schema_and_rules()]
-    if sub_category == ACCIDENT_SUB:
-        return [accident_schema_and_rules()]
-    schema, rules = _pick_fields(*subs_schema_and_rules(), set(emergency_slots_for(sub_category)))
-    return [(schema, rules)] if schema else []
+
 
 
 class LLMExtractor119:
@@ -1585,9 +1584,6 @@ class LLMExtractor119:
             complaint_field:        "string|null",
             "medical_history":      "string|null",
         }
-        rescue_incident_schema = {
-            "incident_description": "string|null",
-        }
         location_schema = {
             "location_type":      "address|intersection|landmark|highway|mrt|null",
             "address_district":   "string|null",
@@ -1722,11 +1718,6 @@ class LLMExtractor119:
             "- patient_age：患者年齡（例：75歲左右 → 75歲）；未滿一歲記月份（例：3個月）。沒講到 → null。\n"
             + complaint_rule +
             "- medical_history：患者病史，照報案人說的記。沒講到 → null。"
-        )
-        rescue_incident_rules = (
-            "【緊急救援案情】只依報警人本輪實際回答抽取；未提及 → null。\n"
-            "- incident_description：發生的事件、現場狀況或需要救援的原因，"
-            "使用最短且完整的描述。"
         )
         location_rules = (
             "【地點結構化抽取】每一欄只依報警人本輪實際說出的內容填寫，未提及 → null。\n"
@@ -1914,8 +1905,7 @@ class LLMExtractor119:
         ]
         if main_category == "救護":
             schema_groups.append((rescue_core_schema, rescue_core_rules))
-        if main_category == "緊急救援":
-            schema_groups.append((rescue_incident_schema, rescue_incident_rules))
+        # 緊急救援的「發生什麼事」併在題目表那一組（_emergency_sub_groups）
         schema_groups.extend(sub_groups)
         if main_category == "火警":
             schema_groups.append((fire_schema, fire_rules))
@@ -1972,20 +1962,20 @@ class LLMExtractor119:
             val = merged.get(key)
             if val is None:
                 continue
-            if key in ("consciousness", "breathing", "abdomen_rise"):
+            if key == "breathing":
+                # 呼吸照 xlsx 存文字（救護、緊急救援共用這一格），只收四個選項，選項以外的當沒講到。
+                # 不再套用下面舊的是／否判斷：舊判斷會把「無呼吸」改成 False、把「呼吸不正常」丟掉，
+                # 轉真人（呼吸不正常、無呼吸）就觸發不了（11/06 使用者決定）
+                text = _clean_str(val)
+                if text in BREATHING_OPTIONS:
+                    result[key] = text
+            elif key in ("consciousness", "abdomen_rise"):
                 from sop_utils_119 import parse_vital_slot
                 rule_val = parse_vital_slot(key, caller_text, question or "")
                 bool_val = _coerce_bool(val)
                 if rule_val is not None:
                     result[key] = rule_val
                 elif bool_val is not None:
-                    if (
-                        key == "breathing"
-                        and bool_val is True
-                        and "呼吸" not in (caller_text or "")
-                        and parse_vital_slot("consciousness", caller_text, "") is True
-                    ):
-                        continue
                     result[key] = bool_val
             elif key == "caller_location":
                 # 報案人位置會決定問不問意識等題目，只收這四種；
@@ -2050,29 +2040,12 @@ class LLMExtractor119:
                     and cleaned not in DISASTER_FIXED_ANSWERS[key]
                 ):
                     cleaned = None
+                # 緊急救援 xlsx 寫「只能填」的欄位（含跟救護共用的意識、性別、溺水狀況、墜落狀況）：
+                # 不是選項裡的說法就不記，避免前置條件比對不到、該問的題沒問（11/06 使用者決定）
                 if (
                     cleaned
-                    and key in ACCIDENT_FIXED_ANSWERS
-                    and cleaned not in ACCIDENT_FIXED_ANSWERS[key]
-                ):
-                    cleaned = None
-                if cleaned and key == "accident_caller_role":
-                    cleaned = normalize_accident_caller_role(cleaned)
-                if cleaned and key in {
-                    "drown_caller_role", "dive_caller_role", "fall_caller_role",
-                    "mountain_caller_role", "trap_caller_role", "gas_caller_role",
-                    "drown_age", "dive_age", "fall_age", "mountain_age",
-                    "drown_gender", "dive_gender", "fall_gender",
-                    "mountain_gender", "trap_gender",
-                    "mountain_cause", "gas_building_use",
-                    "lift_caller_role", "door_caller_role", "door_reason",
-                    "door_gender", "lift_discomfort",
-                }:
-                    cleaned = normalize_sub_field(key, cleaned)
-                if (
-                    cleaned
-                    and key in SUB_FIXED_ANSWERS
-                    and cleaned not in SUB_FIXED_ANSWERS[key]
+                    and key in EMERGENCY_FIXED_ANSWERS
+                    and cleaned not in EMERGENCY_FIXED_ANSWERS[key]
                 ):
                     cleaned = None
                 if cleaned and key == "call_type" and cleaned not in {

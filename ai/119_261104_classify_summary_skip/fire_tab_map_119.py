@@ -24,8 +24,7 @@ UNRESOLVED_TAB_TAG = "火災類型無法判斷，預設輕微火警"
 SAFETY_MESSAGE = (
     "消防車已經在路上了，請在安全的地方等候，看到車再幫我們引導消防隊。"
 )
-# 報案人講出有人受困時，轉接專人前說的話（火警流程任何時候都適用）
-TRAPPED_TRANSFER_MESSAGE = "請不要掛斷電話，我馬上幫您轉給專人。"
+# 轉接專人時講的話統一在 sop_119_engine.TRANSFER_LINE（11/06 使用者決定）
 
 TAB_A = "A"
 TAB_B1 = "B1"

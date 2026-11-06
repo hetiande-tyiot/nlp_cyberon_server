@@ -177,14 +177,15 @@ class SubCategoryHandler:
             engine._set_stage(item.stage)
             if self._ems_question_needed(engine, item, fields):
                 question = item.question
+                singles = self._single_missing_questions(engine, fields)
                 missing = [field for field in fields if not engine._is_field_filled(field)]
-                if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
-                    question = SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]]
+                if singles and len(missing) == 1:
+                    question = singles[missing[0]]
                 engine._ask_and_extract(question)
                 # 複合題問完還剩一個沒答到（例如只答「是女生」），用單問句再問一次
                 missing = [field for field in fields if not engine._is_field_filled(field)]
-                if tuple(fields) in SINGLE_MISSING_QUESTIONS and len(missing) == 1:
-                    engine._ask_and_extract(SINGLE_MISSING_QUESTIONS[tuple(fields)][missing[0]])
+                if singles and len(missing) == 1:
+                    engine._ask_and_extract(singles[missing[0]])
             else:
                 engine._debug_print(
                     f"skip_{item.stage}",
@@ -193,6 +194,13 @@ class SubCategoryHandler:
             self._after_ems_item(engine, item)
         self._check_escalation(engine)
         self._check_breathing_transfer(engine)
+
+    def _single_missing_questions(self, engine: "SopEngine119", fields) -> Optional[dict]:
+        """
+        一句問兩個關鍵要素、只答到一個時的單問句 {欄位: 問句}；沒有就回傳 None。
+        預設用 SINGLE_MISSING_QUESTIONS；問句用字不同的大類覆寫這裡（例如緊急救援部分表用「當事人」）。
+        """
+        return SINGLE_MISSING_QUESTIONS.get(tuple(fields))
 
     def _check_escalation(self, engine: "SopEngine119") -> None:
         """
@@ -215,17 +223,12 @@ class SubCategoryHandler:
     def _check_breathing_transfer(self, engine: "SopEngine119") -> None:
         """
         呼吸 = 呼吸不正常、無呼吸 → 轉真人（使用者 11/02 決定，不再用 OHCA 判定）。
-        講原程式轉人工那句，再交給真人；已經轉過真人就不再講。
+        轉接的做法統一在 engine._transfer_to_human。
         """
         from ems_tab_map_119 import BREATHING_TRANSFER
 
-        if engine._bridged or engine.case.breathing not in BREATHING_TRANSFER:
-            return
-        from sop_119_engine import TransferToHumanError
-
-        engine._debug_print("breathing_transfer", engine.case.breathing)
-        engine._say("請不要掛斷電話，我立即為您轉接專人。")
-        raise TransferToHumanError("breathing_transfer", result="human_transfer")
+        if engine.case.breathing in BREATHING_TRANSFER:
+            engine._transfer_to_human(f"breathing_transfer：{engine.case.breathing}")
 
     def _check_and_respond_to_triggers(self, caller_text: str, engine: "SopEngine119") -> None:
         """觸發情境偵測；預設沒有，由各次案類覆寫。"""

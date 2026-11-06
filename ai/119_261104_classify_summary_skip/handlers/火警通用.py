@@ -23,7 +23,6 @@ from fire_tab_map_119 import (
     TAB_B1,
     TAB_C,
     TAB_QUESTIONS,
-    TRAPPED_TRANSFER_MESSAGE,
     TRAPPED_YES,
     UNRESOLVED_TAB_TAG,
     VEHICLE_KINDS_TRANSFER,
@@ -78,28 +77,23 @@ class HuoJingGenericHandler(SubCategoryHandler):
     def _transfer_or_switch_if_needed(self, engine: "SopEngine119") -> None:
         """
         火警流程中每次報案人回答之後、每一題問之前都會檢查，不等問到那一題。
-        - 交通工具是聯結車、大客車(公車、遊覽車) → 轉接專人（1104 xlsx 備註，講救護轉人工那句）
+        - 交通工具是聯結車、大客車(公車、遊覽車) → 轉接專人（1104 xlsx 備註）
         - 交通工具火警、車上有人出不來（人員受困 = 有人受困）、而且沒有火
           → 改判緊急救援-車禍救助（1104 xlsx 備註）
-        - 其他有人出不來（人員受困 = 有人受困）→ 說一句話後立刻轉接專人
-        已經轉接過（真人接手、系統只在旁聽）就不再處理。
+        - 其他有人出不來（人員受困 = 有人受困）→ 轉接專人
+        轉接的做法統一在 engine._transfer_to_human。
+        已經轉接過（真人接手、系統只在旁聽）就不再處理，也不再改判車禍救助。
         """
         if engine._bridged:
             return
-        from sop_119_engine import TransferToHumanError
-
         case = engine.case
         if case.vehicle_kind in VEHICLE_KINDS_TRANSFER:
-            engine._debug_print("fire_large_vehicle_transfer", case.vehicle_kind)
-            engine._say("請不要掛斷電話，我立即為您轉接專人。")
-            raise TransferToHumanError("fire_large_vehicle", result="human_transfer")
+            engine._transfer_to_human(f"fire_large_vehicle：{case.vehicle_kind}")
         if case.trapped_status != TRAPPED_YES:
             return
         if resolve_fire_tab(case) == TAB_B1 and case.fire_or_smoke in FIRE_SMOKE_NO_FIRE:
             engine._switch_fire_to_vehicle_rescue()
-        engine._debug_print("fire_people_trapped_transfer", {"人員受困": case.trapped_status})
-        engine._say(TRAPPED_TRANSFER_MESSAGE)
-        raise TransferToHumanError("fire_people_trapped", result="human_transfer")
+        engine._transfer_to_human("fire_people_trapped")
 
     def _backfill_earlier_answers_for_tab(self, engine: "SopEngine119") -> None:
         """
