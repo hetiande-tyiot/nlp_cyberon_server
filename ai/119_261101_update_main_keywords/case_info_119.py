@@ -79,15 +79,15 @@ class CaseInfo119:
     drinking_status:      Optional[str] = None  # 是否飲酒：有喝酒/沒有喝酒/不清楚（被動）
     collapse_status:      Optional[str] = None  # 路倒狀況：喝醉/睡著/身體不舒服/跌倒受傷/不清楚
     patient_appearance:   Optional[str] = None  # 外觀特徵（路倒）：照報案人說的記，讓救護人員找得到人
-    companion_present:    Optional[str] = None  # 身旁親友（路倒）：有家人或朋友在旁邊/只有他一個人/不清楚
+    companion_present:    Optional[str] = None  # 身旁親友（路倒舊欄位）：1106 xlsx 起路倒改問家屬陪同，這格沒有題目在用，要不要刪待決定
     mobility:             Optional[str] = None  # 平常行動能力：平常可以自己走/平常需要人扶/長期臥床或坐輪椅（被動）
     symptom_onset:        Optional[str] = None  # 症狀發生時間（被動）
     scene_access:         Optional[str] = None  # 現場進入條件：有沒有人開門、管理員、電梯（被動）
     # 救護垂片 1028 xlsx 燒炭OK 的文字欄位
     charcoal_status:      Optional[str] = None  # 炭盆狀況：尚未熄滅/已滅火
-    patient_location:     Optional[str] = None  # 患者所在位置：還在裡面/已在外面
+    patient_location:     Optional[str] = None  # 患者位置（燒炭）：還在裡面/已在外面
     # 救護垂片 1028 xlsx 墜落傷OK
-    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/已勸導離開
+    fall_status:          Optional[str] = None  # 墜落狀況：尚未跳下/已跳下/卡住/已勸導離開
     fall_height:          Optional[str] = None  # 墜落高度：幾樓或多高
     fall_position:        Optional[str] = None  # 患者位置：地面(一樓)/卡住/不清楚
     stuck_location:       Optional[str] = None  # 卡住位置：遮雨棚/女兒牆/屋頂或鐵皮屋/陽台/鷹架…

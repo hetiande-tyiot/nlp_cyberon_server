@@ -116,10 +116,14 @@ class ZhuiLuoShangTests(unittest.TestCase):
         self.assertEqual(engine.case.caller_relation, "路過")  # 改判後的回答照樣記下來
 
     def test_fall_status_stuck_escalates(self) -> None:
-        """墜落狀況答卡住（1104 xlsx 11/05 版新選項）：照備註「跳下來卡住」改判緊急救援。"""
+        """墜落狀況答卡住：照備註「跳下來卡住」改判緊急救援。
+        1106 xlsx：墜落狀況 = 卡住也要問卡住位置，報案人位置也要問（患者位置沒問過，不算不清楚）。"""
         stuck = ("跳下來卡在半空中", {"fall_status": "卡住"})
-        engine, _io = _run("墜落傷", [stuck, PASSER, MALE_40])
+        engine, io = _run("墜落傷", [stuck, PASSER, MALE_40, self.RAIN_SHELTER, self.NEAR, AWAKE])
         self.assertEqual(engine.case.main_category, "緊急救援")
+        self.assertEqual(_asked("墜落傷", io), [
+            "墜落狀況", "報案身分", "性別", "卡住位置", "報案人位置", "意識",
+        ])
 
     def test_stuck_escalates_and_asks_where(self) -> None:
         engine, io = _run("墜落傷", [

@@ -4,7 +4,7 @@
 規格：docs/(all)救護垂片規格_關鍵要素與問句_1028.xlsx 的「17-燒炭OK」
   - 主動題：還不知道才問；條件題：前置條件確定成立、而且還不知道才問
   - 本人報案：報案人位置就是在現場，不用問
-  - 報案人在現場 → 問患者所在位置；不在現場 → 問現場進入條件
+  - 報案人在現場 → 問患者位置；不在現場 → 問現場進入條件
   - 炭盆尚未熄滅、患者還在裡面 → 講提醒（答案是前面就講過的也要講）
   - 需要破門 → 改判緊急救援
   - 意識清醒 → 不問呼吸；不清醒、沒有呼吸 → OHCA 轉人工
@@ -104,24 +104,24 @@ BREAK_IN = ("門反鎖了，要破門", {"scene_access": "需要破門"})
 class ShaoTanFlowTests(unittest.TestCase):
 
     def test_on_scene_family_awake(self) -> None:
-        """在現場、家人、清醒：問患者所在位置、不問現場進入條件；清醒不問呼吸。"""
+        """在現場、家人、清醒：問患者位置、不問現場進入條件；清醒不問呼吸。"""
         engine, io = _run([ON_SCENE, OUT, OUTSIDE, FAMILY, MALE_30, AWAKE])
         self.assertEqual(_asked(io), [
-            "報案人位置", "炭盆狀況", "患者所在位置", "報案身分", "性別", "意識",
+            "報案人位置", "炭盆狀況", "患者位置", "報案身分", "性別", "意識",
         ])
 
     def test_reminders_right_after_answers(self) -> None:
         """炭盆還在燒、患者還在裡面：答完緊接著講提醒。"""
         _, io = _run([ON_SCENE, NOT_OUT, INSIDE, FAMILY, MALE_30, AWAKE])
         self.assertEqual(_asked(io), [
-            "報案人位置", "炭盆狀況", "提醒熄滅炭盆", "患者所在位置", "提醒移到通風處",
+            "報案人位置", "炭盆狀況", "提醒熄滅炭盆", "患者位置", "提醒移到通風處",
             "報案身分", "性別", "意識",
         ])
 
     def test_reminder_when_answer_known_before(self) -> None:
         """報案人前面就說炭盆還在燒：這題不問，提醒照講。"""
         _, io = _run([ON_SCENE, OUTSIDE, FAMILY, MALE_30, AWAKE], charcoal_status="尚未熄滅")
-        self.assertEqual(_asked(io)[:3], ["報案人位置", "提醒熄滅炭盆", "患者所在位置"])
+        self.assertEqual(_asked(io)[:3], ["報案人位置", "提醒熄滅炭盆", "患者位置"])
 
     def test_not_on_scene_passer_by(self) -> None:
         """不在現場、路過：問現場進入條件；不問炭盆、患者位置、性別年齡、意識、呼吸。"""
@@ -140,7 +140,7 @@ class ShaoTanFlowTests(unittest.TestCase):
     def test_caller_is_patient(self) -> None:
         """本人報案：報案人位置記在現場、不問；本人不問意識。"""
         engine, io = _run([OUT, OUTSIDE, MALE_30], caller_relation="本人")
-        self.assertEqual(_asked(io), ["炭盆狀況", "患者所在位置", "性別"])
+        self.assertEqual(_asked(io), ["炭盆狀況", "患者位置", "性別"])
         self.assertEqual(engine.case.caller_location, "在現場")
 
     def test_unresponsive_breathing_continues(self) -> None:
@@ -179,7 +179,7 @@ class ShaoTanElementIdTests(unittest.TestCase):
         self.assertEqual(ids["217-1"], "在現場")
         self.assertEqual(ids["217-2"], "已滅火")
         self.assertNotIn("217-3", ids)               # 在現場 → 不問現場進入條件
-        self.assertEqual(ids["217-4"], PENDING_ANSWER)  # 在現場 → 要問患者所在位置
+        self.assertEqual(ids["217-4"], PENDING_ANSWER)  # 在現場 → 要問患者位置
         self.assertEqual(ids["217-5"], PENDING_ANSWER)  # 報案身分是主動題
 
 

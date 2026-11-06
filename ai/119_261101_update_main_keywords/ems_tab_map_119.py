@@ -40,7 +40,7 @@ BREATHING_TRANSFER = ("呼吸不正常", "無呼吸")
 RELATION_SELF = "本人"
 # 報案人位置 = 在現場
 LOCATION_ON_SCENE = ("在現場",)
-# 燒炭：炭盆狀況、患者所在位置（回答這兩種時要講提醒，見 handlers/燒炭.py）
+# 燒炭：炭盆狀況、患者位置（回答這兩種時要講提醒，見 handlers/燒炭.py）
 CHARCOAL_NOT_OUT = "尚未熄滅"
 PATIENT_STILL_INSIDE = "還在裡面"
 # 報案身分（OK 表參考範圍）：精神異常的病史、家屬陪同要看是不是家人、朋友
@@ -125,13 +125,15 @@ def _fall_jumped(case: Any) -> bool:
 
 
 def _fall_stuck(case: Any) -> bool:
-    """患者位置 = 卡住（墜落傷）。"""
-    return case.fall_position == FALL_POSITION_STUCK
+    """墜落狀況 = 卡住，或患者位置 = 卡住（墜落傷）。"""
+    return case.fall_status == FALL_STATUS_STUCK or case.fall_position == FALL_POSITION_STUCK
 
 
-def _fall_position_not_unknown(case: Any) -> bool:
-    """患者位置 ≠ 不清楚（墜落傷）：一定要已經問出患者位置，而且不是不清楚。"""
-    return bool(case.fall_position) and case.fall_position != FALL_POSITION_UNKNOWN
+def _fall_down_position_not_unknown(case: Any) -> bool:
+    """墜落狀況 = 已跳下、卡住，且患者位置 ≠ 不清楚（墜落傷）。
+    卡住時不會問患者位置，患者位置沒填也算「不是不清楚」。"""
+    return (case.fall_status in (FALL_JUMPED, FALL_STATUS_STUCK)
+            and case.fall_position != FALL_POSITION_UNKNOWN)
 
 
 def _hanging_not_untied(case: Any) -> bool:
@@ -273,8 +275,8 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
         EmsQuestion("現場進入條件", "scene_access", MODE_CONDITIONAL,
                     "燒炭-現場進入條件", "救護人員到場之後可以進去嗎？需不需要破門？",
                     _caller_off_scene, "報案人位置 ≠ 在現場"),
-        EmsQuestion("患者所在位置", "patient_location", MODE_CONDITIONAL,
-                    "燒炭-患者所在位置", "患者還在裡面嗎？還是已經出來了？",
+        EmsQuestion("患者位置", "patient_location", MODE_CONDITIONAL,
+                    "燒炭-患者位置", "患者還在裡面嗎？還是已經出來了？",
                     _caller_on_scene, "報案人位置 = 在現場"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                     "燒炭-報案身分", "請問你認識患者嗎？"),
@@ -313,10 +315,10 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     _fall_jumped, "墜落狀況 = 已跳下"),
         EmsQuestion("卡住位置", "stuck_location", MODE_CONDITIONAL,
                     "墜落傷-卡住位置", "目前是在遮雨棚上卡住還是女兒牆上？",
-                    _fall_stuck, "患者位置 = 卡住"),
+                    _fall_stuck, "墜落狀況 = 卡住 或 患者位置 = 卡住"),
         EmsQuestion("報案人位置", "caller_location", MODE_CONDITIONAL,
                     "墜落傷-報案人位置", "你有在傷者旁邊嗎？可以靠近嗎？",
-                    _fall_position_not_unknown, "患者位置 ≠ 不清楚"),
+                    _fall_down_position_not_unknown, "墜落狀況 = 已跳下、卡住 且 患者位置 ≠ 不清楚"),
         EmsQuestion("意識", "consciousness_level", MODE_CONDITIONAL,
                     "墜落傷-意識", "他現在人清醒嗎？叫他有沒有反應？",
                     _not_self_on_scene, "報案身分 ≠ 本人 且 報案人位置 = 在現場"),
@@ -476,7 +478,7 @@ EMS_QUESTIONS: Dict[str, Tuple[EmsQuestion, ...]] = {
                     "路倒-外觀特徵", "他身上穿什麼顏色的衣服？我請救護人員好認一點。"),
         EmsQuestion("報案身分", "caller_relation", MODE_ACTIVE,
                     "路倒-報案身分", "請問你認識患者嗎？"),
-        EmsQuestion("身旁親友", "companion_present", MODE_PASSIVE, "路倒-身旁親友"),
+        EmsQuestion("家屬陪同", "family_accompany", MODE_PASSIVE, "路倒-家屬陪同"),
         EmsQuestion("性別", "patient_gender", MODE_CONDITIONAL,
                     "路倒-性別", "請問患者是男生還是女生？大概幾歲？",
                     _on_scene_or_family_friend, _GENDER_AGE_TEXT),

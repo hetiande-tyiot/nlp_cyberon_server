@@ -247,7 +247,7 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "symptom_onset": "症狀發生時間",
     "scene_access": "現場進入條件",
     "charcoal_status": "炭盆狀況",
-    "patient_location": "患者所在位置",
+    "patient_location": "患者位置（燒炭）",
     "fall_status": "墜落狀況",
     "fall_height": "墜落高度",
     "fall_position": "患者位置（墜落傷）",
