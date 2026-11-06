@@ -339,6 +339,10 @@ OTHER_CLARIFY_EMERGENCY_KW: Tuple[str, ...] = (
 )
 
 
+# 轉接真人時對報案人講的話，整個系統統一這一句（11/06 使用者決定）。見 SopEngine119._transfer_to_human。
+TRANSFER_LINE = "請不要掛斷電話，我馬上幫您轉接專人。"
+
+
 class TransferToHumanError(Exception):
     """觸發時立即中止 handler 並轉接真人接線員。"""
 
@@ -731,6 +735,23 @@ class SopEngine119:
                     self.case.caller_is_patient = is_patient
 
         self._notify_case_update()
+
+    def _transfer_to_human(self, reason: str) -> None:
+        """
+        轉接真人。各垂片在 xlsx 規定要轉真人的條件成立時呼叫，條件本身寫在各垂片。
+        1. 已經轉接過就什麼都不做：轉接後真人接手，系統還在旁邊聽、照樣抽欄位，
+           條件可能再成立一次，這時不能再講話或再轉，否則會打斷真人的通話。
+        2. 講統一的那句話（TRANSFER_LINE），同時記進對話紀錄。
+        3. 丟出 TransferToHumanError，立刻停下目前在問的題目，交給報案流程最外層收尾：
+           標記已轉接、流程階段與結果記成「human_transfer」、通知前端 AI 不再問問題。
+           通話不會結束；下游看到結果是 human_transfer 會跳轉接提示、不掛電話。
+        reason 只記在 log，方便事後查是哪個條件觸發的，不會講給報案人聽。
+        """
+        if self._bridged:
+            return
+        self._debug_print("transfer_to_human", reason)
+        self._say(TRANSFER_LINE)
+        raise TransferToHumanError(reason, result="human_transfer")
 
     def _check_ohca_and_transfer(self, vital_val: Optional[bool], slot: str) -> None:
         """任一生命征象非 True → OHCA 轉人工。"""

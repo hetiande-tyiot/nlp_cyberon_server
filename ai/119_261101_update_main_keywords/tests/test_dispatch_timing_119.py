@@ -23,7 +23,7 @@ from handlers import _REGISTRY
 from handlers.火警通用 import HuoJingGenericHandler
 from handlers.緊急救援通用 import JinJiJiuYuanGenericHandler
 from location_validation_119 import JurisdictionResult
-from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
+from sop_119_engine import TRANSFER_LINE, DialogueIO, SopEngine119, TransferToHumanError
 
 AMBULANCE_LINE = "救護車已派出了歐。"
 FIRE_TRUCK_LINE = "消防車已派出了歐。"
@@ -228,7 +228,7 @@ class FireTests(unittest.TestCase):
         engine, io = self._fire_engine([], trapped_status=TRAPPED_YES)
         with self.assertRaises(TransferToHumanError):
             HuoJingGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.ai_lines, ["請不要掛斷電話，我馬上幫您轉給專人。"])
+        self.assertEqual(io.ai_lines, [TRANSFER_LINE])
 
 
 class EmergencyRescueTests(unittest.TestCase):

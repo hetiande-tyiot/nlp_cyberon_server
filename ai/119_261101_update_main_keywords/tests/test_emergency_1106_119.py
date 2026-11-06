@@ -25,7 +25,13 @@ from emergency_tab_map_119 import (
 )
 from handlers.緊急救援通用 import JinJiJiuYuanGenericHandler
 from llm_extractor_119 import LLMExtractor119
-from sop_119_engine import DialogueIO, MainCategorySwitched, SopEngine119, TransferToHumanError
+from sop_119_engine import (
+    TRANSFER_LINE,
+    DialogueIO,
+    MainCategorySwitched,
+    SopEngine119,
+    TransferToHumanError,
+)
 
 
 class ScriptedIO(DialogueIO):
@@ -356,7 +362,7 @@ class EmergencyBreathingTransferTests(unittest.TestCase):
                 engine.case.breathing = state
                 with self.assertRaises(TransferToHumanError):
                     JinJiJiuYuanGenericHandler().run_generic_flow(engine)
-                self.assertEqual(io.messages[-1], "請不要掛斷電話，我立即為您轉接專人。")
+                self.assertEqual(io.messages[-1], TRANSFER_LINE)
 
 
 class EmergencySharedFieldTests(unittest.TestCase):

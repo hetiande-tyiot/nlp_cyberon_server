@@ -223,17 +223,12 @@ class SubCategoryHandler:
     def _check_breathing_transfer(self, engine: "SopEngine119") -> None:
         """
         呼吸 = 呼吸不正常、無呼吸 → 轉真人（使用者 11/02 決定，不再用 OHCA 判定）。
-        講原程式轉人工那句，再交給真人；已經轉過真人就不再講。
+        轉接的做法統一在 engine._transfer_to_human。
         """
         from ems_tab_map_119 import BREATHING_TRANSFER
 
-        if engine._bridged or engine.case.breathing not in BREATHING_TRANSFER:
-            return
-        from sop_119_engine import TransferToHumanError
-
-        engine._debug_print("breathing_transfer", engine.case.breathing)
-        engine._say("請不要掛斷電話，我立即為您轉接專人。")
-        raise TransferToHumanError("breathing_transfer", result="human_transfer")
+        if engine.case.breathing in BREATHING_TRANSFER:
+            engine._transfer_to_human(f"breathing_transfer：{engine.case.breathing}")
 
     def _check_and_respond_to_triggers(self, caller_text: str, engine: "SopEngine119") -> None:
         """觸發情境偵測；預設沒有，由各次案類覆寫。"""

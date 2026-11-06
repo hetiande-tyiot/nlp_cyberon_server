@@ -28,13 +28,12 @@ from fire_tab_map_119 import (
     TAB_B1,
     TAB_C,
     TAB_C_QUESTIONS,
-    TRAPPED_TRANSFER_MESSAGE,
     apply_subtype_identity_codes,
     tab_conflicts_with_fire_smoke,
 )
 from handlers.火警通用 import HuoJingGenericHandler
 from llm_extractor_119 import LLMExtractor119
-from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
+from sop_119_engine import TRANSFER_LINE, DialogueIO, SopEngine119, TransferToHumanError
 
 # 垂片 A 各題的問句（取自題目表，xlsx 改問句時測試不必跟著改）。
 # 建築物類型有兩種問法，Q 只記得其中一種，所以另外用「問句 → 關鍵要素」對照
@@ -341,7 +340,7 @@ class PeopleTrappedTransferTests(unittest.TestCase):
         engine.case.main_category = "火警"
         with self.assertRaises(TransferToHumanError):
             HuoJingGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.messages[-1], TRAPPED_TRANSFER_MESSAGE)
+        self.assertEqual(io.messages[-1], TRANSFER_LINE)
         self.assertEqual(_asked_elements(io), [])
 
     def test_trapped_known_before_fire_flow_transfers_without_asking(self) -> None:
@@ -349,7 +348,7 @@ class PeopleTrappedTransferTests(unittest.TestCase):
         engine, io = _building_fire_engine([], {}, trapped_status="有人受困")
         with self.assertRaises(TransferToHumanError):
             HuoJingGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.messages, [TRAPPED_TRANSFER_MESSAGE])
+        self.assertEqual(io.messages, [TRANSFER_LINE])
 
     def test_unsure_trapped_does_not_transfer(self) -> None:
         steps = list(TOWNHOUSE_CALL)

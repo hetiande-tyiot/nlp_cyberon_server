@@ -27,11 +27,16 @@ from fire_tab_map_119 import (
     SAFETY_MESSAGE,
     TAB_B1,
     TAB_B1_QUESTIONS,
-    TRAPPED_TRANSFER_MESSAGE,
 )
 from handlers.火警通用 import HuoJingGenericHandler
 from llm_extractor_119 import LLMExtractor119
-from sop_119_engine import DialogueIO, MainCategorySwitched, SopEngine119, TransferToHumanError
+from sop_119_engine import (
+    TRANSFER_LINE,
+    DialogueIO,
+    MainCategorySwitched,
+    SopEngine119,
+    TransferToHumanError,
+)
 
 # 垂片 B1 各題的問句（取自題目表，xlsx 改問句時測試不必跟著改）
 Q = {item.element: item.question for item in TAB_B1_QUESTIONS}
@@ -264,7 +269,7 @@ class OccupantsStillInsideTransferTests(unittest.TestCase):
         engine.case.main_category = "火警"
         with self.assertRaises(TransferToHumanError):
             HuoJingGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.messages[-1], TRAPPED_TRANSFER_MESSAGE)
+        self.assertEqual(io.messages[-1], TRANSFER_LINE)
 
     def test_no_fire_people_inside_switches_to_vehicle_rescue(self) -> None:
         """沒有火、車上有人出不來 → 改判緊急救援-車禍救助，不轉人工、不講話。"""
@@ -302,7 +307,7 @@ class LargeVehicleTransferTests(unittest.TestCase):
         engine.case.vehicle_kind = "聯結車"
         with self.assertRaises(TransferToHumanError):
             HuoJingGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.messages[-1], "請不要掛斷電話，我立即為您轉接專人。")
+        self.assertEqual(io.messages[-1], TRANSFER_LINE)
 
     def test_big_truck_does_not_transfer(self) -> None:
         _, io = _run_vehicle_fire([

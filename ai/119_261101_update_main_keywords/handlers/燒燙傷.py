@@ -5,8 +5,7 @@ handlers/燒燙傷.py
 
 照 1028 xlsx「08-燒燙傷OK」的題目表逐題問（ems_tab_map_119.SHAO_TANG_SHANG_QUESTIONS、
 base._ask_ems_questions）。xlsx 備註另外要求：
-  - 小兒燒燙傷轉真人（小兒定義：14 歲（含）以前）
-    轉人工講原程式 OHCA 轉人工那句「請不要掛斷電話，我立即為您轉接專人。」
+  - 小兒燒燙傷轉真人（小兒定義：14 歲（含）以前），轉接的做法統一在 engine._transfer_to_human
 OK 表的案類不用觸發情境，所以這裡沒有。
 題目問完講提醒語表（docs/救護提醒語_問卷回饋_1030 改.xlsx）燒燙傷的 2 句。
 
@@ -48,13 +47,8 @@ class ShaoTangShangHandler(SubCategoryHandler):
         xlsx 備註：小兒燒燙傷轉真人。
         年齡可能在任何一句講到（例如開頭就說「我兒子五歲」），所以每一題處理完都檢查。
         """
-        if engine._bridged or not is_child_age(engine.case.patient_age):
-            return
-        from sop_119_engine import TransferToHumanError
-
-        engine._debug_print("burn_child_transfer", engine.case.patient_age)
-        engine._say("請不要掛斷電話，我立即為您轉接專人。")
-        raise TransferToHumanError("burn_child", result="human_transfer")
+        if is_child_age(engine.case.patient_age):
+            engine._transfer_to_human(f"burn_child：{engine.case.patient_age}")
 
     def collect_caller_info(self, engine: "SopEngine119") -> None:
         """燒燙傷使用基類預設：詢問姓名與聯繫方式（無住址）。"""

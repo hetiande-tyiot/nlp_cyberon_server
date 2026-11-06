@@ -28,10 +28,9 @@ from fire_tab_map_119 import (
     TAB_A_QUESTIONS,
     TAB_C,
     TAB_C_QUESTIONS,
-    TRAPPED_TRANSFER_MESSAGE,
 )
 from handlers.火警通用 import HuoJingGenericHandler
-from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
+from sop_119_engine import TRANSFER_LINE, DialogueIO, SopEngine119, TransferToHumanError
 
 # 垂片 C 各題的問句（取自題目表，xlsx 改問句時測試不必跟著改）
 Q = {item.element: item.question for item in TAB_C_QUESTIONS}
@@ -271,7 +270,7 @@ class TabCTrappedTransferTests(unittest.TestCase):
         engine.case.caller_role = "住戶"
         with self.assertRaises(TransferToHumanError):
             HuoJingGenericHandler().run_generic_flow(engine)
-        self.assertEqual(io.messages, [Q["人員受困"], TRAPPED_TRANSFER_MESSAGE])
+        self.assertEqual(io.messages, [Q["人員受困"], TRANSFER_LINE])
 
 
 if __name__ == "__main__":

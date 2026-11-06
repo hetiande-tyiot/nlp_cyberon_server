@@ -19,10 +19,9 @@ import openpyxl
 
 from ems_tab_map_119 import EMS_QUESTIONS, is_child_age
 from handlers import get_handler
-from sop_119_engine import DialogueIO, SopEngine119, TransferToHumanError
+from sop_119_engine import TRANSFER_LINE, DialogueIO, SopEngine119, TransferToHumanError
 
 BREAK_IN_LINE = "這需要破門，我已為您加派消防車前往。"
-TRANSFER_LINE = "請不要掛斷電話，我立即為您轉接專人。"
 MEDICINE_BAG_REMINDER = "如果有發現藥袋，請一併提供給救護人員帶到醫院。"
 BURN_REMINDERS = ["可以的話，請協助沖冷水到救護人員到達為止。", "燙到的地方先不要擦任何藥。"]
 STOP_BLEEDING_REMINDER = "先拿乾淨的毛巾或衣服，用力壓住傷口止血。"
