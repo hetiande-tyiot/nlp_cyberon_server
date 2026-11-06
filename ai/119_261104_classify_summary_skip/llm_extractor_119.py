@@ -1809,7 +1809,8 @@ class LLMExtractor119:
             "我朋友 → 朋友；我同事 → 同事；我鄰居 → 鄰居；警衛、保全 → 警衛(保全)；"
             "路人、經過看到 → 路過。沒講到 → null。\n"
             "- caller_location：報案人現在在哪裡（報案人位置），只能填這幾種之一："
-            "在現場、在遠處、不敢靠近、不在現場。在患者身邊也算在現場。沒講到 → null。\n"
+            "在現場、在遠處、不敢靠近、不在現場。在患者身邊也算在現場。"
+            "地址、路名不是報案人位置，不要填在這裡。沒講到 → null。\n"
             "- drinking_status：患者有沒有喝酒（有喝酒/沒有喝酒/不清楚）。\n"
             "- mobility：患者平常的行動能力，只能填：平常可以自己走、平常需要人扶、長期臥床或坐輪椅。"
             "突然走不動、站不起來不填這裡。沒講到 → null。\n"
@@ -1992,6 +1993,11 @@ class LLMExtractor119:
                     ):
                         continue
                     result[key] = bool_val
+            elif key == "caller_location":
+                # 報案人位置會決定問不問意識等題目，只收這四種；
+                # LLM 曾把地址填進來，條件就當成不在現場而跳過意識，選項以外的一律當沒講到
+                if str(val).strip() in ("在現場", "在遠處", "不敢靠近", "不在現場"):
+                    result[key] = str(val).strip()
             elif key == "NeedPolice":
                 bool_val = _coerce_bool(val)
                 if bool_val is not None:
