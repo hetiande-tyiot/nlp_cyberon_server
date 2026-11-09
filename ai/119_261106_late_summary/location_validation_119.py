@@ -8,6 +8,7 @@ import time
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -15,6 +16,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import timing_119
+from addrcheck_log_119 import log_addrcheck
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -103,15 +105,33 @@ def verify_address_detail(
     *,
     url: Optional[str] = None,
     timeout: Optional[float] = None,
+    call_uuid: Optional[str] = None,
 ) -> tuple[Optional[bool], Optional[str], Optional[str]]:
     """地址驗測核心：POST addrCheck /Verify，回 (status, hint, reason)。
 
     status True=有效 / False=查無 / None=網路或回應異常（API 無法使用）。
     location_type 轉成 API 的 type 只查該層；None 讓後端自動判斷。
+    連不上時隔 1 秒再查一次，還是不行才回 None（所有地點型態都一樣）。
+    每打一次 API 都寫一筆到資料庫 addrcheck_log；call_uuid 是哪一通電話，引擎以外呼叫時為 None。
     """
     address = (address or "").strip()
     if not address:
         return False, "尚未取得地址", None
+    result = _verify_once(address, location_type, url, timeout, call_uuid)
+    if result[0] is None:
+        time.sleep(1)
+        result = _verify_once(address, location_type, url, timeout, call_uuid)
+    return result
+
+
+def _verify_once(
+    address: str,
+    location_type: Optional[str],
+    url: Optional[str],
+    timeout: Optional[float],
+    call_uuid: Optional[str],
+) -> tuple[Optional[bool], Optional[str], Optional[str]]:
+    """打一輪 addrCheck：主位址連線被拒等失敗時換備用位址。每打一次都寫一筆紀錄。"""
     base = (url or os.getenv("ADDRCHECK_API_URL", DEFAULT_ADDRCHECK_BASE_URL)).rstrip("/")
     bases = [base]
     # 呼叫端自己指定 url（測試、離線腳本）時只打那一個，不用備用位址
@@ -138,6 +158,7 @@ def verify_address_detail(
             headers=headers,
             method="POST",
         )
+        called_at = datetime.now()
         _t0 = time.perf_counter()
         try:
             with urlopen(request, timeout=timeout) as response:
@@ -146,8 +167,10 @@ def verify_address_detail(
                 raise ValueError("回應格式非物件")
         except Exception as exc:
             # 逾時/連不上的耗時照樣記——外部 API 慢是常見的延遲來源
-            timing_119.emit("addrcheck", api_type or "address",
-                            (time.perf_counter() - _t0) * 1000.0, extra="error=1")
+            elapsed_ms = (time.perf_counter() - _t0) * 1000.0
+            timing_119.emit("addrcheck", api_type or "address", elapsed_ms, extra="error=1")
+            log_addrcheck(call_uuid, address, api_type, None, None, None,
+                          elapsed_ms, str(exc), called_at)
             # 等滿逾時秒數都沒回應：直接當 API 無法使用，不再打備用位址；
             # 其他失敗（連線被拒、HTTP 錯誤、回應格式不對）才換下一個位址
             timed_out = isinstance(exc, TimeoutError) or isinstance(
@@ -156,13 +179,16 @@ def verify_address_detail(
             if timed_out or base == bases[-1]:
                 return None, str(exc), None
             continue
-        timing_119.emit("addrcheck", api_type or "address",
-                        (time.perf_counter() - _t0) * 1000.0)
-        return (
+        elapsed_ms = (time.perf_counter() - _t0) * 1000.0
+        timing_119.emit("addrcheck", api_type or "address", elapsed_ms)
+        status, hint, reason = (
             bool(payload.get("status")),
             payload.get("hint"),
             payload.get("reason"),
         )
+        log_addrcheck(call_uuid, address, api_type, status, reason, hint,
+                      elapsed_ms, None, called_at)
+        return status, hint, reason
 
 
 def verify_address_status(
@@ -184,6 +210,7 @@ def query_jurisdiction(
     *,
     url: Optional[str] = None,
     timeout: Optional[float] = None,
+    call_uuid: Optional[str] = None,
 ) -> JurisdictionResult:
     """一般地址（address 型態）驗測 → addrCheck House。
 
@@ -191,7 +218,7 @@ def query_jurisdiction(
     （119 不需管轄分局），valid=None 表示 API 無法使用。
     """
     status, hint, reason = verify_address_detail(
-        address, "address", url=url, timeout=timeout
+        address, "address", url=url, timeout=timeout, call_uuid=call_uuid
     )
     return JurisdictionResult(
         status, office_name=None, error=hint, api_reason=reason

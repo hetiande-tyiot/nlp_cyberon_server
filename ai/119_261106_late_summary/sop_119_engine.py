@@ -675,6 +675,8 @@ class SopEngine119:
         # 回報對上案類之後，抽取改走該案類的父類與 SOP 槽位。對上前維持 None。
         self._report_parent_category: Optional[str] = None
         self._report_allowed_fields: Optional[frozenset] = None
+        # 這通電話的通話編號（apiserver 開 session 時帶入），寫地址驗證紀錄到資料庫時對回 cases.uuid
+        self._call_uuid: Optional[str] = None
 
     # ── 工具方法 ──────────────────────────────────────────────────────────────
 
@@ -3920,7 +3922,7 @@ class SopEngine119:
             self._set_stage("location_validating")
             # 用 query_jurisdiction（JurisdictionResult 已帶 hint 與 api_reason），
             # 資訊與 verify_address_detail 相同，但保持既有 mock / 呼叫點不變。
-            result = query_jurisdiction(self.case.address or "")
+            result = query_jurisdiction(self.case.address or "", call_uuid=self._call_uuid)
             status, hint, api_reason = (
                 result.valid, result.error, result.api_reason
             )
@@ -3940,7 +3942,8 @@ class SopEngine119:
                 self._set_address_validation(
                     "error", reason="地址驗測 API 無法使用"
                 )
-                return False, "地址驗測 API 無法使用", True
+                # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+                return False, "地址驗測 API 無法使用", False
 
             last_reason = addrcheck_failure_reason(api_reason)
             self._set_address_validation("invalid", reason=last_reason)
@@ -4018,7 +4021,7 @@ class SopEngine119:
             and self._guided_address_collect()
         ):
             self._set_stage("location_validating")
-            result = query_jurisdiction(self.case.address or "")
+            result = query_jurisdiction(self.case.address or "", call_uuid=self._call_uuid)
             status, hint, api_reason = (
                 result.valid, result.error, result.api_reason
             )
@@ -4070,7 +4073,7 @@ class SopEngine119:
         road_base = re.sub(r"[一二三四五六七八九十]+段$", "", road)  # 去段
         try:
             _st, road_hint, _r = verify_address_detail(
-                f"{district}{road_base}", None
+                f"{district}{road_base}", None, call_uuid=self._call_uuid
             )
         except Exception as exc:  # noqa: BLE001
             self._debug_print("section_road_probe_error", exc)
@@ -4082,7 +4085,7 @@ class SopEngine119:
         for sec in adv.sections:
             cand = f"{district}{road_base}{sec}{number}"
             try:
-                st, _h, _rr = verify_address_detail(cand, None)
+                st, _h, _rr = verify_address_detail(cand, None, call_uuid=self._call_uuid)
             except Exception:  # noqa: BLE001
                 continue
             if st is True:
@@ -4166,7 +4169,7 @@ class SopEngine119:
         })
         self._record_address_candidate(address, source="llm_consolidated")
 
-        result = query_jurisdiction(address)
+        result = query_jurisdiction(address, call_uuid=self._call_uuid)
         self._record_address_candidate(
             address, source="llm_consolidated",
             api_status=result.api_reason, api_hint=result.error,
@@ -4267,7 +4270,9 @@ class SopEngine119:
         if not is_usable_address(address) or is_bare_district_or_city(address):
             return None
         try:
-            status, hint, api_reason = verify_address_detail(address, None)
+            status, hint, api_reason = verify_address_detail(
+                address, None, call_uuid=self._call_uuid
+            )
         except Exception as exc:
             self._debug_print("probe_location_type_error", exc)
             return "address"
@@ -4319,16 +4324,18 @@ class SopEngine119:
         else:
             try:
                 status, hint, _api_reason = verify_address_detail(
-                    spoken, location_type
+                    spoken, location_type, call_uuid=self._call_uuid
                 )
             except Exception as exc:
                 self._debug_print(f"{location_type}_validation_error", exc)
                 self._set_address_validation("error", reason=error_reason)
-                return False, error_reason, True
+                # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+                return False, error_reason, False
 
         if status is None:
             self._set_address_validation("error", reason=error_reason)
-            return False, error_reason, True
+            # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+            return False, error_reason, False
         if status is not True:
             self._set_address_validation("invalid", reason=invalid_reason)
             return False, invalid_reason, True
@@ -4522,7 +4529,7 @@ class SopEngine119:
                 self.case.address = rebuilt
             self._normalize_location_fields()
             status, _hint, api_reason = verify_address_detail(
-                self.case.address or "", "intersection"
+                self.case.address or "", "intersection", call_uuid=self._call_uuid
             )
             if status is True:
                 self._set_address_validation("valid")
@@ -4532,7 +4539,8 @@ class SopEngine119:
                 self._set_address_validation("invalid", reason=reason)
                 return False, reason, True
             self._set_address_validation("error", reason="地址驗測 API 無法使用")
-            return False, "地址驗測 API 無法使用", True
+            # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+            return False, "地址驗測 API 無法使用", False
 
         if location_type == "highway":
             self._apply_location_rules(self.case.address or "")
@@ -4560,7 +4568,7 @@ class SopEngine119:
                 self.case.address = complete
             self._normalize_location_fields()
             status, _hint, api_reason = verify_address_detail(
-                self.case.address or "", "highway"
+                self.case.address or "", "highway", call_uuid=self._call_uuid
             )
             if status is True:
                 self._set_address_validation("valid")
@@ -4570,7 +4578,8 @@ class SopEngine119:
                 self._set_address_validation("invalid", reason=reason)
                 return False, reason, True
             self._set_address_validation("error", reason="地址驗測 API 無法使用")
-            return False, "地址驗測 API 無法使用", True
+            # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+            return False, "地址驗測 API 無法使用", False
 
         if location_type in {"landmark", "mrt"}:
             return self._validate_landmark_like(location_type)
