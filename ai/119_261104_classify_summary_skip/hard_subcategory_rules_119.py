@@ -1,8 +1,9 @@
 """
 hard_subcategory_rules_119.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-指定次案類的硬規則。詞來自 scripts/119keywords.xlsx 第一張表，
-只收錄呼叫端點名的大案類／次案類。命中後由引擎同時寫入次案類與疑似次案類。
+次案類的硬規則。詞來自 scripts/案類關鍵字展開表1107_審核後.xlsx 的
+「判斷案類絕對關鍵字_展開」表（已審核），表上有詞的次案類都會套用。
+命中後由引擎同時寫入次案類與疑似次案類。
 """
 
 from __future__ import annotations
@@ -14,159 +15,75 @@ from typing import Dict, List, Optional, Tuple
 
 import openpyxl
 
-_SHEET = "民眾可能說的關鍵字(判斷次案類)"
-_XLSX = Path(__file__).resolve().parent / "scripts" / "119keywords.xlsx"
+_SHEET = "判斷案類絕對關鍵字_展開"
+_XLSX = Path(__file__).resolve().parent / "scripts" / "案類關鍵字展開表1107_審核後.xlsx"
 
-# 詞尾的等級標記，例如 (D)、（B)、以及表裡的筆誤「路塌陷B)」。
-_TRAILING_GRADE = re.compile(
-    r"(?:[（(]\s*[ABCDabcd]\s*[)）]|[ABCDabcd]\s*[)）])\s*$"
-)
+# 表上的欄位：B 大案類、C 次案類、F 關鍵字（第一列是標題）。
+_COL_MAIN = 1
+_COL_SUB = 2
+_COL_KEYWORD = 5
 
-# 只對這些次案類做硬規則。火警名稱與表內 C 列、垂片對照一致，不拆開。
-HARD_RULE_TARGETS: Dict[str, Tuple[str, ...]] = {
-    "救護": (
-        "刀傷(切割傷)",
-        "喝農藥",
-        "電擊傷",
-        "溺水",
-        "槍傷",
-        "吸入廢氣",
-    ),
-    "火警": (
-        "旅館、百貨商場用途建築物",
-        "古蹟、文化財",
-        "地下建築物(如地下街)",
-        "高層建築物(10層樓以上)",
-        "船舶",
-        "電影院用途建築物",
-        "軌道型交通工具",
-    ),
-    "緊急救援": (
-        "開瓦斯自殺",
-        "氣爆",
-        "緊急救援",
-        "CO中毒",
-        "溺水",
-        "破門",
-        "其他(卡住夾住)",
-    ),
-    "災害": (
-        "道路坍方落石",
-        "電線掉落",
-        "積水",
-        "鐵皮掉落",
-        "道路受損",
-        "招牌掉落",
-        "自來水管線破裂",
-        "淹水",
-        "電線桿傾倒",
-        "人員疏散及災民收容",
-        "土石流及大規模崩塌災害",
-        "災害",
-        "交通號誌損壞",
-        "山坡地社區災害",
-        "電力停電",
-        "道路中斷",
-    ),
-    "其他案類": (
-        "破門",
-        "動物救援",
-        "其他案類",
-        "剪除異物",
-        "捕蜂",
-        "捕捉動物",
-        "送水",
-        "電梯受困",
-    ),
-    "檢舉投訴": (
-        "其它",
-        "消防安全",
-        "救護",
-        "檢舉投訴",
-        "危險物品",
-        "服勤紀律",
-        "救災",
-    ),
-}
+# 其他案類有幾個次案類在表上寫成「破門(緊急救援-破門)」，括號是對照用的說明，
+# 程式裡的次案類名稱不含括號，所以讀進來時拿掉。
+_OTHER_CASE_NOTE = re.compile(r"[（(]緊急救援-[^)）]*[)）]\s*$")
 
-# 表上的「緊急救援／其他」混了卡住和雜項。只有卡住這些詞才直通卡住的 SOP。
+# 表上的「緊急救援／其他」都是卡住、夾住的說法，命中就走卡住夾住的題目。
 _STUCK_LABEL = "其他(卡住夾住)"
-_STUCK_KEYWORDS = frozenset({
-    "手指卡住",
-    "手指頭卡住",
-    "頭卡住",
-    "腳卡住",
-    "手被機器捲進去",
-    "機器捲入",
-    "腳卡在椅子",
+
+# 使用者決定不收的詞：(大案類, 次案類, 關鍵字)。
+_EXCLUDED = frozenset({
+    # 這幾個是審核時加進集合住宅的相似詞，太通用，火警裡講到就會被定成集合住宅
+    ("火警", "集合住宅", "失火"),
+    ("火警", "集合住宅", "火災"),
+    ("火警", "集合住宅", "著火"),
+    ("火警", "集合住宅", "起火"),
+    ("火警", "集合住宅", "燒起來"),
+    ("火警", "集合住宅", "冒煙"),
+    # 跌落山坡不是卡住夾住，不能走卡住夾住的題目；要歸哪個次案類還沒決定
+    ("緊急救援", "其他", "走路跌落山坡"),
+    ("緊急救援", "其他", "走路跌落山邊坡"),
 })
+
 _Rule = Tuple[str, str, str, int]
-
-
-def normalize_hard_keyword(raw: object) -> str:
-    """去掉空白與詞尾等級標記。等級被拿掉後沒有剩字就回空字串。"""
-    text = str(raw or "").strip()
-    if not text:
-        return ""
-    return _TRAILING_GRADE.sub("", text).strip()
 
 
 def _compact(text: str) -> str:
     return "".join((text or "").split())
 
 
+def _cell(row: tuple, idx: int) -> str:
+    value = row[idx] if len(row) > idx else None
+    return str(value or "").strip()
+
+
 @lru_cache(maxsize=1)
 def _load_rules() -> Dict[str, Tuple[_Rule, ...]]:
-    wanted = {
-        main: set(subs) for main, subs in HARD_RULE_TARGETS.items()
-    }
-    found: Dict[Tuple[str, str], List[_Rule]] = {
-        (main, sub): []
-        for main, subs in HARD_RULE_TARGETS.items()
-        for sub in subs
-    }
+    by_main: Dict[str, List[_Rule]] = {}
     wb = openpyxl.load_workbook(_XLSX, data_only=True, read_only=True)
     try:
         ws = wb[_SHEET]
-        current_main: Optional[str] = None
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             if not row:
                 continue
-            main_cell = row[1] if len(row) > 1 else None
-            sub_cell = row[2] if len(row) > 2 else None
-            if main_cell is not None and str(main_cell).strip():
-                current_main = str(main_cell).strip()
-            if current_main not in wanted or sub_cell is None:
+            main = _cell(row, _COL_MAIN)
+            sub = _cell(row, _COL_SUB)
+            keyword = _cell(row, _COL_KEYWORD)
+            if not main or not sub or not keyword:
                 continue
-            sub = str(sub_cell).strip()
-            if current_main == "緊急救援" and sub == "其他":
-                bucket = found.get((current_main, _STUCK_LABEL))
-                if bucket is None:
-                    continue
-                for cell in row[3:]:
-                    keyword = normalize_hard_keyword(cell)
-                    if keyword in _STUCK_KEYWORDS:
-                        bucket.append((_STUCK_LABEL, keyword, _compact(keyword), row_idx))
+            if (main, sub, keyword) in _EXCLUDED:
                 continue
-            if sub not in wanted[current_main]:
-                continue
-            bucket = found[(current_main, sub)]
-            for cell in row[3:]:
-                keyword = normalize_hard_keyword(cell)
-                if not keyword:
-                    continue
-                bucket.append((sub, keyword, _compact(keyword), row_idx))
+            if main == "緊急救援" and sub == "其他":
+                sub = _STUCK_LABEL
+            elif main == "其他案類":
+                sub = _OTHER_CASE_NOTE.sub("", sub).strip()
+            by_main.setdefault(main, []).append((sub, keyword, _compact(keyword), row_idx))
     finally:
         wb.close()
-
-    by_main: Dict[str, List[_Rule]] = {main: [] for main in HARD_RULE_TARGETS}
-    for (main, _sub), rules in found.items():
-        by_main[main].extend(rules)
     return {main: tuple(rules) for main, rules in by_main.items()}
 
 
 def keywords_for(main_category: str, sub_category: str) -> Tuple[str, ...]:
-    """該大案類、次案類載入到的關鍵詞（已去掉等級標記）。不在清單內則空。"""
+    """該大案類、次案類載入到的關鍵詞。表上沒有則空。"""
     rules = _load_rules().get(main_category, ())
     return tuple(keyword for sub, keyword, _compact_kw, _row in rules if sub == sub_category)
 
