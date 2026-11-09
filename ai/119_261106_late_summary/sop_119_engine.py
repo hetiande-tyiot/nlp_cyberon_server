@@ -3500,6 +3500,15 @@ class SopEngine119:
             )
         self._notify_case_update()
 
+    def _confirm_address_text(self) -> str:
+        """覆誦時要念的地址：對照地址是門牌（有路街和號碼）才跟報案人講的地點一起念，
+        只有「區＋名稱」（例如「新北市永和區福和橋」）跟地點重複就不念；「*號」不念。"""
+        spoken = self.case.display_address()
+        reference = (self.case.address_reference or "").replace("*號", "")
+        if self.case.address_reference and is_street_address(self.case.address_reference):
+            return f"{spoken}（{reference}）"
+        return spoken
+
     def _reset_location_for_correction(self) -> None:
         """清除旧地点，避免完整重报被 merge_address 保留为旧值。"""
         with self._case_lock:
@@ -3515,6 +3524,7 @@ class SopEngine119:
             self.case.address_validation_status = "pending"
             self.case.jurisdiction_office = None
             self.case.address_error_reason = None
+            self.case.address_reference = None
 
     # ── 一般門牌地址：五步流程的輔助 ──────────────────────────────────────
 
@@ -4728,7 +4738,7 @@ class SopEngine119:
                     f"請確認行政區是「{self._district_guess[1]}」對嗎？"
                 )
             else:
-                confirm_q = f"確定是{current_addr_display}這個地址嗎？"
+                confirm_q = f"確定是{self._confirm_address_text()}這個地址嗎？"
             addr_before_confirm = self.case.address
             confirm_text = self._ask_and_extract(confirm_q)
             # 報案人常在覆誦時才補上巷弄（「還有31巷」）；先併進路名再判斷，
@@ -4791,6 +4801,7 @@ class SopEngine119:
                     self.case.highway_kilometer = None
                     self.case.address_validation_status = "pending"
                     self.case.jurisdiction_office = None
+                    self.case.address_reference = None
                 self._apply_location_rules(corrected or "")
                 valid, reason = self._complete_and_validate_location()
                 if not valid:

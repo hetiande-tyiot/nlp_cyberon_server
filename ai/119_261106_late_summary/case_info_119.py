@@ -45,6 +45,9 @@ class CaseInfo119:
     # 向報案人複述路名無法分辨」——覆誦得到的「對」不具鑑別力，所以要讓
     # 受理員知道這個路名是系統改的，不是報案人講的。
     address_corrected_note: Optional[str] = None
+    # 地標表或 addrCheck 回傳的地址，跟報案人講的地點（address）分開記，給受理員對照。
+    # 報案人講的是一般門牌時留空。
+    address_reference: Optional[str] = None
 
     # ── 生命征象（救護專用）────────────────────────────────────────────────
     # True=有/是, False=沒有/否, None=不確定/未提及
@@ -405,7 +408,7 @@ class CaseInfo119:
             "transcript", "flow_stage", "result",
             "main_conf", "sub_conf", "suspected_sub_category", "address_confirmed",
             "address_validation_status", "address_suspect_error",
-            "address_error_reason", "address_corrected_note",
+            "address_error_reason", "address_corrected_note", "address_reference",
             "is_ohca", "caller_name", "caller_contact", "caller_salutation",
             "caller_contact_valid", "caller_contact_reason",
             "caller_address",

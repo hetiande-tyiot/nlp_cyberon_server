@@ -1092,6 +1092,7 @@ def main():
             }
             addr_fields = [
                 ("地址",       case.get("address")),
+                ("對照地址",   case.get("address_reference")),
                 ("地址類別",   type_labels.get(
                     case.get("location_type"), case.get("location_type")
                 )),

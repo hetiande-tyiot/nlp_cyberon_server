@@ -40,6 +40,7 @@ LABELS: Dict[str, str] = {
     "address_suspect_error": "地址疑似有誤",
     "address_error_reason": "地址錯誤原因",
     "address_corrected_note": "地址讀音更正提示",
+    "address_reference": "對照地址",
     # 生命征象（救護專用）
     "consciousness": "是否有意識",
     "breathing": "呼吸",
