@@ -1691,6 +1691,30 @@ _TOLL_FREE_PREFIXES = ("0800", "0809", "0806")   # 客服／免付費，總長 1
 _SHORT_SERVICE_NUMBERS = frozenset({"110", "119", "112", "113", "165", "166", "167"})
 
 
+_CN_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "兩": 2, "三": 3, "四": 4,
+               "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+_CN_UNITS = {"十": 10, "百": 100, "千": 1000}
+
+
+def chinese_numerals_to_digits(text: Optional[str]) -> str:
+    """把句子裡的中文數字換成阿拉伯數字，其他字不動。
+    有十百千的照數值換（「四十二公里」→「42公里」）；沒有的逐字換（「三九零零零一」→「390001」）。"""
+    def convert(m: "re.Match[str]") -> str:
+        token = m.group(0)
+        if not any(u in token for u in _CN_UNITS):
+            return "".join(str(_CN_DIGITS[ch]) for ch in token)
+        total, digit = 0, 0
+        for ch in token:
+            if ch in _CN_UNITS:
+                total += (digit or 1) * _CN_UNITS[ch]
+                digit = 0
+            else:
+                digit = _CN_DIGITS[ch]
+        return str(total + digit)
+
+    return re.sub(r"[零〇一二兩三四五六七八九十百千]+", convert, text or "")
+
+
 def normalize_phone_digits(raw: Optional[str]) -> str:
     """取出號碼中的純數字；+886/886 開頭轉回 0 開頭的國內格式。"""
     if not raw:

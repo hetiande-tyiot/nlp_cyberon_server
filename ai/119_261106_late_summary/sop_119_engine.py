@@ -95,6 +95,7 @@ from location_validation_119 import (
     verify_address_detail,
     verify_address_status,
     lookup_landmark_table,
+    mrt_query_candidates,
 )
 from landmark_unresolved_log_119 import REASON_DENIED, REASON_NOT_FOUND, record_unresolved
 import timing_119
@@ -4345,7 +4346,12 @@ class SopEngine119:
         # 再打一次 API——急案的每一次往返都是時間。
         probed = self._probed_result
         self._probed_result = None
-        if probed is not None:
+        mrt_candidates = mrt_query_candidates(spoken) if location_type == "mrt" else None
+        mrt_query = None
+        if mrt_candidates:
+            # 捷運站改成 addrCheck 認得的寫法再查，不沿用探測時用原話查的結果
+            status, hint, mrt_query = self._query_mrt_candidates(mrt_candidates)
+        elif probed is not None:
             status, hint, _api_reason = probed
         else:
             try:
@@ -4379,6 +4385,9 @@ class SopEngine119:
             return False, invalid_reason, True
 
         with self._case_lock:
+            if mrt_query:
+                # 捷運的地址欄位放標準站名（實際查到的寫法），不放報案人的原話
+                self.case.address = mrt_query
             self.case.address_reference = match.resolved or match.matched
         self._reference_name = match.matched
         if match.is_fuzzy:
@@ -4391,6 +4400,24 @@ class SopEngine119:
         )
         self._set_address_validation("valid")
         return True, "", False
+
+    def _query_mrt_candidates(
+        self, candidates: tuple
+    ) -> tuple[Optional[bool], Optional[str], Optional[str]]:
+        """依序試捷運站的幾種寫法，第一個完全比對到的就採用；都沒有就用第一種寫法的結果。
+        回 (status, hint, 採用的寫法)；連不上就直接停。"""
+        first = None
+        for query in candidates:
+            status, hint, _reason = verify_address_detail(
+                query, "mrt", call_uuid=self._call_uuid
+            )
+            if status is None:
+                return None, hint, query
+            if first is None:
+                first = (status, hint, query)
+            if status is True and not parse_landmark_hint(hint).is_fuzzy:
+                return status, hint, query
+        return first
 
     def _sample_landmark_guess(self, outcome: str) -> None:
         """把報案人對這個猜測的反應記進模糊比對紀錄（調門檻用）。"""

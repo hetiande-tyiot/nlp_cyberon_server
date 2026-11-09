@@ -348,6 +348,72 @@ def lookup_landmark_table(
     return None
 
 
+# 機場線各站（交通部鐵道局「機場捷運車站位置座標」），addrCheck 只認「○○站」，不帶出口
+AIRPORT_MRT_STATIONS = frozenset((
+    "台北車", "三重", "新北產業園區", "新莊副都心", "泰山", "泰山貴和", "體育大學",
+    "長庚醫院", "林口", "山鼻", "坑口", "機場第一航廈", "機場第二航廈", "機場第三航廈",
+    "機場旅館", "大園", "橫山", "領航", "高鐵桃園", "桃園體育園區", "興南", "環北",
+))
+# 機場線和其他線都有的站：報案人有講「機捷」「機場捷運」才算機場線
+AIRPORT_MRT_SHARED = frozenset(("台北車", "三重", "新北產業園區"))
+
+
+def _mrt_station_core(raw: str) -> str:
+    """名單上的名稱去掉出口和「站」，留下站名本體（「頂埔站出口1」→「頂埔」、「台北車站M1」→「台北車」）。"""
+    return re.sub(r"站?(?:出口\w*|M\d+)?$", "", raw.replace("臺", "台")).strip()
+
+
+@lru_cache(maxsize=4)
+def load_mrt_exits(path: str = str(DEFAULT_MRT_CSV)) -> dict:
+    """捷運名單整理成 {站名本體: {出口編號: 名單上的寫法}}；沒有出口編號的列記在空字串底下。"""
+    stations: dict = {}
+    with open(path, "r", encoding="cp950", newline="") as handle:
+        reader = csv.reader(handle)
+        next(reader, None)
+        for row in reader:
+            raw = str(row[1] or "").strip() if len(row) > 1 else ""
+            if not raw:
+                continue
+            exit_no = str(row[2] or "").strip() if len(row) > 2 else ""
+            exit_no = "" if exit_no == "0" else exit_no.upper()
+            stations.setdefault(_mrt_station_core(raw), {})[exit_no] = raw
+    return stations
+
+
+def mrt_query_candidates(spoken: Optional[str]) -> Optional[tuple[str, ...]]:
+    """把報案人講的捷運站改成 addrCheck 認得的寫法，依序列出要試的幾種（第一個完全比對到的就採用）。
+
+    addrCheck 的捷運資料寫法不一：多數是「府中捷運站2號出口」，也有名單原本的「南港展覽館站出口2A」
+    「台北車站M1」，機場線只認「泰山貴和站」。名單上找不到站名就回 None，照原話查。
+    """
+    from sop_utils_119 import chinese_numerals_to_digits
+
+    # 不先轉整句中文數字：站名裡也有數字（三重、七張、十四張）
+    text = re.sub(r"\s+", "", (spoken or "").replace("臺", "台"))
+    try:
+        stations = load_mrt_exits()
+    except Exception:
+        return None
+    found = [core for core in stations if core and core in text]
+    if not found:
+        return None
+    core = max(found, key=len)
+    airport_said = "機捷" in text or "機場捷運" in text
+    if core in AIRPORT_MRT_STATIONS and (core not in AIRPORT_MRT_SHARED or airport_said):
+        return (f"{core}站",)
+    exit_token = r"([A-Za-z]?(?:\d+|[一二兩三四五六七八九十]+)[A-Za-z]?)"
+    m = (re.search(exit_token + r"號?出口", text.replace(core, "", 1))
+         or re.search(r"出口" + exit_token, text))
+    exit_no = chinese_numerals_to_digits(m.group(1)).upper() if m else ""
+    candidates = []
+    if exit_no:
+        candidates.append(f"{core}捷運站{exit_no}號出口")
+        if exit_no in stations[core]:
+            candidates.append(stations[core][exit_no])
+    candidates += [f"{core}捷運站", f"{core}站"]
+    return tuple(dict.fromkeys(candidates))
+
+
 @lru_cache(maxsize=4)
 def load_mrt_location_names(path: str = str(DEFAULT_MRT_CSV)) -> tuple[str, ...]:
     """读取 cp950 CSV 第二列，并补充不含出口编号的站名。"""
