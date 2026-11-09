@@ -2049,7 +2049,7 @@ class SopEngine119:
         first_q = random.choice([
             "119 您好，請問是火災，還是救護",
             "119 您好，請問是需要消防車，還是救護車",
-            "119 您好，請問是要報火災，還是有人身體不舒服",
+            # "119 您好，請問是要報火災，還是有人身體不舒服",
         ])
         first_input = self._ask_and_extract(first_q)
 
