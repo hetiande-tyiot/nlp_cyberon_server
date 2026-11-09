@@ -73,7 +73,6 @@ from fuzzy_match_log_119 import (
 from address_hint_119 import (
     ASK_DISTRICT,
     LandmarkMatch,
-    build_landmark_confirm_question,
     is_uncertain_answer,
     normalized_address_from_hint,
     phonetic_correction_note,
@@ -82,6 +81,7 @@ from address_hint_119 import (
     ASK_NUMBER,
     ASK_ROAD,
     GENERIC_ADDRESS_RETRY,
+    LANDMARK_NOT_FOUND_RETRY,
     GUIDED_OPENING,
     build_hint_question,
     floor_suppress_reason,
@@ -94,8 +94,9 @@ from location_validation_119 import (
     query_jurisdiction,
     verify_address_detail,
     verify_address_status,
-    normalize_landmark_alias,
+    lookup_landmark_table,
 )
+from landmark_unresolved_log_119 import REASON_DENIED, REASON_NOT_FOUND, record_unresolved
 import timing_119
 from sop_utils_119 import (
     address_ask_should_include_floor,
@@ -639,6 +640,12 @@ class SopEngine119:
         self._probed_result = None
         # B：同一通內已被報案人否決過的模糊地標（matched/resolved），不再重複提案。
         self._denied_landmarks: set = set()
+        # addrCheck 用猜的找到的地標（報案人講的話, 比對結果, hint, 型態），覆誦時報案人否認要丟掉
+        self._landmark_guess: Optional[tuple] = None
+        # 對照地址對應的名稱（地標表的名稱、addrCheck 找到的地標），覆誦時判斷對照地址是不是只有「區＋名稱」
+        self._reference_name: Optional[str] = None
+        # 地點驗證失敗、要請報案人重講時用的問句；沒設就用 GENERIC_ADDRESS_RETRY
+        self._retry_question: Optional[str] = None
         # 行政區若是臺語音近「猜」出來的，記 (原片段, 猜測值)，
         # 必須讓報案人覆誦確認；未確認前不得當成已知地址交給派遣或真人。
         self._district_guess: Optional[tuple] = None
@@ -3501,12 +3508,16 @@ class SopEngine119:
         self._notify_case_update()
 
     def _confirm_address_text(self) -> str:
-        """覆誦時要念的地址：對照地址是門牌（有路街和號碼）才跟報案人講的地點一起念，
-        只有「區＋名稱」（例如「新北市永和區福和橋」）跟地點重複就不念；「*號」不念。"""
+        """覆誦時要念的地址：對照地址只是「區＋名稱」（例如「新北市永和區福和橋」）跟地點重複就不念；
+        是門牌，或裡面沒有找到的名稱（「八里療養院」對到「新北市八里區華富山33號」）就跟報案人講的地點
+        一起念，報案人才聽得出有沒有找錯。「*號」不念。"""
         spoken = self.case.display_address()
-        reference = (self.case.address_reference or "").replace("*號", "")
-        if self.case.address_reference and is_street_address(self.case.address_reference):
-            return f"{spoken}（{reference}）"
+        reference = self.case.address_reference
+        if not reference:
+            return spoken
+        name = self._reference_name
+        if is_street_address(reference) or not (name and name in reference):
+            return f"{spoken}（{reference.replace('*號', '')}）"
         return spoken
 
     def _reset_location_for_correction(self) -> None:
@@ -4300,17 +4311,15 @@ class SopEngine119:
     def _validate_landmark_like(
         self, location_type: str
     ) -> tuple[bool, str, bool]:
-        """地標／捷運驗測。
+        """地標／捷運驗測（11/06 地址規則）。
 
-        addrCheck 的地標比對沒有相似度門檻，會把「捷運不存在站出口9」硬配成
-        「捷運亞東醫院站2號出口」並回 status=true。API 的 hint 自己就寫著
-        「若不確定請向報案人確認是否為此處」——所以模糊配出來的一律當猜測，
-        必須讓報案人有機會否認，不得靜默採用。
+        - 地標先查地標表（scripts/landmarks.xlsx），查到就用表上的名稱和地址，不打 addrCheck。
+        - addrCheck 有找到（完全比對或用猜的）：地址保留報案人講的話，找到的地址記在對照地址，
+          不另外問「是這裡嗎」，留到覆誦時一起確認。用猜的記在 _landmark_guess，覆誦被否認時
+          由 _deny_landmark_guess 處理。
+        - 查不到，或找到的是這通已被否認過的地標：記進無法判別表，請報案人提供最近的門牌地址。
         """
-        error_reason = (
-            "地標資料表無法讀取" if location_type == "landmark"
-            else "捷運車站資料無法讀取"
-        )
+        error_reason = "地址驗測 API 無法使用"
         invalid_reason = (
             "地標不在資料表中" if location_type == "landmark"
             else "查無捷運車站"
@@ -4318,6 +4327,20 @@ class SopEngine119:
         self._set_stage("location_validating")
         self._normalize_location_fields()
         spoken = self.case.address or ""
+        self._landmark_guess = None
+
+        if location_type == "landmark":
+            table_hit = lookup_landmark_table(spoken)
+            if table_hit:
+                name, table_address = table_hit
+                self._debug_print("landmark_table_hit", {"spoken": spoken, "name": name})
+                with self._case_lock:
+                    self.case.address = name
+                    self.case.address_reference = table_address
+                self._reference_name = name
+                self._set_address_validation("valid")
+                return True, "", False
+
         # _probe_location_type 剛查過就沿用它的結果，別為了同一個地址
         # 再打一次 API——急案的每一次往返都是時間。
         probed = self._probed_result
@@ -4331,105 +4354,75 @@ class SopEngine119:
                 )
             except Exception as exc:
                 self._debug_print(f"{location_type}_validation_error", exc)
-                self._set_address_validation("error", reason=error_reason)
-                # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
-                return False, error_reason, False
+                status, hint = None, None
 
         if status is None:
             self._set_address_validation("error", reason=error_reason)
             # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
             return False, error_reason, False
-        if status is not True:
+
+        match = parse_landmark_hint(hint) if status is True else None
+        if match and (
+            match.matched in self._denied_landmarks
+            or (match.resolved and match.resolved in self._denied_landmarks)
+        ):
+            # 這通已經被報案人否認過的地標不再提出來，跟查不到一樣處理
+            self._debug_print("landmark_already_denied", match.matched)
+            match = None
+        if match is None:
+            record_unresolved(
+                spoken=spoken, reason=REASON_NOT_FOUND, location_type=location_type,
+                api_hint=hint, call_uuid=self._call_uuid,
+            )
             self._set_address_validation("invalid", reason=invalid_reason)
+            self._retry_question = LANDMARK_NOT_FOUND_RETRY
             return False, invalid_reason, True
 
-        match = parse_landmark_hint(hint)
-        if not match.is_fuzzy:
-            self._set_address_validation("valid")
-            return True, "", False
-
-        # 模糊比對：先問報案人是不是這裡。
-        self._debug_print("landmark_fuzzy_match", {
-            "spoken": spoken,
-            "matched": match.matched,
-            "resolved": match.resolved,
-        })
-        def _sample(outcome: str) -> None:
-            record_fuzzy_match(
-                KIND_LANDMARK,
-                spoken=spoken,
-                matched=match.matched,
-                resolved=match.resolved,
-                outcome=outcome,
-                alternatives=match.alternatives,
-                api_hint=hint,
-                location_type=location_type,
-                session=getattr(self, "_session_tag", None),
-            )
-
-        # B：同一通已被報案人否決過的模糊地標，不再重複提案（避免鬼打牆）。
-        if match.matched in self._denied_landmarks or (
-            match.resolved and match.resolved in self._denied_landmarks
-        ):
-            _sample(OUTCOME_DENIED)
-            self._clear_unconfirmed_landmark_components()
-            self._set_address_validation(
-                "invalid", reason="地標比對未確認（報案人已否決此地標）"
-            )
-            return False, "地標比對未確認", True
-
-        answer = self._address_ask(build_landmark_confirm_question(match))
-        if answer is None:
-            # 預算用盡：不敢逕自採用猜測，標成疑義交給受理員。
-            _sample(OUTCOME_UNCONFIRMED)
-            self._clear_unconfirmed_landmark_components()
-            self._set_address_validation(
-                "invalid", reason=f"{invalid_reason}（地標為模糊比對，未經確認）"
-            )
-            return False, f"{invalid_reason}（未經確認）", False
-        # 報案人用「是＋另一個地點」回答時，「是」只是連接詞，意思是後面那個
-        # 地點才對（11/06 問「板橋捷運站1號出口，是這裡嗎」答「是板橋火車站」，
-        # 原本只看開頭的「是」就當成確認）。改用報案人講的地點重新查一次。
-        corrected_place = self._place_after_yes(answer, match)
-        if corrected_place:
-            _sample(OUTCOME_DENIED)
-            for v in (match.matched, match.resolved):
-                if v:
-                    self._denied_landmarks.add(v)
-            self._reset_location_for_correction()
-            self._clear_unconfirmed_landmark_components()
-            with self._case_lock:
-                self.case.address = corrected_place
-            self._record_address_candidate(
-                corrected_place, source="caller_stated"
-            )
-            self._notify_case_update()
-            return self._validate_location_once(allow_component_reasks=False)
-        if parse_yes_no(answer) is False or is_uncertain_answer(answer):
-            # 「不知道」不等於「對」——地址攸關派遣，模稜兩可不採用猜測。
-            _sample(OUTCOME_DENIED)
-            # B：記住被否決的地標，後續重報不再提案同一個。
-            for v in (match.matched, match.resolved):
-                if v:
-                    self._denied_landmarks.add(v)
-            # C：清掉未確認模糊比對帶進來的門牌組件（純地標不該有路/號）。
-            self._clear_unconfirmed_landmark_components()
-            self._set_address_validation(
-                "invalid", reason="報案人未能確認模糊比對到的地標"
-            )
-            return False, "地標比對未確認", True
-        _sample(OUTCOME_CONFIRMED)
-
-        # 報案人確認後才改寫成 API 解析出的地址。
-        if match.resolved:
-            with self._case_lock:
-                self.case.address = match.resolved
+        with self._case_lock:
+            self.case.address_reference = match.resolved or match.matched
+        self._reference_name = match.matched
+        if match.is_fuzzy:
+            self._debug_print("landmark_fuzzy_match", {
+                "spoken": spoken, "matched": match.matched, "resolved": match.resolved,
+            })
+            self._landmark_guess = (spoken, match, hint, location_type)
         self._record_address_candidate(
-            self.case.address, source="api_suggested", api_status="valid",
-            api_hint=hint,
+            spoken, source="api_suggested", api_status="valid", api_hint=hint,
         )
         self._set_address_validation("valid")
         return True, "", False
+
+    def _sample_landmark_guess(self, outcome: str) -> None:
+        """把報案人對這個猜測的反應記進模糊比對紀錄（調門檻用）。"""
+        spoken, match, hint, location_type = self._landmark_guess
+        record_fuzzy_match(
+            KIND_LANDMARK,
+            spoken=spoken,
+            matched=match.matched,
+            resolved=match.resolved,
+            outcome=outcome,
+            alternatives=match.alternatives,
+            api_hint=hint,
+            location_type=location_type,
+            session=getattr(self, "_session_tag", None),
+        )
+
+    def _deny_landmark_guess(self) -> None:
+        """覆誦時報案人否認系統猜的地標：記下這個地標被否認過（這通不再提出來），
+        記進模糊比對紀錄和無法判別表，清掉對照地址。"""
+        spoken, match, hint, location_type = self._landmark_guess
+        self._sample_landmark_guess(OUTCOME_DENIED)
+        for v in (match.matched, match.resolved):
+            if v:
+                self._denied_landmarks.add(v)
+        record_unresolved(
+            spoken=spoken, reason=REASON_DENIED, location_type=location_type,
+            matched=match.matched, resolved=match.resolved, api_hint=hint,
+            call_uuid=self._call_uuid,
+        )
+        self._landmark_guess = None
+        with self._case_lock:
+            self.case.address_reference = None
 
     def _place_after_yes(self, answer: str, match: LandmarkMatch) -> Optional[str]:
         """回答開頭的「是／對」後面接了另一個地點，就回傳那個地點。
@@ -4484,14 +4477,8 @@ class SopEngine119:
         # 判型不受街路映射影響（看的是路/號/區的結構），所以先判型；
         # 門牌型態的街路映射延後到 addrCheck 查無才套用。
         self._normalize_location_fields()
-        # 地標同音誤認正規化（南亞夜市→南雅夜市），送 addrCheck 前先改寫，免得
-        # 無門檻的地標模糊比對硬配到別處（南機場夜市）。對映來自 landmarks.xlsx。
-        if self.case.address:
-            fixed = normalize_landmark_alias(self.case.address)
-            if fixed and fixed != self.case.address:
-                with self._case_lock:
-                    self.case.address = fixed
-                self._debug_print("landmark_alias_normalized", fixed)
+        # 地標同音誤認（南亞夜市→南雅夜市）改由 _validate_landmark_like 先查地標表處理
+        self._retry_question = None
         location_type = self._refresh_location_type()
         if not location_type:
             location_type = self._probe_location_type()
@@ -4605,7 +4592,7 @@ class SopEngine119:
         self._set_stage("location_validation_reask")
         self._reset_location_for_correction()
         self._notify_case_update()
-        self._ask_address_and_extract(GENERIC_ADDRESS_RETRY)
+        self._ask_address_and_extract(self._retry_question or GENERIC_ADDRESS_RETRY)
         if not is_usable_address(self.case.address):
             return False, "重新提供的地址仍無法抽取"
         ok, reason, _ = self._validate_location_once(
@@ -4777,7 +4764,11 @@ class SopEngine119:
                 except Exception as exc:
                     self._debug_print("extract_confirmation_error", exc)
 
-            corrected = addr_update or new_address
+            # addrCheck 用猜的地標：報案人回「是＋另一個地點」（例如「是板橋火車站」）時，
+            # 「是」只是連接詞，改用後面那個地點重新查
+            guess = self._landmark_guess
+            place = self._place_after_yes(confirm_text, guess[1]) if guess else None
+            corrected = place or addr_update or new_address
             if (
                 not is_usable_address(corrected)
                 and confirmed is None
@@ -4787,6 +4778,8 @@ class SopEngine119:
                 # 直接拿改後的地址走重驗，別讓它未經驗證就留下。
                 corrected = self.case.address
             if is_usable_address(corrected):
+                if guess:
+                    self._deny_landmark_guess()
                 with self._case_lock:
                     self.case.address = corrected
                     self.case.address_confirmed = None
@@ -4809,7 +4802,26 @@ class SopEngine119:
                     return
                 continue
 
+            if guess and (confirmed is False or is_uncertain_answer(confirm_text)):
+                # 報案人否認、或說不知道系統猜的地標：丟掉猜測，請報案人重講地點再查一次
+                self._deny_landmark_guess()
+                self._set_stage("location_validation_reask")
+                self._reset_location_for_correction()
+                self._notify_case_update()
+                self._ask_address_and_extract(GENERIC_ADDRESS_RETRY)
+                if not is_usable_address(self.case.address):
+                    self._mark_address_failure("重新提供的地址仍無法抽取")
+                    return
+                valid, reason = self._complete_and_validate_location()
+                if not valid:
+                    self._mark_address_failure(reason or "更正地址校驗失敗")
+                    return
+                continue
+
             if confirmed is True:
+                if guess:
+                    self._sample_landmark_guess(OUTCOME_CONFIRMED)
+                    self._landmark_guess = None
                 # 報案人確認過，音近猜測不再是未驗證資訊。
                 self._district_guess = None
                 with self._case_lock:

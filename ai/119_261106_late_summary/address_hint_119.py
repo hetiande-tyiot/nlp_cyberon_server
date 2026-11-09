@@ -321,6 +321,8 @@ def normalized_address_from_hint(
 # 原本三種失敗共用一句「地址無法確認，請重新提供完整正確的事發地點。」，
 # 太僵硬也不像人講話；依 hint 拆成各自的說法。
 GENERIC_ADDRESS_RETRY = "不好意思，地址我這邊對不起來，麻煩再說一次事發地點？"
+# 地標、捷運查不到時改問門牌（11/06 地址規則）
+LANDMARK_NOT_FOUND_RETRY = "找不到您說的地址，可否請您提供最近的門牌地址"
 ASK_DISTRICT = "請問是哪一區？"
 ASK_ROAD = "請問是什麼路？"
 ASK_NUMBER = "請問是幾號？"

@@ -311,6 +311,44 @@ def normalize_landmark_alias(
 
 
 @lru_cache(maxsize=4)
+def load_landmark_table(
+    path: str = str(DEFAULT_LANDMARK_XLSX),
+) -> tuple[tuple[str, tuple[str, ...], str], ...]:
+    """讀地標表每一列：(地標名稱, (名稱與別名…), 地址)。地址空白的列不收（沒有地址就不能直接定位）。"""
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    rows = workbook.active.iter_rows(values_only=True)
+    next(rows, ())  # 跳過表頭
+    table = []
+    for row in rows:
+        primary = str(row[0] or "").strip() if len(row) > 0 else ""
+        aliases = str(row[1] or "").strip() if len(row) > 1 else ""
+        address = str(row[2] or "").strip() if len(row) > 2 else ""
+        if primary and address:
+            table.append((primary, (primary, *_split_aliases(aliases)), address))
+    workbook.close()
+    return tuple(table)
+
+
+def lookup_landmark_table(
+    location: Optional[str], path: str = str(DEFAULT_LANDMARK_XLSX)
+) -> Optional[tuple[str, str]]:
+    """報案人講的地點有包含地標表上的名稱或別名，就回傳 (地標名稱, 地址)；沒有或讀表失敗回 None。"""
+    target = _normalized_name(location or "")
+    if not target:
+        return None
+    try:
+        table = load_landmark_table(path)
+    except Exception:
+        return None
+    for primary, names, address in table:
+        if any(_normalized_name(n) and _normalized_name(n) in target for n in names):
+            return primary, address
+    return None
+
+
+@lru_cache(maxsize=4)
 def load_mrt_location_names(path: str = str(DEFAULT_MRT_CSV)) -> tuple[str, ...]:
     """读取 cp950 CSV 第二列，并补充不含出口编号的站名。"""
     names: list[str] = []
