@@ -1307,7 +1307,9 @@ def build_highway_address(
     if not name or not direction or not kilometer:
         return None
     km = re.sub(r"\s*(?:公里處|公里|K|k)\s*$", "", str(kilometer)).strip()
-    return f"{name} {direction} {km}公里處" if km else None
+    # 不加空格，跟 addrCheck 回傳的寫法（「國道1北上35.209公里處」）一樣；
+    # 有空格的話，覆誦時每輪重組會被當成報案人改了地址
+    return f"{name}{direction}{km}公里處" if km else None
 
 
 def is_bare_district_or_city(text: Optional[str]) -> bool:
@@ -1362,7 +1364,7 @@ def classify_location_type(
     s = re.sub(r"\s+", "", location or "")
     if not s:
         return None
-    if re.search(r"(?:國道|国道|高速公路)", s):
+    if HIGHWAY_ROUTE_RE.search(s):
         return "highway"
     if ("路口" in s or "巷口" in s) or (
         len(extract_intersection_roads(s)) >= 2
@@ -1713,6 +1715,24 @@ def chinese_numerals_to_digits(text: Optional[str]) -> str:
         return str(total + digit)
 
     return re.sub(r"[零〇一二兩三四五六七八九十百千]+", convert, text or "")
+
+
+# 高速公路、快速道路（11/06 地址規則）：程式只判斷是不是高速公路、缺哪一項，其他交給 addrCheck
+HIGHWAY_ROUTE_RE = re.compile(
+    r"國道|国道|高速公路|中山高|北二高|二高|快速道路|快速公路|台6\d線|台六十[一二三四五六七八九]線"
+)
+HIGHWAY_DIRECTION_RE = re.compile(r"南下|北上|南向|北向|往南|往北|向南|向北|東向|西向|向東|向西|往東|往西")
+HIGHWAY_KM_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:公里|[Kk])")
+
+
+def highway_km_to_digits(text: Optional[str]) -> str:
+    """只把公里數的中文數字換成阿拉伯數字（「四十二公里」→「42公里」）；
+    路名裡的數字不換，「北二高」換成「北2高」反而查不到。"""
+    return re.sub(
+        r"[零〇一二兩三四五六七八九十百千]+(?=\s*(?:公里|[Kk]))",
+        lambda m: chinese_numerals_to_digits(m.group(0)),
+        text or "",
+    )
 
 
 def normalize_phone_digits(raw: Optional[str]) -> str:

@@ -100,6 +100,10 @@ from location_validation_119 import (
 from landmark_unresolved_log_119 import REASON_DENIED, REASON_NOT_FOUND, record_unresolved
 import timing_119
 from sop_utils_119 import (
+    HIGHWAY_DIRECTION_RE,
+    HIGHWAY_KM_RE,
+    HIGHWAY_ROUTE_RE,
+    highway_km_to_digits,
     address_ask_should_include_floor,
     build_address_ask_questions,
     dropped_address_details,
@@ -4582,48 +4586,84 @@ class SopEngine119:
             return False, "地址驗測 API 無法使用", False
 
         if location_type == "highway":
-            self._apply_location_rules(self.case.address or "")
-            complete = build_highway_address(
-                self.case.highway_name,
-                self.case.highway_direction,
-                self.case.highway_kilometer,
-            )
-            if not complete and allow_component_reasks:
-                for _ in range(2):
-                    self._set_stage("location_highway_reask")
-                    self._ask_address_and_extract(
-                        "請問在哪一條高速公路、南向或北向，以及幾公里處？"
-                    )
-                    complete = build_highway_address(
-                        self.case.highway_name,
-                        self.case.highway_direction,
-                        self.case.highway_kilometer,
-                    )
-                    if complete:
-                        break
-            if not complete:
-                return False, "高速公路地點資訊不完整", False
-            with self._case_lock:
-                self.case.address = complete
-            self._normalize_location_fields()
-            status, _hint, api_reason = verify_address_detail(
-                self.case.address or "", "highway", call_uuid=self._call_uuid
-            )
-            if status is True:
-                self._set_address_validation("valid")
-                return True, "", False
-            if status is False:
-                reason = addrcheck_failure_reason(api_reason)
-                self._set_address_validation("invalid", reason=reason)
-                return False, reason, True
-            self._set_address_validation("error", reason="地址驗測 API 無法使用")
-            # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
-            return False, "地址驗測 API 無法使用", False
+            return self._validate_highway(allow_component_reasks)
 
         if location_type in {"landmark", "mrt"}:
             return self._validate_landmark_like(location_type)
 
         return False, "不支援的地址類別", False
+
+    def _validate_highway(self, allow_reasks: bool) -> tuple[bool, str, bool]:
+        """高速公路、快速道路（11/06 地址規則）。
+
+        送報案人的原話給 addrCheck（公里數的中文數字先換成阿拉伯數字），程式只看缺哪一項：
+        沒講路名問整句、交流道隧道問方向和公里、缺公里問公里、缺方向依道路問南北或東西，
+        最多問 2 次，回答接在原話後面再查。報案人沒講方向時 addrCheck 有時會自己挑一個方向
+        回有效，所以方向要自己檢查。查到後地址欄位放 addrCheck 的定位結果；
+        問過還是查不到就記進無法判別表、算地址失敗，地址保留報案人的原話（高速公路上沒有門牌可問）。
+        """
+        spoken = self.case.address or ""
+        query = highway_km_to_digits(spoken)
+        asks = 0
+        while True:
+            status, hint, api_reason = verify_address_detail(
+                query, "highway", call_uuid=self._call_uuid
+            )
+            if status is None:
+                with self._case_lock:
+                    self.case.address = spoken
+                self._set_address_validation("error", reason="地址驗測 API 無法使用")
+                # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+                return False, "地址驗測 API 無法使用", False
+            if status is True and HIGHWAY_DIRECTION_RE.search(query):
+                # addrCheck 回「國道定位成功：國道1北上35.209公里處」，取冒號後面那段
+                found = re.search(r"[：:]\s*(.+)$", hint or "")
+                located = found.group(1).strip() if found else query
+                m = re.match(r"(國道\d+[甲乙]?|快速道路\d+)(北上|南下|向東|向西)([\d.]+)公里處", located)
+                with self._case_lock:
+                    self.case.address = located
+                    self.case.address_reference = None
+                    if m:
+                        self.case.highway_name, self.case.highway_direction, self.case.highway_kilometer = m.groups()
+                self._set_address_validation("valid")
+                return True, "", False
+            question = self._highway_question(query, hint)
+            if not question or not allow_reasks or asks >= 2:
+                break
+            asks += 1
+            self._set_stage("location_highway_reask")
+            answer = self._ask_address_and_extract(question)
+            query = f"{query} {highway_km_to_digits(answer or '')}".strip()
+
+        record_unresolved(
+            spoken=query, reason=REASON_NOT_FOUND, location_type="highway",
+            api_hint=hint, call_uuid=self._call_uuid,
+        )
+        reason = (
+            "高速公路沒有講行車方向" if status is True
+            else addrcheck_failure_reason(api_reason)
+        )
+        with self._case_lock:
+            self.case.address = spoken
+        self._set_address_validation("invalid", reason=reason)
+        return False, reason, False
+
+    def _highway_question(self, query: str, hint: Optional[str]) -> Optional[str]:
+        """高速公路缺哪一項就問哪一項；都講了還查不到（公里數不存在）回 None，不再問。"""
+        has_km = HIGHWAY_KM_RE.search(query)
+        has_dir = HIGHWAY_DIRECTION_RE.search(query)
+        if not HIGHWAY_ROUTE_RE.search(query) or (not has_km and not has_dir and not re.search(r"交流道|隧道", query)):
+            return "請問在哪一條高速公路、南向或北向，以及幾公里處？"
+        if not has_km and not has_dir:
+            return "請問是南下北上幾公里處？"
+        if not has_km:
+            return "請問是幾公里處？"
+        if not has_dir:
+            # 台64 這類東西向的快速道路，addrCheck 的提示會寫向東、向西
+            if "向東" in (hint or "") or "向西" in (hint or ""):
+                return "請問是往東還是往西？"
+            return "請問是南下還是北上？"
+        return None
 
     def _complete_and_validate_location(self) -> tuple[bool, str]:
         ok, reason, retryable = self._validate_location_once(
