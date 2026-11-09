@@ -1371,8 +1371,13 @@ def classify_location_type(
         and re.search(r"(?:與|与|和|交叉)", s)
     ):
         return "intersection"
+    # 路燈要在門牌之前判：「路燈390001」有「路」和數字，會被當成門牌
+    if STREETLIGHT_RE.search(s):
+        return "streetlight"
     if is_street_address(s):
         return "address"
+    if POLE_RE.search(s):
+        return "pole"
     if any(name and name.replace(" ", "") in s for name in (mrt_names or [])):
         return "mrt"
     if ("捷運" in s or "捷运" in s) and ("站" in s or "出口" in s):
@@ -1733,6 +1738,22 @@ def highway_km_to_digits(text: Optional[str]) -> str:
         lambda m: chinese_numerals_to_digits(m.group(0)),
         text or "",
     )
+
+
+# 路燈、電線桿（11/06 地址規則）：路燈加 4 位以上編號用 addrCheck 定位；電線桿只記下來，不驗證
+STREETLIGHT_RE = re.compile(r"路燈(?:編號|號碼)?([\d零〇一二兩三四五六七八九]{4,})")
+POLE_RE = re.compile(r"(?:電線桿|電線杆|電桿)(?:編號|號碼)?[0-9A-Za-z\-]*")
+
+
+def extract_streetlight_or_pole(text: Optional[str]) -> Optional[str]:
+    """路燈、電線桿的講法整理成地址：「路燈三九零零零一」→「路燈390001」；電線桿照原話（含緊接的英數編號）。
+    抽地址的模型規則只抽門牌、地標，這兩種要先用規則抓。"""
+    s = re.sub(r"\s+", "", text or "")
+    m = STREETLIGHT_RE.search(s)
+    if m:
+        return "路燈" + chinese_numerals_to_digits(m.group(1))
+    m = POLE_RE.search(s)
+    return m.group(0) if m else None
 
 
 def normalize_phone_digits(raw: Optional[str]) -> str:

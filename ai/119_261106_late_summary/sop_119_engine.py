@@ -82,6 +82,7 @@ from address_hint_119 import (
     ASK_ROAD,
     GENERIC_ADDRESS_RETRY,
     LANDMARK_NOT_FOUND_RETRY,
+    POLE_ASK_DOOR,
     GUIDED_OPENING,
     build_hint_question,
     floor_suppress_reason,
@@ -100,6 +101,7 @@ from location_validation_119 import (
 from landmark_unresolved_log_119 import REASON_DENIED, REASON_NOT_FOUND, record_unresolved
 import timing_119
 from sop_utils_119 import (
+    extract_streetlight_or_pole,
     HIGHWAY_DIRECTION_RE,
     HIGHWAY_KM_RE,
     HIGHWAY_ROUTE_RE,
@@ -649,6 +651,8 @@ class SopEngine119:
         self._landmark_guess: Optional[tuple] = None
         # 對照地址對應的名稱（地標表的名稱、addrCheck 找到的地標），覆誦時判斷對照地址是不是只有「區＋名稱」
         self._reference_name: Optional[str] = None
+        # 報案人只給得出電線桿、沒有門牌時記下電線桿的講法，地址失敗時改用電線桿的標記方式
+        self._pole_address: Optional[str] = None
         # 地點驗證失敗、要請報案人重講時用的問句；沒設就用 GENERIC_ADDRESS_RETRY
         self._retry_question: Optional[str] = None
         # 行政區若是臺語音近「猜」出來的，記 (原片段, 猜測值)，
@@ -1560,6 +1564,14 @@ class SopEngine119:
 
         # 1) 規則備援（快速、對「地址在…」口語最穩）
         hinted = extract_address_hint(caller_text)
+        # 路燈、電線桿：模型的地址規則只抽門牌、地標，先用規則抓。電線桿遇到同一句有門牌就以門牌為準；
+        # 路燈一律用路燈（「路燈999999這邊」有「路」和數字，門牌規則會誤抓整句）
+        marker = extract_streetlight_or_pole(caller_text)
+        if marker and (marker.startswith("路燈") or not is_street_address(hinted or "")):
+            with self._case_lock:
+                self._apply_extracted_fields({"address": marker})
+            self._debug_print("extract_address_streetlight_or_pole", marker)
+            return is_usable_address(self.case.address)
         if is_usable_address(hinted):
             with self._case_lock:
                 self._apply_extracted_fields({"address": hinted})
@@ -3484,6 +3496,9 @@ class SopEngine119:
 
     def _mark_address_failure(self, reason: str) -> None:
         """发布地址错误标签，并让案件继续后续流程。"""
+        if self._pole_address:
+            self._mark_pole_address()
+            return
         self._revert_unconfirmed_district_guess()
         self._record_address_candidate(self.case.address, source="final")
         self._restore_best_candidate()
@@ -4510,6 +4525,7 @@ class SopEngine119:
         self._normalize_location_fields()
         # 地標同音誤認（南亞夜市→南雅夜市）改由 _validate_landmark_like 先查地標表處理
         self._retry_question = None
+        self._pole_address = None
         location_type = self._refresh_location_type()
         if not location_type:
             location_type = self._probe_location_type()
@@ -4588,6 +4604,12 @@ class SopEngine119:
         if location_type == "highway":
             return self._validate_highway(allow_component_reasks)
 
+        if location_type == "streetlight":
+            return self._validate_streetlight()
+
+        if location_type == "pole":
+            return self._handle_pole(allow_component_reasks)
+
         if location_type in {"landmark", "mrt"}:
             return self._validate_landmark_like(location_type)
 
@@ -4664,6 +4686,66 @@ class SopEngine119:
                 return "請問是往東還是往西？"
             return "請問是南下還是北上？"
         return None
+
+    def _validate_streetlight(self) -> tuple[bool, str, bool]:
+        """路燈（11/06 地址規則）：送「路燈＋編號」、不指定型態；回傳開頭是「路燈定位成功」才算查到，
+        其他（例如編號不存在時配到「公園路燈管理處」）一律當查不到。
+        地址欄位放「路燈390001」，對照地址放查到的地址，覆誦兩個一起念。"""
+        spoken = self.case.address or ""
+        query = extract_streetlight_or_pole(spoken) or spoken
+        status, hint, _api_reason = verify_address_detail(query, None, call_uuid=self._call_uuid)
+        if status is None:
+            self._set_address_validation("error", reason="地址驗測 API 無法使用")
+            # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+            return False, "地址驗測 API 無法使用", False
+        if status is True and (hint or "").startswith("路燈定位成功"):
+            # 「路燈定位成功：新北市八里區龍源里龍米路一段*號（燈桿 390001）」取中間的地址
+            found = re.search(r"[：:]\s*(.+?)\s*(?:（燈桿.*）)?$", hint)
+            with self._case_lock:
+                self.case.address = query
+                self.case.address_reference = found.group(1) if found else None
+            self._reference_name = None
+            self._set_address_validation("valid")
+            return True, "", False
+        record_unresolved(
+            spoken=spoken, reason=REASON_NOT_FOUND, location_type="streetlight",
+            api_hint=hint, call_uuid=self._call_uuid,
+        )
+        self._set_address_validation("invalid", reason="查無此路燈編號")
+        self._retry_question = LANDMARK_NOT_FOUND_RETRY
+        return False, "查無此路燈編號", True
+
+    def _handle_pole(self, allow_reasks: bool) -> tuple[bool, str, bool]:
+        """電線桿（11/06 地址規則）：先問最近的門牌，有門牌就改走門牌流程；
+        沒有才把電線桿當地址，不覆誦、不算已確認，由 _mark_pole_address 標記給受理員。"""
+        pole_text = self.case.address or ""
+        if allow_reasks:
+            self._set_stage("location_pole_reask")
+            self._ask_address_and_extract(POLE_ASK_DOOR)
+            answer_addr = self.case.address
+            if (
+                is_usable_address(answer_addr)
+                and answer_addr != pole_text
+                and classify_location_type(answer_addr) != "pole"
+            ):
+                return self._validate_location_once(allow_component_reasks=True)
+        with self._case_lock:
+            self.case.address = pole_text
+        self._pole_address = pole_text
+        return False, "地址為電線桿編號，報案人無法提供門牌，未驗證", False
+
+    def _mark_pole_address(self) -> None:
+        """電線桿當地址：保留報案人講的電線桿（不換成其他候選），列重要案件、加「地址未確認」，
+        錯誤原因寫明是電線桿、沒有驗證，流程繼續。"""
+        with self._case_lock:
+            self.case.address = self._pole_address
+            self.case.address_confirmed = False
+            self.case.address_suspect_error = True
+            self.case.address_error_reason = "地址為電線桿編號，報案人無法提供門牌，未驗證"
+            self.case.address_validation_status = None
+            self.case.ImportantCase = 1
+            self.case.ImportantTag = merge_important_tags(self.case.ImportantTag, ["地址未確認"])
+        self._notify_case_update()
 
     def _complete_and_validate_location(self) -> tuple[bool, str]:
         ok, reason, retryable = self._validate_location_once(

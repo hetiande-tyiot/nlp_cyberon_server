@@ -1082,6 +1082,8 @@ def main():
                 "intersection": "交叉路口／巷口",
                 "landmark": "特殊地標",
                 "highway": "高速公路",
+                "streetlight": "路燈",
+                "pole": "電線桿",
                 "mrt": "捷運車站",
             }
             validation_labels = {

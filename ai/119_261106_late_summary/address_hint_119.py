@@ -323,6 +323,8 @@ def normalized_address_from_hint(
 GENERIC_ADDRESS_RETRY = "不好意思，地址我這邊對不起來，麻煩再說一次事發地點？"
 # 地標、捷運查不到時改問門牌（11/06 地址規則）
 LANDMARK_NOT_FOUND_RETRY = "找不到您說的地址，可否請您提供最近的門牌地址"
+# 報案人講電線桿時先問門牌（11/06 地址規則）
+POLE_ASK_DOOR = "可否請您提供最近的門牌地址"
 ASK_DISTRICT = "請問是哪一區？"
 ASK_ROAD = "請問是什麼路？"
 ASK_NUMBER = "請問是幾號？"
@@ -400,7 +402,9 @@ FloorRule = Tuple[str, Callable[[object], bool]]
 
 
 def _location_type_is_non_building(case: object) -> bool:
-    return getattr(case, "location_type", None) in {"intersection", "highway", "mrt"}
+    return getattr(case, "location_type", None) in {
+        "intersection", "highway", "mrt", "streetlight", "pole",
+    }
 
 
 def _fire_is_non_building(case: object) -> bool:

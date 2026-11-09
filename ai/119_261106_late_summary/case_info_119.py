@@ -28,7 +28,7 @@ class CaseInfo119:
     # ── 地址 ────────────────────────────────────────────────────────────────
     address:           Optional[str]  = None  # 完整事發地址（含樓層）
     address_confirmed: Optional[bool] = None  # 報警人是否已確認地址
-    location_type:     Optional[str]  = None  # address/intersection/landmark/highway/mrt
+    location_type:     Optional[str]  = None  # address/intersection/landmark/highway/mrt/streetlight/pole
     address_district:  Optional[str]  = None  # 行政區（如「板橋區」）
     address_road:      Optional[str]  = None  # 道路（含段、巷、弄）
     address_number:    Optional[str]  = None  # 門牌號（如「32號」）
