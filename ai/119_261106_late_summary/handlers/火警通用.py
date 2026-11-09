@@ -67,6 +67,8 @@ class HuoJingGenericHandler(SubCategoryHandler):
                         "fire_tab_switched_restart",
                         {"old": sw.old, "new": sw.new, "tab": engine.case.fire_tab},
                     )
+                    # 換了垂片，前面講的話要用新垂片的欄位再抽一次，已經答到的才不會重問
+                    self._backfill_earlier_answers_for_tab(engine)
                     continue
         finally:
             engine._sub_reclassify_enabled = False
@@ -79,7 +81,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
         火警流程中每次報案人回答之後、每一題問之前都會檢查，不等問到那一題。
         - 交通工具是聯結車、大客車(公車、遊覽車) → 轉接專人（1104 xlsx 備註）
         - 交通工具火警、車上有人出不來（人員受困 = 有人受困）、而且沒有火
-          → 改判緊急救援-車禍救助（1104 xlsx 備註）
+          → 改判緊急救援-車禍救助並轉真人（1104 xlsx 備註）
         - 其他有人出不來（人員受困 = 有人受困）→ 轉接專人
         轉接的做法統一在 engine._transfer_to_human。
         已經轉接過（真人接手、系統只在旁聽）就不再處理，也不再改判車禍救助。
