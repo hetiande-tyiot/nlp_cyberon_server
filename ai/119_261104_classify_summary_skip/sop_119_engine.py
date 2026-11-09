@@ -67,6 +67,7 @@ from fuzzy_match_log_119 import (
 )
 from address_hint_119 import (
     ASK_DISTRICT,
+    LandmarkMatch,
     build_landmark_confirm_question,
     is_uncertain_answer,
     normalized_address_from_hint,
@@ -4143,6 +4144,24 @@ class SopEngine119:
                 "invalid", reason=f"{invalid_reason}（地標為模糊比對，未經確認）"
             )
             return False, f"{invalid_reason}（未經確認）", False
+        # 報案人用「是＋另一個地點」回答時，「是」只是連接詞，意思是後面那個
+        # 地點才對（11/06 問「板橋捷運站1號出口，是這裡嗎」答「是板橋火車站」，
+        # 原本只看開頭的「是」就當成確認）。改用報案人講的地點重新查一次。
+        corrected_place = self._place_after_yes(answer, match)
+        if corrected_place:
+            _sample(OUTCOME_DENIED)
+            for v in (match.matched, match.resolved):
+                if v:
+                    self._denied_landmarks.add(v)
+            self._reset_location_for_correction()
+            self._clear_unconfirmed_landmark_components()
+            with self._case_lock:
+                self.case.address = corrected_place
+            self._record_address_candidate(
+                corrected_place, source="caller_stated"
+            )
+            self._notify_case_update()
+            return self._validate_location_once(allow_component_reasks=False)
         if parse_yes_no(answer) is False or is_uncertain_answer(answer):
             # 「不知道」不等於「對」——地址攸關派遣，模稜兩可不採用猜測。
             _sample(OUTCOME_DENIED)
@@ -4168,6 +4187,34 @@ class SopEngine119:
         )
         self._set_address_validation("valid")
         return True, "", False
+
+    def _place_after_yes(self, answer: str, match: LandmarkMatch) -> Optional[str]:
+        """回答開頭的「是／對」後面接了另一個地點，就回傳那個地點。
+
+        以下情況都回傳 None，交給原本的是非判斷：
+        - 只回「是」「是的」「不是」這類短答，後面沒有其他字。
+        - 後面的地點完整包含在系統找到的地標名稱或地址裡（「是1號出口」），
+          這時「是」就是肯定的意思。
+        - 後面的字不像地點（「是啊沒錯」「對，就是那邊」）。
+        - 開頭不是「是／對」（例如「不是，…」照原本的否認處理）。
+        """
+        text = re.sub(r"[，,。．.！!？?、\s]", "", answer or "")
+        place = re.sub(r"^(?:就是|是的|對的|对的|是|對|对)+", "", text)
+        if not place or place == text:
+            return None
+        if any(place in v for v in (match.matched, match.resolved) if v):
+            return None
+        try:
+            names = {
+                "mrt_names": list(load_mrt_location_names()),
+                "landmark_names": list(load_landmark_names()),
+            }
+        except Exception as exc:
+            self._debug_print("load_location_names_error", exc)
+            names = {}
+        if not classify_location_type(place, **names):
+            return None
+        return place
 
     def _clear_unconfirmed_landmark_components(self) -> None:
         """清掉未確認地標模糊比對誤帶進來的門牌組件。
