@@ -4545,15 +4545,37 @@ class SopEngine119:
             with self._case_lock:
                 self.case.address = rebuilt
             self._normalize_location_fields()
-            status, _hint, api_reason = verify_address_detail(
+            status, hint, api_reason = verify_address_detail(
                 self.case.address or "", "intersection", call_uuid=self._call_uuid
             )
+            if (
+                status is False
+                and api_reason == "ambiguous"
+                and allow_component_reasks
+                and self._ask_missing_component("district")
+            ):
+                # 沒講區、好幾區都有這個路口：只補問區，不用整個重講
+                with self._case_lock:
+                    self.case.address = build_intersection_address(
+                        self.case.address_district,
+                        self.case.intersection_road1,
+                        self.case.intersection_road2,
+                    )
+                status, hint, api_reason = verify_address_detail(
+                    self.case.address or "", "intersection", call_uuid=self._call_uuid
+                )
             if status is True:
                 self._set_address_validation("valid")
                 return True, "", False
             if status is False:
+                # 查不到：記進無法判別表，請報案人提供最近的門牌地址
+                record_unresolved(
+                    spoken=self.case.address, reason=REASON_NOT_FOUND,
+                    location_type="intersection", api_hint=hint, call_uuid=self._call_uuid,
+                )
                 reason = addrcheck_failure_reason(api_reason)
                 self._set_address_validation("invalid", reason=reason)
+                self._retry_question = LANDMARK_NOT_FOUND_RETRY
                 return False, reason, True
             self._set_address_validation("error", reason="地址驗測 API 無法使用")
             # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
