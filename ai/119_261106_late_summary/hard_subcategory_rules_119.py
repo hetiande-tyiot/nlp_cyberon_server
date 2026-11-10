@@ -139,3 +139,25 @@ def match_hard_subcategory(
             best_sub = sub
             best_keyword = keyword
     return best_sub, best_keyword
+
+
+_HERITAGE = "古蹟、文化財"
+
+
+def match_named_heritage(text: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    報案人回答地址的話裡，有沒有講到有名字的古蹟（例如「鶯歌美術館」）。
+
+    只認「火警－古蹟、文化財」硬規則裡、同時也列在報案人關鍵詞標籤的名字，
+    「寺」「宮廟」這類短詞不算，地址裡的「○○寺路」才不會被當成古蹟。
+    回傳 (古蹟、文化財, 命中的名字)；未命中為 (None, None)。
+    """
+    from important_tags_119 import CALLER_KEYWORD_TAGS
+
+    compact = _compact(text)
+    if not compact:
+        return None, None
+    for keyword in keywords_for("火警", _HERITAGE):
+        if keyword in CALLER_KEYWORD_TAGS and _compact(keyword) in compact:
+            return _HERITAGE, keyword
+    return None, None

@@ -146,7 +146,7 @@ from sop_utils_119 import (
     road_has_section,
     strip_district_prefix_from_road,
 )
-from hard_subcategory_rules_119 import match_hard_subcategory
+from hard_subcategory_rules_119 import match_hard_subcategory, match_named_heritage
 from incoming_caller_119 import classify_incoming_line, fetch_incoming_caller
 from report_case_119 import fetch_report_case
 from subcategory_keywords_119 import match_rescue_subcategory
@@ -2771,6 +2771,24 @@ class SopEngine119:
         )
         self._notify_case_update()
 
+    def _match_hard_subcategory_with_heritage(
+        self, keyword_text: str, main_cat: str,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """
+        先用報案人描述案情的話比對硬規則；沒命中、而且是火警、地址也確認成功時，
+        再看報案人回答地址的話有沒有講到有名字的古蹟（例如只在地址講「鶯歌美術館」，
+        後面只說「美術館燒起來」）。其他硬規則詞照舊不比對地址的回答。
+        """
+        hard_cat, hard_kw = match_hard_subcategory(keyword_text, main_cat)
+        if hard_cat or main_cat != "火警" or not self.case.address_confirmed:
+            return hard_cat, hard_kw
+        address_answers = "\n".join(
+            t.get("text") or ""
+            for t in self.case.transcript
+            if t.get("role") == "caller" and t.get("skip_classifier")
+        )
+        return match_named_heritage(address_answers)
+
     def _do_sub_classify(self, text: str, main_cat: str):
         """
         子類判定：指定清單的硬規則優先，救護再走高貼合關鍵詞，最後才是子分類器。
@@ -2784,7 +2802,7 @@ class SopEngine119:
         """
         # 硬規則、關鍵詞跟分類器一樣不看問地址的回答，地址裡的字（例如「豫溪街」的溪）才不會撞到關鍵字
         keyword_text = self._model_caller_text(text)
-        hard_cat, hard_kw = match_hard_subcategory(keyword_text, main_cat)
+        hard_cat, hard_kw = self._match_hard_subcategory_with_heritage(keyword_text, main_cat)
         if hard_cat:
             self._debug_print(
                 "hard_subcategory_hit",
@@ -2995,7 +3013,9 @@ class SopEngine119:
         text = (self.case.full_caller_text() or "").strip()
         if text:
             # 跟分類器一樣不看問地址的回答，地址裡的字才不會撞到關鍵字
-            hard_cat, _hard_kw = match_hard_subcategory(self._model_caller_text(text), main_cat)
+            hard_cat, _hard_kw = self._match_hard_subcategory_with_heritage(
+                self._model_caller_text(text), main_cat,
+            )
             if hard_cat:
                 # 硬規則命中就不把次案類交給 MacBERT 改寫。
                 if hard_cat != current:
