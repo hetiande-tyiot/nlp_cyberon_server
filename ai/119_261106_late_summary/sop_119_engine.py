@@ -4021,6 +4021,14 @@ class SopEngine119:
                     return True, "", False
                 break  # 探段不成 → 交 LLM 整合／引導式
             spoken_number = self.case.address_number
+            # 給相近路名讓報案人選時，路名會整個清掉，原本講的「2段」也跟著消失。
+            # 先記下來，報案人選完路名沒講段時接回去。
+            # 2026-11-10 實測（f8e351e3）：講「南南路2段15號」，選了「南雅南路」後
+            # 送查變成「南雅南路15號」，查不到就從區開始重問。
+            spoken_section = (
+                extract_road_section(self.case.address_road or "")
+                if advice.kind == "road_suggestions" else None
+            )
             with self._case_lock:
                 for field in self._HINT_CLEAR_FIELDS.get(advice.kind, ()):
                     setattr(self.case, field, None)
@@ -4033,6 +4041,9 @@ class SopEngine119:
             self._fill_components_from_address()
             _recent = self.case.caller_texts()
             self._merge_lane_into_road(_recent[-1] if _recent else "")
+            if spoken_section:
+                # 這次自己講了段就以這次為準，路名沒有段才接回原本的段
+                self._merge_lane_into_road(spoken_section)
             for kind, field in (
                 ("district", "address_district"),
                 ("road", "address_road"),
