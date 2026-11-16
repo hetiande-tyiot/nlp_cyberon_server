@@ -1709,9 +1709,20 @@ def highway_km_to_digits(text: Optional[str]) -> str:
     )
 
 
-# 路燈、電線桿（11/06 地址規則）：路燈加 4 位以上編號用 addrCheck 定位；電線桿只記下來，不驗證
-STREETLIGHT_RE = re.compile(r"路燈(?:編號|號碼)?([\d零〇一二兩三四五六七八九]{4,})")
+# 路燈、電線桿（11/06 地址規則）：路燈加 6 碼編號用 addrCheck 定位；電線桿只記下來，不驗證
+# 路燈編號固定 6 碼（11/16）：不是剛好 6 碼就不收，由地址流程再問一次
+_STREETLIGHT_DIGITS = r"[\d零〇一二兩三四五六七八九]"
+# 「路燈」和編號之間可以隔幾個字（「路燈，他的編號是。811198」）。
+# 中間有路、街、巷、弄、段、號，或數字後面接號、巷、弄、樓、之，就是在講門牌，不算路燈編號
+# （「路燈旁邊中正路1234號」「路燈旁邊1234號」）。
+STREETLIGHT_RE = re.compile(
+    r"路燈(?:編號|號碼|[^路街巷弄段號]){0,10}?(?<!" + _STREETLIGHT_DIGITS + r")("
+    + _STREETLIGHT_DIGITS + r"{6})(?!" + _STREETLIGHT_DIGITS + r"|[號巷弄樓之])"
+)
 POLE_RE = re.compile(r"(?:電線桿|電線杆|電桿)(?:編號|號碼)?[0-9A-Za-z\-]*")
+_BARE_NUMBER_RE = re.compile(
+    r"(?<!" + _STREETLIGHT_DIGITS + r")" + _STREETLIGHT_DIGITS + r"{6}(?!" + _STREETLIGHT_DIGITS + r")"
+)
 
 
 def extract_streetlight_or_pole(text: Optional[str]) -> Optional[str]:
@@ -1723,6 +1734,16 @@ def extract_streetlight_or_pole(text: Optional[str]) -> Optional[str]:
         return "路燈" + chinese_numerals_to_digits(m.group(1))
     m = POLE_RE.search(s)
     return m.group(0) if m else None
+
+
+def extract_streetlight_number_only(text: Optional[str]) -> Optional[str]:
+    """報案人前面提過路燈、這句只講數字（「811198」）時，取出編號。
+    要剛好 6 碼；句子裡有路、街、巷、弄、段、號就是在講門牌，不算。"""
+    s = re.sub(r"[\s，,。.、！!？?]+", "", text or "")
+    if re.search(r"[路街巷弄段號]", s):
+        return None
+    m = _BARE_NUMBER_RE.search(s)
+    return chinese_numerals_to_digits(m.group(0)) if m else None
 
 
 def normalize_phone_digits(raw: Optional[str]) -> str:

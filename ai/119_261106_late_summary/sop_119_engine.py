@@ -83,6 +83,8 @@ from address_hint_119 import (
     GENERIC_ADDRESS_RETRY,
     LANDMARK_NOT_FOUND_RETRY,
     POLE_ASK_DOOR,
+    STREETLIGHT_ASK_NUMBER,
+    STREETLIGHT_RECHECK,
     GUIDED_OPENING,
     build_hint_question,
     floor_suppress_reason,
@@ -102,6 +104,7 @@ from landmark_unresolved_log_119 import REASON_DENIED, REASON_NOT_FOUND, record_
 import timing_119
 from sop_utils_119 import (
     extract_streetlight_or_pole,
+    extract_streetlight_number_only,
     HIGHWAY_DIRECTION_RE,
     HIGHWAY_KM_RE,
     HIGHWAY_ROUTE_RE,
@@ -650,8 +653,10 @@ class SopEngine119:
         self._landmark_guess: Optional[tuple] = None
         # 對照地址對應的名稱（地標表的名稱、addrCheck 找到的地標），覆誦時判斷對照地址是不是只有「區＋名稱」
         self._reference_name: Optional[str] = None
-        # 報案人只給得出電線桿、沒有門牌時記下電線桿的講法，地址失敗時改用電線桿的標記方式
+        # 報案人只給得出電線桿（或路燈編號查不到）、沒有門牌時記下報案人的講法，地址失敗時改用這個標記方式
         self._pole_address: Optional[str] = None
+        # 報案人提到路燈但還沒講編號：接下來只講數字就當路燈編號，地址流程也改問編號
+        self._awaiting_streetlight_number = False
         # 地點驗證失敗、要請報案人重講時用的問句；沒設就用 GENERIC_ADDRESS_RETRY
         self._retry_question: Optional[str] = None
         # 行政區若是臺語音近「猜」出來的，記 (原片段, 猜測值)，
@@ -1554,12 +1559,27 @@ class SopEngine119:
         # 路燈、電線桿：模型的地址規則只抽門牌、地標，先用規則抓。電線桿遇到同一句有門牌就以門牌為準；
         # 路燈一律用路燈（「路燈999999這邊」有「路」和數字，門牌規則會誤抓整句）
         marker = extract_streetlight_or_pole(caller_text)
+        # 前面提過路燈、這句只講數字（「811198」）：接成路燈編號
+        if not marker and self._awaiting_streetlight_number:
+            number = extract_streetlight_number_only(caller_text)
+            if number:
+                marker = "路燈" + number
         if marker and (marker.startswith("路燈") or not is_street_address(hinted or "")):
+            self._awaiting_streetlight_number = False
             with self._case_lock:
                 self._apply_extracted_fields({"address": marker})
             self._debug_print("extract_address_streetlight_or_pole", marker)
             return is_usable_address(self.case.address)
+        # 提到路燈但沒講 6 碼編號，句子裡也沒有其他路名、門牌：先記下來等編號，不往下抽
+        # （「我這邊有一個路燈」往下抽會把「有一個路」當成路名，接著問哪一區、幾號）
+        if "路燈" in caller_text and not re.search(
+            r"[路街巷弄段號]|大道", re.sub(r"路燈|編號|號碼", "", caller_text)
+        ):
+            self._awaiting_streetlight_number = True
+            self._debug_print("extract_address_streetlight_without_number", caller_text)
+            return False
         if is_usable_address(hinted):
+            self._awaiting_streetlight_number = False
             with self._case_lock:
                 self._apply_extracted_fields({"address": hinted})
             self._debug_print("extract_address_rule", hinted)
@@ -1739,6 +1759,13 @@ class SopEngine119:
 
         # 市話核對前，整輪抽取都不得改寫 API 地址。
         incoming_snapshot = self._incoming_address_snapshot()
+        # 這句之前的地址欄位：這句只提到路燈、沒講編號時要放回去
+        address_before = {
+            name: getattr(self.case, name)
+            for name in (
+                "address", "location_type", "address_district", "address_road", "address_number",
+            )
+        }
         qa_question = self._get_last_assistant_question() if question is None else question
         # 受困人數只在回答那一題時允許改寫，抽取當下先記住這輪的問題。
         self._pending_extract_question = qa_question
@@ -1815,10 +1842,17 @@ class SopEngine119:
 
         # 4) 專項地址抽取（規則 + LLM）
         self._try_extract_address(caller_text)
-        self._apply_location_rules(caller_text)
-        self._refresh_location_type()
-        self._update_street_address_from_input(caller_text)
-        self._normalize_location_fields()
+        if self._awaiting_streetlight_number and "路燈" in caller_text:
+            # 這句只提到路燈、還沒講編號：這句不是門牌，把地址欄位放回這句之前的樣子，
+            # 也不用門牌規則拆這句（不然「有一個路燈」會被拆出路名「有一個路」）
+            with self._case_lock:
+                for name, value in address_before.items():
+                    setattr(self.case, name, value)
+        else:
+            self._apply_location_rules(caller_text)
+            self._refresh_location_type()
+            self._update_street_address_from_input(caller_text)
+            self._normalize_location_fields()
         self._restore_incoming_address(incoming_snapshot)
         self._pending_extract_question = None
 
@@ -4622,7 +4656,7 @@ class SopEngine119:
             return self._validate_highway(allow_component_reasks)
 
         if location_type == "streetlight":
-            return self._validate_streetlight()
+            return self._validate_streetlight(allow_component_reasks)
 
         if location_type == "pole":
             return self._handle_pole(allow_component_reasks)
@@ -4704,32 +4738,80 @@ class SopEngine119:
             return "請問是南下還是北上？"
         return None
 
-    def _validate_streetlight(self) -> tuple[bool, str, bool]:
+    def _ask_streetlight_number(self) -> str:
+        """報案人提到路燈但沒講編號（11/16）：問編號；回答有數字但不是 6 碼就再問一次；
+        還是沒有編號也沒有地址，就問最近的門牌。回傳報案人最後一次的回答。"""
+        self._set_stage("location_streetlight_ask")
+        answer = self._ask_address_and_extract(STREETLIGHT_ASK_NUMBER)
+        self._clear_unusable_address()
+        if not is_usable_address(self.case.address) and re.search(r"[\d零〇一二兩三四五六七八九]", answer):
+            self._awaiting_streetlight_number = True
+            answer = self._ask_address_and_extract(STREETLIGHT_ASK_NUMBER)
+        self._awaiting_streetlight_number = False
+        self._clear_unusable_address()
+        if not is_usable_address(self.case.address):
+            answer = self._ask_address_and_extract(POLE_ASK_DOOR)
+            # 回答門牌時又講到路燈（「路燈旁邊那間」）也不再回頭問編號
+            self._awaiting_streetlight_number = False
+        return answer
+
+    def _validate_streetlight(self, allow_reasks: bool) -> tuple[bool, str, bool]:
         """路燈（11/06 地址規則）：送「路燈＋編號」、不指定型態；回傳開頭是「路燈定位成功」才算查到，
         其他（例如編號不存在時配到「公園路燈管理處」）一律當查不到。
-        地址欄位放「路燈390001」，對照地址放查到的地址，覆誦兩個一起念。"""
+        地址欄位放「路燈390001」，對照地址放查到的地址，覆誦兩個一起念。
+
+        查不到時（11/16）：請報案人重念一次編號再查；還是查不到就改問最近的門牌；
+        門牌也給不出來，由 _mark_pole_address 保留「路燈＋編號」標記給受理員，流程繼續。"""
         spoken = self.case.address or ""
         query = extract_streetlight_or_pole(spoken) or spoken
-        status, hint, _api_reason = verify_address_detail(query, None, call_uuid=self._call_uuid)
-        if status is None:
-            self._set_address_validation("error", reason="地址驗測 API 無法使用")
-            # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
-            return False, "地址驗測 API 無法使用", False
-        if status is True and (hint or "").startswith("路燈定位成功"):
-            # 「路燈定位成功：新北市八里區龍源里龍米路一段*號（燈桿 390001）」取中間的地址
-            found = re.search(r"[：:]\s*(.+?)\s*(?:（燈桿.*）)?$", hint)
-            with self._case_lock:
-                self.case.address = query
-                self.case.address_reference = found.group(1) if found else None
-            self._reference_name = None
-            self._set_address_validation("valid")
-            return True, "", False
-        record_unresolved(
-            spoken=spoken, reason=REASON_NOT_FOUND, location_type="streetlight",
-            api_hint=hint, call_uuid=self._call_uuid,
-        )
+        for attempt in range(2):
+            status, hint, _api_reason = verify_address_detail(query, None, call_uuid=self._call_uuid)
+            if status is None:
+                self._set_address_validation("error", reason="地址驗測 API 無法使用")
+                # API 連不上（已隔 1 秒重查過）就算地址失敗，不請報案人重講，接著跑後面的流程
+                return False, "地址驗測 API 無法使用", False
+            if status is True and (hint or "").startswith("路燈定位成功"):
+                # 「路燈定位成功：新北市八里區龍源里龍米路一段*號（燈桿 390001）」取中間的地址
+                found = re.search(r"[：:]\s*(.+?)\s*(?:（燈桿.*）)?$", hint)
+                with self._case_lock:
+                    self.case.address = query
+                    self.case.address_reference = found.group(1) if found else None
+                self._reference_name = None
+                self._set_address_validation("valid")
+                return True, "", False
+            record_unresolved(
+                spoken=query, reason=REASON_NOT_FOUND, location_type="streetlight",
+                api_hint=hint, call_uuid=self._call_uuid,
+            )
+            if attempt or not allow_reasks:
+                break
+            # 第一次查不到：請報案人重念一次編號
+            self._set_stage("location_streetlight_reask")
+            # 重念時通常只講數字，先標成在等路燈編號，才不會被當成別的地址去抽
+            self._awaiting_streetlight_number = True
+            answer = self._ask_address_and_extract(STREETLIGHT_RECHECK)
+            self._awaiting_streetlight_number = False
+            again = extract_streetlight_or_pole(answer) or ""
+            if not again.startswith("路燈"):
+                number = extract_streetlight_number_only(answer)
+                again = "路燈" + number if number else ""
+            if not again:
+                # 沒有重念編號，改講了別的地址（例如門牌）就照那個地址走
+                answer_addr = self.case.address
+                if (
+                    is_usable_address(answer_addr)
+                    and answer_addr != spoken
+                    and classify_location_type(answer_addr) != "streetlight"
+                ):
+                    return self._validate_location_once(allow_component_reasks=True)
+                break
+            query = again
+        with self._case_lock:
+            self.case.address = query
         self._set_address_validation("invalid", reason="查無此路燈編號")
         self._retry_question = LANDMARK_NOT_FOUND_RETRY
+        # 接著會問門牌；門牌也給不出來時，用這個保留「路燈＋編號」給受理員
+        self._pole_address = query
         return False, "查無此路燈編號", True
 
     def _handle_pole(self, allow_reasks: bool) -> tuple[bool, str, bool]:
@@ -4752,13 +4834,17 @@ class SopEngine119:
         return False, "地址為電線桿編號，報案人無法提供門牌，未驗證", False
 
     def _mark_pole_address(self) -> None:
-        """電線桿當地址：保留報案人講的電線桿（不換成其他候選），列重要案件、加「地址未確認」，
-        錯誤原因寫明是電線桿、沒有驗證，流程繼續。"""
+        """電線桿（或查不到的路燈編號）當地址：保留報案人講的電線桿、路燈編號（不換成其他候選），
+        列重要案件、加「地址未確認」，錯誤原因寫明沒有驗證，流程繼續。"""
+        if self._pole_address.startswith("路燈"):
+            reason = "查無此路燈編號，報案人無法提供門牌，未驗證"
+        else:
+            reason = "地址為電線桿編號，報案人無法提供門牌，未驗證"
         with self._case_lock:
             self.case.address = self._pole_address
             self.case.address_confirmed = False
             self.case.address_suspect_error = True
-            self.case.address_error_reason = "地址為電線桿編號，報案人無法提供門牌，未驗證"
+            self.case.address_error_reason = reason
             self.case.address_validation_status = None
             self.case.ImportantCase = 1
             self.case.ImportantTag = merge_important_tags(self.case.ImportantTag, ["地址未確認"])
@@ -4850,18 +4936,23 @@ class SopEngine119:
         # 行動預填只到區名時，usable 也要問原本的地址問句。
         addr_asks = 0
         ask_max = min(2, len(ask_questions))
-        while addr_asks < ask_max and (
+        while (addr_asks < ask_max or self._awaiting_streetlight_number) and (
             not is_usable_address(self.case.address)
             or (addr_asks == 0 and self._address_is_mobile_district_only())
         ):
-            addr_q = ask_questions[addr_asks]
-            if addr_asks:
-                addr_q = self._narrowed_reask(addr_q)
-            if not self._should_ask_floor():
-                addr_q = addr_q.replace("？幾樓？", "？").replace("幾樓？", "")
-            addr_asks += 1
-            self._debug_print("address_ask", {"n": addr_asks, "q": addr_q})
-            answer = self._ask_address_and_extract(addr_q)
+            if self._awaiting_streetlight_number:
+                # 報案人提到路燈但沒講編號：改問編號、再不行問門牌，問完就不再問一般的地址問句
+                answer = self._ask_streetlight_number()
+                addr_asks = ask_max
+            else:
+                addr_q = ask_questions[addr_asks]
+                if addr_asks:
+                    addr_q = self._narrowed_reask(addr_q)
+                if not self._should_ask_floor():
+                    addr_q = addr_q.replace("？幾樓？", "？").replace("幾樓？", "")
+                addr_asks += 1
+                self._debug_print("address_ask", {"n": addr_asks, "q": addr_q})
+                answer = self._ask_address_and_extract(addr_q)
             self._clear_unusable_address()
             if not is_usable_address(self.case.address):
                 self._try_extract_address(answer)

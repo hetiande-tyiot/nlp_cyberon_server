@@ -325,6 +325,10 @@ GENERIC_ADDRESS_RETRY = "不好意思，地址我這邊對不起來，麻煩再�
 LANDMARK_NOT_FOUND_RETRY = "找不到您說的地址，可否請您提供最近的門牌地址"
 # 報案人講電線桿時先問門牌（11/06 地址規則）
 POLE_ASK_DOOR = "可否請您提供最近的門牌地址"
+# 報案人提到路燈但沒講編號時問編號（11/16）
+STREETLIGHT_ASK_NUMBER = "請給我路燈上的6碼編號"
+# 路燈編號查不到時，請報案人重念一次（11/16）
+STREETLIGHT_RECHECK = "請確認路燈上的數字，並將六碼數字念給我"
 ASK_DISTRICT = "請問是哪一區？"
 ASK_ROAD = "請問是什麼路？"
 ASK_NUMBER = "請問是幾號？"
