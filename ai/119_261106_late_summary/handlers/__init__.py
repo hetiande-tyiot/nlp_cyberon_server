@@ -60,7 +60,6 @@ SHARED_SEMANTIC_SLOTS = frozenset({
     "symptoms",
     "consciousness",
     "breathing",
-    "abdomen_rise",
     "patient_count",
     "patient_gender",
     "patient_age",

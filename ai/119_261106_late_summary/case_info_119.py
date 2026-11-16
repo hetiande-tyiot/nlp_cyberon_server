@@ -53,7 +53,6 @@ class CaseInfo119:
     # True=有/是, False=沒有/否, None=不確定/未提及
     consciousness: Optional[bool] = None  # 是否有意識
     breathing:     Optional[bool] = None  # 是否有呼吸
-    abdomen_rise:  Optional[bool] = None  # 肚子是否有起伏
     is_ohca:       bool           = False  # 是否判斷為 OHCA
 
     # ── 患者基本資訊（救護專用）────────────────────────────────────────────
@@ -376,18 +375,6 @@ class CaseInfo119:
     def display_address(self) -> str:
         """返回完整地址，用於複讀確認。"""
         return self.address if self.address else "（未知）"
-
-    def vital_signs_ok(self) -> bool:
-        """三項生命征象是否全部確認（True）。"""
-        return (
-            self.consciousness is True
-            and self.breathing is True
-            and self.abdomen_rise is True
-        )
-
-    def vital_signs_ohca(self) -> bool:
-        """任一生命征象為 False 或 None → 判斷為 OHCA。"""
-        return not self.vital_signs_ok()
 
     def is_field_filled(self, field: str) -> bool:
         """欄位是否已有抽取結果（非空）。"""

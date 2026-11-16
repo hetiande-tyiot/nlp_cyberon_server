@@ -229,7 +229,6 @@ _RESCUE_SLOT_MEANINGS: Dict[str, str] = {
     "incident_description": "現場發生什麼事",
     "consciousness": "是否有意識",
     "breathing": "呼吸",
-    "abdomen_rise": "肚子是否有起伏",
     "patient_count": "患者人數",
     "patient_gender": "患者性別",
     "patient_age": "患者年齡",
@@ -424,7 +423,6 @@ _DISPATCH_LINE_BY_MAIN = {
 RESCUE_EXCLUSIVE_FIELDS = frozenset({
     "consciousness",
     "breathing",
-    "abdomen_rise",
     "is_ohca",
     "patient_count",
     "patient_gender",
@@ -902,7 +900,7 @@ class SopEngine119:
 
     def _apply_extracted_fields(self, extracted: Dict[str, Any]) -> None:
         """將跨欄位抽取結果合併進 case（空欄位優先填入，地址允許升級）。"""
-        _BOOL_FIELDS = {"consciousness", "breathing", "abdomen_rise", "caller_is_patient"}
+        _BOOL_FIELDS = {"consciousness", "breathing", "caller_is_patient"}
         _RESCUE_FIELDS = RESCUE_EXCLUSIVE_FIELDS - {"is_ohca"}
         _INTERNAL_OVERWRITE_FIELDS = {
             "report_request_type",
@@ -1807,7 +1805,6 @@ class SopEngine119:
             for slot, keywords in (
                 ("consciousness", ("意識", "意识", "清醒", "反應", "反应", "捏", "肩膀")),
                 ("breathing", ("呼吸",)),
-                ("abdomen_rise", ("起伏", "肚子", "腹部", "反應", "反应", "捏", "肩膀")),
             ):
                 if any(k in qa_question for k in keywords):
                     val = parse_vital_slot(slot, caller_text, qa_question)

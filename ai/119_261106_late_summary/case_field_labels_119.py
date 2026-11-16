@@ -44,7 +44,6 @@ LABELS: Dict[str, str] = {
     # 生命征象（救護專用）
     "consciousness": "是否有意識",
     "breathing": "呼吸",
-    "abdomen_rise": "肚子是否有起伏",
     "is_ohca": "是否判斷為 OHCA",
     # 患者基本資訊（救護專用）
     "patient_count": "患者人數",

@@ -1941,7 +1941,7 @@ class LLMExtractor119:
                 text = _clean_str(val)
                 if text in BREATHING_OPTIONS:
                     result[key] = text
-            elif key in ("consciousness", "abdomen_rise"):
+            elif key == "consciousness":
                 from sop_utils_119 import parse_vital_slot
                 rule_val = parse_vital_slot(key, caller_text, question or "")
                 bool_val = _coerce_bool(val)
@@ -2313,7 +2313,7 @@ class LLMExtractor119:
             return {}
 
         bool_slots = {
-            "consciousness", "breathing", "abdomen_rise", "caller_is_patient",
+            "consciousness", "breathing", "caller_is_patient",
         }
         schema: Dict[str, str] = {}
         for slot in new_slots:
@@ -2343,7 +2343,7 @@ class LLMExtractor119:
             "- 同名欄位若在新舊子類語義不同（例如 medical_history 可能是病史、"
             "家屬在場或是否在現場），不可原樣照抄，必須符合新子類含義才填。\n"
             "- 無法從舊要素確定的欄位必須輸出 null，禁止臆造。\n"
-            "- 生命征象（consciousness/breathing/abdomen_rise）若舊要素已有明確"
+            "- 生命征象（consciousness/breathing）若舊要素已有明確"
             "是/否，可遷移。"
         )
         try:

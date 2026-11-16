@@ -89,11 +89,6 @@ def parse_yes_no_for_question(question: str, answer: str) -> Optional[bool]:
         if slot_val is not None:
             return slot_val
 
-    if any(k in q for k in ("起伏", "肚子", "腹部")):
-        slot_val = parse_vital_slot("abdomen_rise", s, q)
-        if slot_val is not None:
-            return slot_val
-
     # 叫/捏反應類（S2 選項）
     if any(k in q for k in ("反應", "反应", "捏", "肩膀")):
         slot_val = parse_vital_slot("consciousness", s, q)
@@ -216,24 +211,6 @@ def parse_vital_slot(
             return parse_yes_no(s)
         return None
 
-    if slot == "abdomen_rise":
-        if _has_negated_core(s, ("起伏", "動", "动")) or any(
-            k in s for k in ("肚子不動", "不會動", "不会动")
-        ):
-            return False
-        if _has_unnegated_token(s, (
-            "有起伏", "還在起伏", "还在起伏", "肚子有動", "腹部有起伏", "有在動", "有在动",
-        )):
-            return True
-        if any(k in q for k in ("起伏", "肚子", "腹部")) and len(s) <= 12:
-            return parse_yes_no(s)
-        # 叫/捏反應問題：有反應視為通過 S2（與腹部起伏同等之生命征象檢查點）
-        if any(k in q for k in ("反應", "反应", "捏", "肩膀")):
-            c = parse_vital_slot("consciousness", s, q)
-            if c is not None:
-                return c
-        return None
-
     return None
 
 
@@ -247,7 +224,7 @@ def extract_vital_signs_hint(text: str) -> dict:
     if not s:
         return {}
     out: dict = {}
-    for slot in ("consciousness", "breathing", "abdomen_rise"):
+    for slot in ("consciousness", "breathing"):
         val = parse_vital_slot(slot, s, question="")
         if val is not None:
             out[slot] = val

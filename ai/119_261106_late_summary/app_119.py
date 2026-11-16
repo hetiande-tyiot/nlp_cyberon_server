@@ -1132,7 +1132,6 @@ def main():
             vital_fields = [
                 ("意識",       case.get("consciousness")),
                 ("呼吸",       case.get("breathing")),
-                ("腹部起伏",   case.get("abdomen_rise")),
             ]
             bool_vital = {True: "✅ 有", False: "❌ 無"}
             rows_html = ""

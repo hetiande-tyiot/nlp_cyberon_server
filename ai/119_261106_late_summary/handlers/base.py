@@ -67,7 +67,6 @@ class SubCategoryHandler:
         "incident_description",
         "consciousness",
         "breathing",
-        "abdomen_rise",
         "patient_count",
         "patient_gender",
         "patient_age",
