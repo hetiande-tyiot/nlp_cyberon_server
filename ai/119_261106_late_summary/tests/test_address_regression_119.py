@@ -803,37 +803,6 @@ class DispatchAnnouncementTests(unittest.TestCase):
     def test_flag_starts_false(self) -> None:
         self.assertFalse(SopEngine119(io=SilentIO())._dispatch_announced)
 
-    def test_transfer_line_omits_dispatch_when_nothing_dispatched(self) -> None:
-        from sop_119_engine import TransferToHumanError
-
-        said: list[str] = []
-
-        class RecordingIO(SilentIO):
-            def say(self, text: str) -> None:
-                said.append(text)
-
-        engine = SopEngine119(io=RecordingIO())
-        with self.assertRaises(TransferToHumanError):
-            engine._check_ohca_and_transfer(None, "consciousness")
-        self.assertEqual(said, ["請不要掛斷電話，我立即為您轉接專人。"])
-
-    def test_transfer_line_keeps_dispatch_after_a_real_dispatch(self) -> None:
-        from sop_119_engine import TransferToHumanError
-
-        said: list[str] = []
-
-        class RecordingIO(SilentIO):
-            def say(self, text: str) -> None:
-                said.append(text)
-
-        engine = SopEngine119(io=RecordingIO())
-        engine._dispatch_announced = True
-        with self.assertRaises(TransferToHumanError):
-            engine._check_ohca_and_transfer(None, "consciousness")
-        self.assertEqual(
-            said, ["救護車已派出，請不要掛斷電話，我立即為您轉接專人。"]
-        )
-
 
 class RoadFillerPeelingTests(unittest.TestCase):
     """句中沒有「區」也沒有縣市時，路名 regex 會連贅詞一起吃。

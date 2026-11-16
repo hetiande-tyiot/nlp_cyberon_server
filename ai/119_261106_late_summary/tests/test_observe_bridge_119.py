@@ -86,16 +86,6 @@ class ObserveBridge119Tests(unittest.TestCase):
         self.assertFalse(llm.general_calls)
         self.assertFalse(llm.summary_calls)
 
-    def test_bridged_ohca_check_does_not_raise_or_speak(self) -> None:
-        io = ScriptedIO()
-        engine = SopEngine119(io=io, llm_extractor=FakeExtractor())
-        engine._bridged = True
-
-        engine._check_ohca_and_transfer(False, "consciousness")
-
-        self.assertTrue(engine.case.is_ohca)
-        self.assertEqual(io.spoken, [])
-
     def test_observe_does_not_reraise_transfer(self) -> None:
         io = ScriptedIO()
         engine = SopEngine119(io=io, llm_extractor=FakeExtractor())

@@ -254,14 +254,6 @@ def extract_vital_signs_hint(text: str) -> dict:
     return out
 
 
-def is_reaction_vital_question(question: str) -> bool:
-    """是否為叫/捏反應類 S2 問題（非腹部起伏）。"""
-    q = question or ""
-    if any(k in q for k in ("起伏", "肚子", "腹部")):
-        return False
-    return any(k in q for k in ("反應", "反应", "捏", "肩膀"))
-
-
 _CN_DIGIT = {
     "一": "1", "二": "2", "三": "3", "四": "4", "五": "5",
     "六": "6", "七": "7", "八": "8", "九": "9", "十": "10",

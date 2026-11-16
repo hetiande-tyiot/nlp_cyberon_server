@@ -812,19 +812,6 @@ class SopEngine119:
         self._say(TRANSFER_LINE)
         raise TransferToHumanError(reason, result="human_transfer")
 
-    def _check_ohca_and_transfer(self, vital_val: Optional[bool], slot: str) -> None:
-        """任一生命征象非 True → OHCA 轉人工。"""
-        if vital_val is not True:
-            with self._case_lock:
-                self.case.is_ohca = True
-            self._notify_case_update()
-            if self._bridged:
-                return
-            self._say("請不要掛斷電話，我立即為您轉接專人。")
-            raise TransferToHumanError(
-                f"OHCA detected at {slot}", result="ohca_transfer"
-            )
-
     def _announce_dispatch(self, line: str) -> None:
         """
         告訴報案人車已派出。承辦的受理順序：主案類、次案類都確定了才講派車，
@@ -5118,10 +5105,11 @@ class SopEngine119:
             while True:
                 try:
                     handler = get_handler(self.case.sub_category)
+                    # 救護的次案類都有照題目表問的流程；萬一登記表漏了某個次案類，轉真人，不讓程式出錯中斷
                     if hasattr(handler, "run_subtype_flow"):
                         handler.run_subtype_flow(self)
                     else:
-                        self._run_救護_generic_handler(handler)
+                        self._transfer_to_human(f"救護次案類沒有對應的流程：{self.case.sub_category}")
                     break
                 except SubCategorySwitched as sw:
                     self._debug_print(
@@ -5144,103 +5132,6 @@ class SopEngine119:
         # ════════════════════════════════════════════════════════
         handler = get_handler(self.case.sub_category)
         handler.collect_caller_info(self)
-
-    def _run_救護_generic_handler(self, handler) -> None:
-        """未登記子類的通用流程：前置問題 → 生命征象 → 後置問題 → 患者資訊。"""
-        handler.run_pre_vital(self)
-
-        # 階段 2：漸進確認生命征象（前一項為否才問下一項）
-        self._ensure_known_fields_from_history()
-
-        vital_questions = [
-            ("救護_vital_1", "consciousness", "請問人是否還有意識？"),
-            ("救護_vital_2", "breathing",     "請你看一下他是否有呼吸？"),
-            ("救護_vital_3", "abdomen_rise",  "請看一下他肚子有沒有起伏？"),
-        ]
-
-        for question_i, (stage, slot, question) in enumerate(vital_questions):
-            self._ensure_known_fields_from_history()
-
-            if self._is_field_filled(slot):
-                with self._case_lock:
-                    vital_val = getattr(self.case, slot)
-                self._debug_print(f"skip_{slot}", vital_val)
-                self._set_stage(stage)
-            else:
-                self._set_stage(stage)
-                vital_text = self._ask_and_extract(question)
-
-                vital_val = parse_yes_no_for_question(question, vital_text)
-                if vital_val is None and self._llm:
-                    try:
-                        vital_val = self._llm.extract_vital_sign(question, vital_text)
-                        self._debug_print(f"vital_{slot}", vital_val)
-                    except Exception as e:
-                        self._debug_print(f"vital_{slot}_error", e)
-
-                with self._case_lock:
-                    setattr(self.case, slot, vital_val)
-                self._notify_case_update()
-
-            # 救護的呼吸照 xlsx 記文字（未知／有呼吸／呼吸不正常／無呼吸）：跟照題目表問的案類用同一套，
-            # 呼吸不正常、無呼吸轉真人，其他就不再往下問生命徵象（11/02 使用者決定）
-            if slot == "breathing" and isinstance(vital_val, str):
-                handler._check_breathing_transfer(self)
-                break
-            # 任一項確認為有，即停止後續生命征象問題；只有明確為否才繼續。
-            if vital_val is True:
-                self._debug_print("vital_confirmed", slot)
-                break
-            if vital_val is None or question_i == len(vital_questions) - 1:
-                self._check_ohca_and_transfer(vital_val, slot)
-
-        # 生命征象後次類別額外問題（如：一般受傷的傷因/部位/TOCC）
-        handler.run_post_vital(self)
-
-        # 階段 3：詢問關鍵要素（已有值則跳過）
-        self._ensure_known_fields_from_history()
-
-        # 性別/年齡：語境感知（含受傷人數、報案人即患者等）
-        handler._run_s6_gender_age(self, "救護_patient_1")
-
-        patient_questions = [
-            ("救護_patient_2", ("incident_description",), "剛剛發生甚麼事？"),
-            (
-                "救護_patient_3",
-                ("current_condition",),
-                handler.build_patient_condition_question(self),
-            ),
-        ]
-
-        for stage, fields, question in patient_questions:
-            self._ensure_known_fields_from_history()
-
-            if all(self._is_field_filled(f) for f in fields):
-                self._debug_print(f"skip_{stage}", {
-                    f: getattr(self.case, f) for f in fields
-                })
-                self._set_stage(stage)
-                continue
-
-            self._set_stage(stage)
-            pi_text = self._ask_and_extract(question)
-
-            hints = extract_patient_info_hint(pi_text)
-            if hints:
-                with self._case_lock:
-                    self._apply_extracted_fields(hints)
-
-            if self._llm:
-                try:
-                    pi_result = self._llm.extract_patient_info(question, pi_text)
-                    self._debug_print("patient_info", pi_result)
-                    with self._case_lock:
-                        for key, val in pi_result.items():
-                            if val and getattr(self.case, key, None) is None:
-                                setattr(self.case, key, val)
-                    self._notify_case_update()
-                except Exception as e:
-                    self._debug_print("patient_info_error", e)
 
     # ── 火警 handler ──────────────────────────────────────────────────────────
 

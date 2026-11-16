@@ -16,8 +16,6 @@ LLMExtractor119
       逐輪抽取門牌地址的區、路、號元件。
   .extract_confirmation(question, caller_text, current_address) -> dict
       判斷報警人是否確認地址，或提供新地址/補充。
-  .extract_vital_sign(question, caller_text) -> bool | None
-      抽取單一生命征象（True/False/None）。
   .extract_patient_info(question, caller_text) -> dict
       抽取患者性別/年齡/事件/現況（單輪問答上下文）。
   .extract_general_fields(caller_text) -> dict
@@ -1433,47 +1431,6 @@ class LLMExtractor119:
             "confirmed":   confirmed,
             "new_address": new_addr,
         }
-
-    # ── 生命征象抽取 ──────────────────────────────────────────────────────────
-
-    def extract_vital_sign(
-        self, question: str, caller_text: str
-    ) -> Optional[bool]:
-        """
-        抽取單一生命征象（意識/呼吸/腹部起伏）。
-
-        返回 True=有/是, False=沒有/否, None=不確定/未提及
-
-        設計：配合「受理員問題 + 報警人回答」Q&A 上下文，
-        確保「沒有」「沒」等簡短否定能正確對應到問題中的徵象。
-        """
-        schema = {"value": "true|false|null"}
-        rules = (
-            f"受理員本輪問題：{question}\n\n"
-            "- value：只判斷報警人對**這一個問題**的回答，輸出 true/false/null。\n"
-            "【長答處理（極重要）】\n"
-            "- 報警人可能先描述病情（出血、頭暈、檢查…），句末再補「是，清醒」「有，還在呼吸」；\n"
-            "  病情描述不影響判斷，只要句中有對問題的肯定/否定就必須輸出。\n"
-            "【意識問題】（問題含「意識/清醒」時）\n"
-            "  • true：清醒/有意識/是清醒/是，清醒/會回應/會睜眼/有反應\n"
-            "  • false：沒有意識/昏迷/叫不醒/沒反應/無意識\n"
-            "【呼吸問題】（問題含「呼吸」時）\n"
-            "  • true：有呼吸/還在呼吸/是，有呼吸/會呼吸\n"
-            "  • false：沒有呼吸/沒呼吸/無呼吸/不呼吸\n"
-            "【腹部起伏問題】（問題含「起伏/肚子」時）\n"
-            "  • true：有起伏/肚子有動/腹部有起伏\n"
-            "  • false：沒有起伏/沒起伏/肚子不動\n"
-            "- 只有完全未提及該徵象且無肯定/否定語句時才輸出 null"
-        )
-        out = self.extract_slots(
-            caller_text, schema, rules,
-            question=question,
-            strict_tail=_STRICT_TAIL_YESNO,
-        )
-        val = _coerce_bool(out.get("value"))
-        if val is None:
-            val = parse_yes_no_for_question(question, caller_text)
-        return val
 
     # ── 患者資訊單輪抽取 ──────────────────────────────────────────────────────
 

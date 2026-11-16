@@ -274,13 +274,6 @@ class EmergencyRescueTests(unittest.TestCase):
 class NoDispatchClaimElsewhereTests(unittest.TestCase):
     """轉人工、救護次案類的觸發回應都不再提派車。"""
 
-    def test_ohca_transfer_line(self) -> None:
-        io = ScriptedIO([])
-        engine = SopEngine119(io=io)
-        with self.assertRaises(TransferToHumanError):
-            engine._check_ohca_and_transfer(False, "breathing")
-        self.assertEqual(io.ai_lines, ["請不要掛斷電話，我立即為您轉接專人。"])
-
     def test_trigger_responses_never_say_dispatched(self) -> None:
         """還有觸發情境的救護 handler，每個情境都跑一次，回應裡不能有派車。
         照 OK 表重寫的次案類（例如燒炭）已經沒有觸發情境，跳過。"""
