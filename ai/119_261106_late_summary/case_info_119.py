@@ -167,6 +167,9 @@ class CaseInfo119:
     # 建築物類型（1013 xlsx，A、C 都問）：透天厝、集合住宅、倉庫…
     # 在 A 跟次案類相同；在 C 另外記，次案類仍是警報器作響等
     building_type:         Optional[str] = None
+    # 工廠類型（1116 xlsx 從建築物類型分出來，A、C 場所用途是工廠時問）：倉庫、大型違章建築區與傳統市場(含工廠)、
+    # 石化廠建築物、毒災場所。跟建築物類型一樣，在 A 跟次案類相同；兩格不會同時有值
+    factory_type:          Optional[str] = None
     trapped_status:        Optional[str] = None  # 人員受困（A、B1、C）：只記 未知/無人受困/有人受困；有人受困就轉人工
     door_response:         Optional[str] = None  # 起火戶應門（A、C）：有人應門/無人應門/已聯絡上/聯絡不上
     building_construction: Optional[str] = None  # 建物構造：木造屋/鐵皮屋/磚造屋/RC…

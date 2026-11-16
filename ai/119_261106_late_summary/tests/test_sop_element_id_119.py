@@ -107,12 +107,12 @@ class SopElementIdTests(unittest.TestCase):
         self.assertNotIn("101-15", ids)  # 有無爆炸：被動題，沒人講到就不列
 
     def test_fire_factory_answer_goes_to_factory_question(self) -> None:
-        # 同一個欄位有兩題（非工廠、工廠）時，答案放在前置條件成立的那一題
+        # 場所用途是工廠時，答案放在第 3 題「工廠類型」，第 2 題「建築物類型」不列（1116 xlsx 分成兩個關鍵要素）
         case = CaseInfo119(
             main_category="火警",
             sub_category="透天厝",
             place_usage="鐵皮工廠",
-            building_type="大型違章建築區與傳統市場(含工廠)",
+            factory_type="大型違章建築區與傳統市場(含工廠)",
         )
 
         ids = case.to_dict()["sop_element_ids"]
@@ -121,7 +121,7 @@ class SopElementIdTests(unittest.TestCase):
         self.assertNotIn("101-2", ids)
 
     def test_fire_conditions_not_met_are_left_out(self) -> None:
-        # 垃圾、無火無煙：只有「氣味」要問；濃煙顏色、是否延燒都不列
+        # 垃圾、無火無煙：要問「氣味」；濃煙顏色、是否延燒都不列（題號照 1116 xlsx 的 17 題）
         case = CaseInfo119(
             main_category="火警",
             sub_category="垃圾",
@@ -130,9 +130,13 @@ class SopElementIdTests(unittest.TestCase):
 
         ids = case.to_dict()["sop_element_ids"]
 
-        self.assertEqual(ids["130-9"], "待問")  # 氣味
-        self.assertNotIn("130-7", ids)  # 濃煙顏色
-        self.assertNotIn("130-10", ids)  # 是否延燒
+        self.assertEqual(ids["130-10"], "待問")  # 氣味
+        self.assertNotIn("130-8", ids)  # 濃煙顏色
+        self.assertNotIn("130-11", ids)  # 是否延燒
+        # 1116 xlsx：場所用途、建築物類型、樓層只有警報器作響、查看案件才問；人員受困反過來，垃圾要問
+        for code in ("130-2", "130-3", "130-4", "130-5", "130-6"):
+            self.assertNotIn(code, ids)
+        self.assertEqual(ids["130-14"], "待問")  # 人員受困
 
     def test_fire_tab_questions_match_case_type_qa_order(self) -> None:
         # 火警的編號用「垂片第幾題」當題號，所以垂片題目要跟 CaseTypeQA.xlsx 一題一題對得上。

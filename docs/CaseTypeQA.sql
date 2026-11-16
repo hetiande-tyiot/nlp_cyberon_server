@@ -1,5 +1,5 @@
 -- CaseTypeQA 初始資料
--- 來源：1106 垂片規格 xlsx（docs/(all)火警、救護、災害、緊急救援垂片規格_關鍵要素與問句_1106.xlsx），經程式用的題號對照表 scripts/CaseTypeQA.xlsx 整理；CaseTypeId 對照 案類資料表.csv
+-- 來源：垂片規格 xlsx（火警 1116 版：docs/(all)火警垂片規格_關鍵要素與問句_1116.xlsx；救護、災害、緊急救援 1106 版），經程式用的題號對照表 scripts/CaseTypeQA.xlsx 整理；CaseTypeId 對照 案類資料表.csv
 -- 2 救護（00-未知）、200 救護-未知 不在 1106 垂片 xlsx 裡，保留原本的內容
 -- QuestionId、SeqNo 都是各次案類內的題號，就是程式送給前端的「次案類編號-第N題」的 N；Serial 為資料庫自動編號不寫入；Type：1=必問(主動) 2=條件式必問(條件) 3=選問(被動)；Answer：xlsx 用一句話問兩個關鍵要素的題目（例如性別和年齡），兩題各寫自己的單獨問句；被動題（報案人自己會講、不主動問）沒有問句，寫空字串
 
@@ -14,7 +14,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 101 火警-透天厝（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (101, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (101, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (101, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (101, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (101, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (101, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (101, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -33,7 +33,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 102 火警-集合住宅（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (102, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (102, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (102, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (102, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (102, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (102, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (102, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -52,7 +52,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 103 火警-倉庫（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (103, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (103, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (103, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (103, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (103, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (103, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (103, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -71,7 +71,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 104 火警-旅館、百貨商場用途建築物（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (104, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (104, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (104, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (104, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (104, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (104, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (104, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -90,7 +90,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 105 火警-運輸中樞用途建築物（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (105, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (105, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (105, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (105, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (105, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (105, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (105, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -109,7 +109,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 106 火警-電影院用途建築物（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (106, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (106, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (106, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (106, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (106, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (106, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (106, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -128,7 +128,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 107 火警-學校、醫院、老人院建築物（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (107, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (107, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (107, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (107, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (107, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (107, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (107, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -147,7 +147,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 108 火警-毒災場所（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (108, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (108, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (108, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (108, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (108, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (108, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (108, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -166,7 +166,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 109 火警-大型違章建築區與傳統市場(含工廠)（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (109, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (109, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (109, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (109, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (109, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (109, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (109, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -185,7 +185,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 110 火警-石化廠建築物（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (110, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (110, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (110, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (110, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (110, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (110, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (110, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -204,7 +204,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 111 火警-古蹟、文化財（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (111, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (111, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (111, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (111, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (111, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (111, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (111, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -223,7 +223,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 112 火警-地下建築物(如地下街)（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (112, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (112, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (112, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (112, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (112, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (112, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (112, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -242,7 +242,7 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 -- 113 火警-高層建築物(10層樓以上)（01-垂片A_建築物火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (113, 1, 1, N'場所用途', N'請問是哪一種建築物？住宅還是工廠呢？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (113, 2, 2, N'建築物類型', N'是公寓、透天還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (113, 3, 3, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (113, 3, 3, N'工廠類型', N'現場是什麼用途？總共有幾層樓？', 2);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (113, 4, 4, N'建物總樓層', N'總共幾層樓？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (113, 5, 5, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (113, 6, 6, N'濃煙顏色', N'是黑煙還是白煙？', 2);
@@ -415,75 +415,79 @@ INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) V
 
 -- 130 火警-垃圾（04-垂片C_輕微火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 1, 1, N'火警類型', N'是警報器作響嗎？還是有聞到燒焦味？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 3, 3, N'建築物類型', N'是公寓還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 4, 4, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 5, 5, N'建物總樓層', N'總共幾層樓？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 6, 6, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 7, 7, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 8, 8, N'警報器狀態', N'警報器現在還在響嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 9, 9, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 10, 10, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 11, 11, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 12, 12, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 13, 13, N'人員受困', N'有聽到有人在呼救嗎？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 14, 14, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 15, 15, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 16, 16, N'起火戶應門', N'', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 3, 3, N'建築物類型', N'是公寓、透天還是大樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 4, 4, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 5, 5, N'工廠類型', N'現場是什麼用途？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 6, 6, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 7, 7, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 8, 8, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 9, 9, N'警報器狀態', N'警報器現在還在響嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 10, 10, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 11, 11, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 12, 12, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 13, 13, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 14, 14, N'人員受困', N'有聽到有人在呼救嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 15, 15, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 16, 16, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (130, 17, 17, N'起火戶應門', N'', 3);
 
 -- 131 火警-電線桿(電纜)（04-垂片C_輕微火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 1, 1, N'火警類型', N'是警報器作響嗎？還是有聞到燒焦味？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 3, 3, N'建築物類型', N'是公寓還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 4, 4, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 5, 5, N'建物總樓層', N'總共幾層樓？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 6, 6, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 7, 7, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 8, 8, N'警報器狀態', N'警報器現在還在響嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 9, 9, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 10, 10, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 11, 11, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 12, 12, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 13, 13, N'人員受困', N'有聽到有人在呼救嗎？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 14, 14, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 15, 15, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 16, 16, N'起火戶應門', N'', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 3, 3, N'建築物類型', N'是公寓、透天還是大樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 4, 4, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 5, 5, N'工廠類型', N'現場是什麼用途？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 6, 6, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 7, 7, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 8, 8, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 9, 9, N'警報器狀態', N'警報器現在還在響嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 10, 10, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 11, 11, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 12, 12, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 13, 13, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 14, 14, N'人員受困', N'有聽到有人在呼救嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 15, 15, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 16, 16, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (131, 17, 17, N'起火戶應門', N'', 3);
 
 -- 133 火警-警報器作響（04-垂片C_輕微火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 1, 1, N'火警類型', N'是警報器作響嗎？還是有聞到燒焦味？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 3, 3, N'建築物類型', N'是公寓還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 4, 4, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 5, 5, N'建物總樓層', N'總共幾層樓？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 6, 6, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 7, 7, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 8, 8, N'警報器狀態', N'警報器現在還在響嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 9, 9, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 10, 10, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 11, 11, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 12, 12, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 13, 13, N'人員受困', N'有聽到有人在呼救嗎？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 14, 14, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 15, 15, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 16, 16, N'起火戶應門', N'', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 3, 3, N'建築物類型', N'是公寓、透天還是大樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 4, 4, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 5, 5, N'工廠類型', N'現場是什麼用途？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 6, 6, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 7, 7, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 8, 8, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 9, 9, N'警報器狀態', N'警報器現在還在響嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 10, 10, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 11, 11, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 12, 12, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 13, 13, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 14, 14, N'人員受困', N'有聽到有人在呼救嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 15, 15, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 16, 16, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (133, 17, 17, N'起火戶應門', N'', 3);
 
 -- 134 火警-查看案件（04-垂片C_輕微火警）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 1, 1, N'火警類型', N'是警報器作響嗎？還是有聞到燒焦味？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 3, 3, N'建築物類型', N'是公寓還是大樓？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 4, 4, N'建築物類型', N'現場是什麼用途？總共有幾層樓？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 5, 5, N'建物總樓層', N'總共幾層樓？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 6, 6, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 7, 7, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 8, 8, N'警報器狀態', N'警報器現在還在響嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 9, 9, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 10, 10, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 11, 11, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 12, 12, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 13, 13, N'人員受困', N'有聽到有人在呼救嗎？', 1);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 14, 14, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 15, 15, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
-INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 16, 16, N'起火戶應門', N'', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 2, 2, N'場所用途', N'請問是住宅還是工廠呢？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 3, 3, N'建築物類型', N'是公寓、透天還是大樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 4, 4, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 5, 5, N'工廠類型', N'現場是什麼用途？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 6, 6, N'建物總樓層', N'總共有幾層樓？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 7, 7, N'火煙狀況', N'現在有看到火嗎？還是只有看到煙？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 8, 8, N'濃煙顏色', N'請問是黑煙還是白煙？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 9, 9, N'警報器狀態', N'警報器現在還在響嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 10, 10, N'氣味類型', N'現場有聞到燒焦味嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 11, 11, N'是否延燒', N'火有沒有燒到旁邊的東西？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 12, 12, N'燃燒面積', N'燒起來的範圍大概多大？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 13, 13, N'報案身分', N'請問您是住在附近，還是剛好經過？', 1);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 14, 14, N'人員受困', N'有聽到有人在呼救嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 15, 15, N'來源確認', N'知道是哪一戶、哪一層傳出來的嗎？', 2);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 16, 16, N'標的物', N'是哪裡在冒煙？電線桿、電表，還是水溝蓋？', 3);
+INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (134, 17, 17, N'起火戶應門', N'', 3);
 
 -- 200 救護-未知（00-未知）
 INSERT INTO CaseTypeQA (CaseTypeId, SeqNo, QuestionId, Question, Answer, Type) VALUES (200, 1, 1, N'病徵', N'請問發生什麼事？', 1);

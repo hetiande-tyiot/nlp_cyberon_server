@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from fire_tab_map_119 import (
+    FIRE_SINGLE_MISSING_QUESTIONS,
     INCIDENT_Q,
     INCIDENT_REASK_Q,
     INCIDENT_STAGE,
@@ -228,21 +229,39 @@ class HuoJingGenericHandler(SubCategoryHandler):
         - 被動題：不問（報案人講到時，每一輪的欄位抽取會記下來）
         - 條件題：前置條件確定成立才問；不確定就當作不成立，不問
         - 主動題、條件成立的條件題：答案還不知道才問
+        - 沒有問句的題目（例如垂片 C 的建物總樓層）跟上一題是一組，用上一題的問句一起問；
+          只缺一個時改問 FIRE_SINGLE_MISSING_QUESTIONS 的單問句，做法跟救護的性別、年齡一樣
         條件在輪到那一題時才判斷，因為要用到前面剛問到的答案。
         每一題問之前先看火煙狀況，需要就在建築物火警和輕微火警之間換垂片。
         """
-        for item in TAB_QUESTIONS.get(tab, ()):
+        questions = TAB_QUESTIONS.get(tab, ())
+        for number, item in enumerate(questions):
             engine._ensure_known_fields_from_history()
             self._transfer_or_switch_if_needed(engine)
             self._check_fire_smoke_and_move_tab(engine)
-            if item.mode == MODE_PASSIVE:
+            if item.mode == MODE_PASSIVE or not item.question:
                 continue
             if item.mode == MODE_CONDITIONAL and not item.condition(engine.case):
                 engine._debug_print(
                     f"skip_{item.stage}", {"前置條件不成立": item.condition_text},
                 )
                 continue
-            self._ask_missing(engine, item.stage, (item.field,), item.question)
+            # 後面緊接著、沒有問句的題目，答案也從這一題的問句來
+            fields = [item.field]
+            for later in questions[number + 1:]:
+                if later.question or later.mode == MODE_PASSIVE:
+                    break
+                fields.append(later.field)
+            singles = FIRE_SINGLE_MISSING_QUESTIONS.get(tuple(fields))
+            question = item.question
+            missing = [field for field in fields if not engine._is_field_filled(field)]
+            if singles and len(missing) == 1:
+                question = singles[missing[0]]
+            self._ask_missing(engine, item.stage, fields, question)
+            # 整句問完只答到一個（例如只說「透天的」），用單問句再問一次
+            missing = [field for field in fields if not engine._is_field_filled(field)]
+            if singles and len(missing) == 1:
+                self._ask_missing(engine, item.stage, fields, singles[missing[0]])
         # 火煙狀況可能在最後一題才問到，問完再檢查一次
         self._check_fire_smoke_and_move_tab(engine)
 
@@ -266,7 +285,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
             if case.fire_tab == TAB_A:
                 set_tab_and_sub_category(case, TAB_C, None)
             else:
-                set_tab_and_sub_category(case, TAB_A, case.building_type)
+                set_tab_and_sub_category(case, TAB_A, case.building_type or case.factory_type)
         engine._notify_case_update()
         engine._debug_print(
             "fire_tab_moved_by_fire_smoke",

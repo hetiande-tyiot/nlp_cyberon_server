@@ -189,6 +189,7 @@ LABELS: Dict[str, str] = {
     # 火警垂片 A（建築物火警）照 0929 xlsx 新增的欄位（存文字）
     "place_usage": "場所用途",
     "building_type": "建築物類型",
+    "factory_type": "工廠類型",
     "trapped_status": "人員受困",
     "door_response": "起火戶應門",
     "building_construction": "建物構造",

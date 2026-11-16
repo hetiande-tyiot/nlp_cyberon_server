@@ -140,8 +140,10 @@ TRAPPED_NO = "無人受困"
 TRAPPED_YES = "有人受困"
 # 場所用途：前置條件只看是不是工廠
 PLACE_FACTORY = "工廠"
-# 建築物類型＝大型違章建築區與傳統市場(含工廠)：才問建物構造、危險物品
+# 工廠類型＝大型違章建築區與傳統市場(含工廠)：才問建物構造、危險物品
 BUILDING_ILLEGAL_OR_MARKET = "大型違章建築區與傳統市場(含工廠)"
+# 工廠類型的參考範圍（1116 xlsx）。這 4 種記在工廠類型，其他建築物火警次案類記在建築物類型
+FACTORY_TYPES: Tuple[str, ...] = ("倉庫", BUILDING_ILLEGAL_OR_MARKET, "石化廠建築物", "毒災場所")
 # B1 交通工具（1013 xlsx 起是車的種類，不是次案類；選項照 1104 xlsx）
 VEHICLE_KIND_TRAILER = "聯結車"
 VEHICLE_KIND_BUS = "大客車(公車、遊覽車)"
@@ -170,6 +172,20 @@ VEHICLE_KIND_TO_SUBTYPE: Dict[str, str] = {
 WILDFIRE_DEFAULT_SUBTYPE = "山林田野(平地)"
 # C 的這兩種次案類通常無火無煙；看得到火或煙就該是建築物火警
 MINOR_ALARM_OR_CHECK: Tuple[str, ...] = ("警報器作響", "查看案件")
+
+# xlsx 用一句話問兩個關鍵要素的題目（問句是合併儲存格），缺什麼問什麼：
+# 兩個都不知道就照 xlsx 整句問；只缺一個時改問下面對應的句子（1116 xlsx 問句欄另外寫的單問句）。
+# 整句問完只答到一個時，也用下面的句子補問一次。做法跟救護的性別、年齡一樣。
+FIRE_SINGLE_MISSING_QUESTIONS: Dict[Tuple[str, str], Dict[str, str]] = {
+    ("building_type", "building_total_floors"): {
+        "building_type": "是公寓、透天還是大樓？",
+        "building_total_floors": "總共有幾層樓？",
+    },
+    ("factory_type", "building_total_floors"): {
+        "factory_type": "現場是什麼用途？",
+        "building_total_floors": "總共有幾層樓？",
+    },
+}
 
 # 前置條件要用到、而且只能從固定說法裡選的欄位。
 # 由 LLM 理解報案人的話後，從這些說法裡選一個；選了清單以外的值就不記（當作這一輪沒抽到）。
@@ -219,9 +235,14 @@ def _subtype_is(*names: str) -> Callable[[Any], bool]:
     return lambda case: getattr(case, "sub_category", None) in names
 
 
-def _building_type_is(name: str) -> Callable[[Any], bool]:
-    """前置條件「建築物類型 = 某一種」。"""
-    return lambda case: getattr(case, "building_type", None) == name
+def _subtype_is_not(*names: str) -> Callable[[Any], bool]:
+    """前置條件「次案類 ≠ 某幾種」，例如「火警類型 ≠ 警報器作響、查看案件」。次案類還不知道就不成立。"""
+    return lambda case: bool(getattr(case, "sub_category", None)) and case.sub_category not in names
+
+
+def _factory_type_is(name: str) -> Callable[[Any], bool]:
+    """前置條件「工廠類型 = 某一種」。"""
+    return lambda case: getattr(case, "factory_type", None) == name
 
 
 def _vehicle_kind_in(*kinds: str) -> Callable[[Any], bool]:
@@ -237,12 +258,12 @@ def _and(*conditions: Callable[[Any], bool]) -> Callable[[Any], bool]:
 TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("場所用途", "place_usage", MODE_ACTIVE,
                  "建築物火警-場所用途", "請問是哪一種建築物？住宅還是工廠呢？"),
-    # 建築物類型就是建築物火警的次案類；依是不是工廠分兩種問法
+    # 建築物類型、工廠類型就是建築物火警的次案類：不是工廠問建築物類型，是工廠問工廠類型
     FireQuestion("建築物類型", "building_type", MODE_CONDITIONAL,
                  "建築物火警-建築物類型", "是公寓、透天還是大樓？總共有幾層樓？",
                  _not_factory, "場所用途 ≠ 工廠"),
-    FireQuestion("建築物類型", "building_type", MODE_CONDITIONAL,
-                 "建築物火警-建築物類型", "現場是什麼用途？總共有幾層樓？",
+    FireQuestion("工廠類型", "factory_type", MODE_CONDITIONAL,
+                 "建築物火警-工廠類型", "現場是什麼用途？總共有幾層樓？",
                  _is_factory, "場所用途 = 工廠"),
     FireQuestion("建物總樓層", "building_total_floors", MODE_ACTIVE,
                  "建築物火警-建物總樓層", "總共幾層樓？"),
@@ -273,12 +294,12 @@ TAB_A_QUESTIONS: Tuple[FireQuestion, ...] = (
                  _people_trapped, "人員受困 = 有人受困"),
     FireQuestion("建物構造", "building_construction", MODE_CONDITIONAL,
                  "建築物火警-建物構造", "請問是鐵皮工廠嗎？",
-                 _building_type_is(BUILDING_ILLEGAL_OR_MARKET),
-                 "建築物類型＝大型違章建築區與傳統市場(含工廠)"),
+                 _factory_type_is(BUILDING_ILLEGAL_OR_MARKET),
+                 "工廠類型＝大型違章建築區與傳統市場(含工廠)"),
     FireQuestion("危險物品", "hazardous_materials", MODE_CONDITIONAL,
                  "建築物火警-危險物品", "裡面有什麼易燃物品嗎？",
-                 _building_type_is(BUILDING_ILLEGAL_OR_MARKET),
-                 "建築物類型＝大型違章建築區與傳統市場(含工廠)"),
+                 _factory_type_is(BUILDING_ILLEGAL_OR_MARKET),
+                 "工廠類型＝大型違章建築區與傳統市場(含工廠)"),
     FireQuestion("有無爆炸", "explosion_status", MODE_PASSIVE, "建築物火警-有無爆炸"),
     FireQuestion("水源狀況", "nearby_water_source", MODE_PASSIVE, "建築物火警-水源狀況"),
     FireQuestion("燃燒面積", "burning_area", MODE_PASSIVE, "建築物火警-燃燒面積"),
@@ -363,18 +384,29 @@ TAB_B2_QUESTIONS: Tuple[FireQuestion, ...] = (
 TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
     FireQuestion("火警類型", "sub_category", MODE_ACTIVE,
                  "輕微火警-火警類型", "是警報器作響嗎？還是有聞到燒焦味？"),
-    # 輕微火警也問場所與建築物，用來掌握現場狀況；
-    # 這裡的建築物類型另外存，不改次案類（次案類仍是警報器作響等）
-    FireQuestion("場所用途", "place_usage", MODE_ACTIVE,
-                 "輕微火警-場所用途", "請問是住宅還是工廠呢？"),
+    # 警報器作響、查看案件才問場所與建築物，用來掌握現場狀況（垃圾、電線桿不問）；
+    # 這裡的建築物類型、工廠類型另外存，不改次案類（次案類仍是警報器作響等）
+    FireQuestion("場所用途", "place_usage", MODE_CONDITIONAL,
+                 "輕微火警-場所用途", "請問是住宅還是工廠呢？",
+                 _subtype_is(*MINOR_ALARM_OR_CHECK), "火警類型 = 警報器作響、查看案件"),
+    # 建築物類型和建物總樓層是一組，用同一句問；建物總樓層沒有自己的問句，
+    # 只缺一個時改問 FIRE_SINGLE_MISSING_QUESTIONS 的單問句。工廠類型那一組也一樣
     FireQuestion("建築物類型", "building_type", MODE_CONDITIONAL,
-                 "輕微火警-建築物類型", "是公寓還是大樓？總共有幾層樓？",
-                 _not_factory, "場所用途 ≠ 工廠"),
-    FireQuestion("建築物類型", "building_type", MODE_CONDITIONAL,
-                 "輕微火警-建築物類型", "現場是什麼用途？總共有幾層樓？",
-                 _is_factory, "場所用途 = 工廠"),
-    FireQuestion("建物總樓層", "building_total_floors", MODE_ACTIVE,
-                 "輕微火警-建物總樓層", "總共幾層樓？"),
+                 "輕微火警-建築物類型", "是公寓、透天還是大樓？總共有幾層樓？",
+                 _and(_not_factory, _subtype_is(*MINOR_ALARM_OR_CHECK)),
+                 "場所用途 ≠ 工廠 且 火警類型 = 警報器作響、查看案件"),
+    FireQuestion("建物總樓層", "building_total_floors", MODE_CONDITIONAL,
+                 "輕微火警-建物總樓層", "",
+                 _and(_not_factory, _subtype_is(*MINOR_ALARM_OR_CHECK)),
+                 "場所用途 ≠ 工廠 且 火警類型 = 警報器作響、查看案件"),
+    FireQuestion("工廠類型", "factory_type", MODE_CONDITIONAL,
+                 "輕微火警-工廠類型", "現場是什麼用途？總共有幾層樓？",
+                 _and(_is_factory, _subtype_is(*MINOR_ALARM_OR_CHECK)),
+                 "場所用途 = 工廠 且 火警類型 = 警報器作響、查看案件"),
+    FireQuestion("建物總樓層", "building_total_floors", MODE_CONDITIONAL,
+                 "輕微火警-建物總樓層", "",
+                 _and(_is_factory, _subtype_is(*MINOR_ALARM_OR_CHECK)),
+                 "場所用途 = 工廠 且 火警類型 = 警報器作響、查看案件"),
     FireQuestion("火煙狀況", "fire_or_smoke", MODE_ACTIVE,
                  "輕微火警-火煙狀況", "現在有看到火嗎？還是只有看到煙？"),
     FireQuestion("濃煙顏色", "smoke_color", MODE_CONDITIONAL,
@@ -395,9 +427,11 @@ TAB_C_QUESTIONS: Tuple[FireQuestion, ...] = (
                  "火警類型＝電線桿(電纜)、垃圾 且 火煙狀況 = 有火有煙、有火無煙"),
     FireQuestion("報案身分", "caller_role", MODE_ACTIVE,
                  "輕微火警-報案身分", "請問您是住在附近，還是剛好經過？"),
-    # 答「有人受困」會立刻轉人工（跟建築物火警一樣）
-    FireQuestion("人員受困", "trapped_status", MODE_ACTIVE,
-                 "輕微火警-人員受困", "有聽到有人在呼救嗎？"),
+    # 答「有人受困」會立刻轉人工（跟建築物火警一樣）；警報器作響、查看案件不問（承辦要求），
+    # 但報案人自己講到有人受困，每一輪照樣會記下來、照樣轉人工
+    FireQuestion("人員受困", "trapped_status", MODE_CONDITIONAL,
+                 "輕微火警-人員受困", "有聽到有人在呼救嗎？",
+                 _subtype_is_not(*MINOR_ALARM_OR_CHECK), "火警類型 ≠ 警報器作響、查看案件"),
     FireQuestion("來源確認", "source_located", MODE_CONDITIONAL,
                  "輕微火警-來源確認", "知道是哪一戶、哪一層傳出來的嗎？",
                  _subtype_is(*MINOR_ALARM_OR_CHECK), "火警類型＝警報器作響、查看案件"),
@@ -435,13 +469,13 @@ def fire_fields_to_extract(tab: Optional[str]) -> Tuple[str, ...]:
     這一輪要請 LLM 抽取的火警欄位（依序、不重複）。
     - 已經知道垂片：次案類代碼 + 轉人工欄位 + 這張垂片 xlsx 上的所有欄位（含被動題）
     - 還不知道垂片：次案類代碼 + 轉人工欄位 + 四張垂片共用的欄位
-    次案類（sub_category）、建築物類型（building_type）不請 LLM 直接填，
+    次案類（sub_category）、建築物類型（building_type）、工廠類型（factory_type）不請 LLM 直接填，
     由次案類代碼換算，所以不列入。
     """
     if tab in TAB_QUESTIONS:
         tab_fields = tuple(
             item.field for item in TAB_QUESTIONS[tab]
-            if item.field not in ("sub_category", "building_type")
+            if item.field not in ("sub_category", "building_type", "factory_type")
         )
     else:
         tab_fields = FIRE_SHARED_FIELDS
@@ -568,6 +602,7 @@ FIELD_LABELS_ZH: Dict[str, str] = {
     "door_response": "起火戶應門",
     "building_total_floors": "建物總樓層",
     "building_type": "建築物類型",  # A、C 都問；在 A 就是次案類，在 C 另外存
+    "factory_type": "工廠類型",  # 同上，場所用途是工廠時問
     "caller_role": "報案身分",
     "building_construction": "建物構造",
     "hazardous_materials": "危險物品",
@@ -1104,18 +1139,29 @@ def resolve_fire_tab(case: Any) -> Optional[str]:
 
 
 # ─── 次案類跟著報案人的回答走（1013 xlsx）─────────────────────────────────────
+def set_building_or_factory_type(case: Any, name: str) -> None:
+    """
+    建築物火警的次案類名稱記到對的欄位：倉庫等 4 種工廠類記在工廠類型，其他記在建築物類型（1116 xlsx 分成兩個關鍵要素）。
+    另一格清掉，兩格不會同時有值，前端不會看到互相矛盾的答案。
+    """
+    if name in FACTORY_TYPES:
+        case.factory_type, case.building_type = name, None
+    else:
+        case.building_type, case.factory_type = name, None
+
+
 def update_sub_category_from_answers(case: Any) -> None:
     """
     用報案人已經回答的內容更新次案類（火警流程每一題問之前呼叫）：
-    - 次案類是建築物類（透天厝、集合住宅…）→ 建築物類型記成同一個值
-      （A 的建築物類型就是次案類；換到 C 時建築物資料跟著帶過去、不重問）
+    - 次案類是建築物類（透天厝、集合住宅…）→ 建築物類型或工廠類型記成同一個值
+      （A 的建築物類型、工廠類型就是次案類；換到 C 時建築物資料跟著帶過去、不重問）
     - 交通工具火警：交通工具換算成次案類（小貨車 → 汽車、腳踏車 → 機車）
     - 山林田野火警：次案類還不知道 → 記平地
     """
     tab = getattr(case, "fire_tab", None)
     sub = getattr(case, "sub_category", None)
     if tab_for_subtype(sub) == TAB_A:
-        case.building_type = sub
+        set_building_or_factory_type(case, sub)
     if tab == TAB_B1:
         mapped = VEHICLE_KIND_TO_SUBTYPE.get(getattr(case, "vehicle_kind", None))
         if mapped and mapped != sub:

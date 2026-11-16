@@ -49,8 +49,8 @@ class FieldsPerTabTests(unittest.TestCase):
             with self.subTest(tab=tab):
                 fields = fire_fields_to_extract(tab)
                 for item in questions:
-                    # 次案類、建築物類型由次案類代碼換算，不請 LLM 直接填
-                    if item.field not in ("sub_category", "building_type"):
+                    # 次案類、建築物類型、工廠類型由次案類代碼換算，不請 LLM 直接填
+                    if item.field not in ("sub_category", "building_type", "factory_type"):
                         self.assertIn(item.field, fields)
 
     def test_building_only_fields_not_sent_before_tab_known(self) -> None:

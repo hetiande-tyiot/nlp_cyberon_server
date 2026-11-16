@@ -558,6 +558,7 @@ FIRE_EXCLUSIVE_FIELDS = frozenset({
     "power_outage",
     # 以下是火警照 1013 xlsx 新增的欄位（火警垂片在問）
     "building_type",
+    "factory_type",
     "vehicle_kind",
     "vehicle_model",
     "vehicle_power",
@@ -1219,11 +1220,12 @@ class SopEngine119:
         （例如 vehicle_wildfire_code = 1 → 機車）。只看本輪抽到的代碼，不依目前垂片推算；
         換到別張垂片的次案類時，由 _maybe_reclassify_sub 的「次案類決定垂片」檢查負責換垂片。
         建築物火警（A）和輕微火警（C）之間只看火煙狀況，LLM 的代碼不能直接換：
-        在 C 聽到建築物類（例如「住大樓」）→ 記到建築物類型，次案類不動。
+        在 C 聽到建築物類（例如「住大樓」）→ 記到建築物類型（倉庫等工廠類記到工廠類型），次案類不動。
         """
         from fire_tab_map_119 import (
             TAB_A,
             is_between_building_and_minor,
+            set_building_or_factory_type,
             subtype_name_for_code,
             tab_for_subtype,
         )
@@ -1235,7 +1237,7 @@ class SopEngine119:
             name_tab = tab_for_subtype(name)
             if is_between_building_and_minor(self.case.fire_tab, name_tab):
                 if name_tab == TAB_A:
-                    self.case.building_type = name
+                    set_building_or_factory_type(self.case, name)
                 continue
             self.case.sub_category = name
 
