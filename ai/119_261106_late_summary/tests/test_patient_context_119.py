@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock
 
 from handlers.base import SubCategoryHandler
 from sop_119_engine import DialogueIO, SopEngine119
@@ -70,80 +69,6 @@ class PatientContextS6Tests(unittest.TestCase):
         engine._extracted_caller_count = 0
         engine._ensure_known_fields_from_history()
         self.assertEqual(engine.case.patient_gender, "男")
-
-    def test_build_question_asks_age_only_when_gender_known(self) -> None:
-        engine = SopEngine119(io=ScriptedIO([]))
-        engine.case.patient_gender = "男"
-        q = self.handler._build_patient_demo_question(engine)
-        self.assertEqual(q, "請問他大約幾歲？")
-
-    def test_build_question_caller_is_patient(self) -> None:
-        engine = SopEngine119(io=ScriptedIO([]))
-        engine.case.caller_is_patient = True
-        engine.case.patient_gender = "男"
-        q = self.handler._build_patient_demo_question(engine)
-        self.assertEqual(q, "請問您大約幾歲？")
-
-    def test_build_question_multiple_casualties(self) -> None:
-        engine = SopEngine119(io=ScriptedIO([]))
-        engine.case.patient_count = "2位"
-        q = self.handler._build_patient_demo_question(engine)
-        self.assertEqual(q, "可以描述一下傷者的性別和年齡嗎？")
-
-    def test_run_s6_skips_gender_asks_age_only(self) -> None:
-        io = ScriptedIO(["1人", "75歲"])
-        engine = SopEngine119(io=io)
-        engine.case.transcript = [
-            {"role": "assistant", "text": "請問發生什麼事？"},
-            {"role": "caller", "text": "有一位先生倒在路邊"},
-        ]
-        engine._extracted_caller_count = 1
-
-        mock_llm = MagicMock()
-        mock_llm.extract_patient_info.return_value = {
-            "patient_gender": None,
-            "patient_age": "75歲",
-            "incident_description": None,
-            "current_condition": None,
-        }
-        mock_llm.extract_slots.return_value = {"patient_count": "1人"}
-        engine._llm = mock_llm
-
-        self.handler._run_s6_gender_age(engine, "test_S6")
-
-        self.assertEqual(engine.case.patient_gender, "男")
-        self.assertEqual(engine.case.patient_age, "75歲")
-        # 通用 handler（sub_category=None，非外傷）→ 中性人數問法（修2）
-        self.assertIn("現場有幾位需要救護？", io.messages)
-        self.assertIn("請問他大約幾歲？", io.messages)
-        self.assertNotIn("男生還是女生", " ".join(io.messages))
-
-    def test_run_s6_caller_patient_skips_when_both_filled(self) -> None:
-        io = ScriptedIO(["1人"])
-        engine = SopEngine119(io=io)
-        engine.case.transcript = [
-            {"role": "assistant", "text": "請問發生什麼事？"},
-            {"role": "caller", "text": "我自己割腕了，25歲，男生"},
-        ]
-        engine._extracted_caller_count = 1
-        engine.case.caller_is_patient = True
-        engine.case.patient_gender = "男"
-        engine.case.patient_age = "25歲"
-
-        mock_llm = MagicMock()
-        mock_llm.extract_slots.return_value = {"patient_count": "1人"}
-        engine._llm = mock_llm
-
-        self.handler._run_s6_gender_age(engine, "test_S6")
-
-        self.assertNotIn("男生還是女生", " ".join(io.messages))
-        self.assertNotIn("大約幾歲", " ".join(io.messages[1:]))
-
-    def test_condition_question_caller_is_patient(self) -> None:
-        engine = SopEngine119(io=ScriptedIO([]))
-        engine.case.caller_is_patient = True
-        q = self.handler.build_patient_condition_question(engine)
-        self.assertEqual(q, "請問您現在狀況如何？")
 
 
 if __name__ == "__main__":

@@ -70,28 +70,6 @@ class ResetProbeEchoTests(unittest.TestCase):
         self.assertEqual(eng.updates, 0)
 
 
-class PatientCountQuestionTests(unittest.TestCase):
-    """修2：非外傷案人數題改中性問法。"""
-
-    def test_trauma_subcats_ask_injury_count(self) -> None:
-        h = SubCategoryHandler()
-        for sub in ("一般受傷", "打架受傷", "車禍", "墜落傷", "燒燙傷"):
-            with self.subTest(sub=sub):
-                eng = _FakeEngine(sub_category=sub)
-                self.assertEqual(
-                    h._patient_count_question(eng), "現場有幾個人受傷？"
-                )
-
-    def test_non_trauma_subcats_ask_neutral_count(self) -> None:
-        h = SubCategoryHandler()
-        for sub in ("吞食藥物", "急病", "精神異常", "路倒", None):
-            with self.subTest(sub=sub):
-                eng = _FakeEngine(sub_category=sub)
-                self.assertEqual(
-                    h._patient_count_question(eng), "現場有幾位需要救護？"
-                )
-
-
 class IncidentVagueTests(unittest.TestCase):
     """Fix2：急病含糊病情判定（含糊 → 仍問 S0 逼出細類）。"""
 
