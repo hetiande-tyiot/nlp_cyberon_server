@@ -196,6 +196,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
         - 已經知道次案類 → 用次案類所屬的垂片，不問
         - 次案類還不知道 → 先用報案人前面說過的話判斷是哪張垂片，判斷得出來就不問
         - 還是判斷不出來 → 問「請問發生什麼事？是什麼東西在燒？」
+          （問這兩句期間會重新判斷主案類，講出來的不是火警就改判）
         - 聽不出來 → 再問「不好意思，請您再說一次是什麼在燒？」
         - 問兩次仍分不出是哪種火災 → 先當成輕微火警（垂片 C）處理，並在 ImportantTag
           記下原因，讓下游知道這通電話的火災類型是系統預設的，不是報案人說的
@@ -206,17 +207,24 @@ class HuoJingGenericHandler(SubCategoryHandler):
             self._lock_tab(engine, known)
             return known
 
-        for question in (INCIDENT_Q, INCIDENT_REASK_Q):
-            engine._set_stage(INCIDENT_STAGE)
-            answer = engine._ask_and_extract(question)
-            self._check_and_respond_to_triggers(answer, engine)
-            self._transfer_or_switch_if_needed(engine)
-            tab = self._tab_already_known(engine) or self._classify_tab(
-                engine, question, answer,
-            )
-            if tab:
-                self._lock_tab(engine, tab)
-                return tab
+        # 問「發生什麼事」這兩句期間，報案人每回答一句就用全部對話重新判斷主案類。
+        # 例如第一句只講「需要消防車」被判成火警，這裡才講出「路樹倒塌、沒有東西在燒」，
+        # 就改判成災害，中斷火警、從災害的流程重新開始（地址確認過不重問）。
+        engine._main_reclassify_enabled = True
+        try:
+            for question in (INCIDENT_Q, INCIDENT_REASK_Q):
+                engine._set_stage(INCIDENT_STAGE)
+                answer = engine._ask_and_extract(question)
+                self._check_and_respond_to_triggers(answer, engine)
+                self._transfer_or_switch_if_needed(engine)
+                tab = self._tab_already_known(engine) or self._classify_tab(
+                    engine, question, answer,
+                )
+                if tab:
+                    self._lock_tab(engine, tab)
+                    return tab
+        finally:
+            engine._main_reclassify_enabled = False
 
         engine._debug_print("fire_tab_unresolved", "fallback_C")
         self._flag_fire_issue(engine, UNRESOLVED_TAB_TAG)

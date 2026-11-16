@@ -2490,7 +2490,10 @@ class SopEngine119:
         """
         if self._main_clf is not None:
             try:
-                model_text = self._classifier_input(self._model_caller_text(text))
+                # 主案類只看報案人講的話，不接案情摘要。
+                # 摘要是照目前的主案類寫的（例如寫著「火警」），接進來會讓重新判斷時
+                # 一直維持原本的主案類：報案人講「路樹倒塌、沒有東西在燒」還是判火警。
+                model_text = self._model_caller_text(text)
                 with timing_119.track("bert", "main_classify", in_size=len(model_text)):
                     result = self._main_clf.predict(model_text)
                 main_probs = result.get("main_probs") or {}
