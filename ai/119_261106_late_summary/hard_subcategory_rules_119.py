@@ -142,6 +142,8 @@ def match_hard_subcategory(
 
 
 _HERITAGE = "古蹟、文化財"
+# 報案人關鍵詞標籤表上也有這些籠統的詞，不是古蹟的名字，地址裡的「○○寺路」才不會被當成古蹟
+_HERITAGE_GENERIC = frozenset({"古蹟", "宮廟", "寺廟", "廟宇", "寺"})
 
 
 def match_named_heritage(text: str) -> Tuple[Optional[str], Optional[str]]:
@@ -158,6 +160,8 @@ def match_named_heritage(text: str) -> Tuple[Optional[str], Optional[str]]:
     if not compact:
         return None, None
     for keyword in keywords_for("火警", _HERITAGE):
-        if keyword in CALLER_KEYWORD_TAGS and _compact(keyword) in compact:
+        if keyword in _HERITAGE_GENERIC or keyword not in CALLER_KEYWORD_TAGS:
+            continue
+        if _compact(keyword) in compact:
             return _HERITAGE, keyword
     return None, None
