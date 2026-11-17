@@ -2405,9 +2405,12 @@ class LLMExtractor119:
         caller_text = "\n".join(transcript_texts) if transcript_texts else "（無）"
 
         # 排除技術欄位，只保留業務正向欄位
+        # 主案類、次案類、火警垂片、派遣等級也不給：這四個是系統判斷的，不是報案人講的，
+        # 給了摘要就會寫出報案人沒講過的事（例如只講「我要消防車」，摘要卻寫「發生火警」）。
         _EXCLUDE_KEYS = {
             "case_summary", "transcript", "flow_stage", "result",
             "main_conf", "sub_conf",
+            "main_category", "sub_category", "fire_tab", "level",
         }
         display_fields: Dict[str, Any] = {
             k: v for k, v in filled_fields.items()
