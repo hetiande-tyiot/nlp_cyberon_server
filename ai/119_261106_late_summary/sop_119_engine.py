@@ -2548,11 +2548,10 @@ class SopEngine119:
         return _DISPATCH_LINE_BY_MAIN.get(cat, _DISPATCH_LINE_BY_MAIN["救護"])
 
     def _should_skip_address_flow(self) -> bool:
-        return bool(
-            self._address_locked
-            and is_usable_address(self.case.address)
-            and self.case.address_confirmed
-        )
+        # 地址那輪整輪問完過（不論成功或失敗）就不再問。改主案類後重問也會遇到同樣問題，
+        # 失敗時已標「地址未確認」，直接交給受理員處理（使用者 11/18 決定）。
+        # 問地址問到一半被改主案類時，這個標記不會設，新案類仍會照常問地址。
+        return self._address_locked
 
     def _exclusive_fields_for_main(self, main_cat: Optional[str]) -> frozenset:
         if main_cat == "救護":
@@ -4322,6 +4321,10 @@ class SopEngine119:
             ("number", "address_number"),
         ):
             if not getattr(self.case, field, None):
+                self._ask_missing_component(kind)
+            # 路和號第一次沒問到，用同一句再問一次（區在開場已經問過一次，不再多問）。
+            # 2026-11-18 實測（8f882587）：問「幾號」答「110巷」，只問一次就放棄這輪地址。
+            if kind != "district" and not getattr(self.case, field, None):
                 self._ask_missing_component(kind)
             if not getattr(self.case, field, None):
                 self._restore_address(previous_address)
