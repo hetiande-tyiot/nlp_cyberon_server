@@ -1355,8 +1355,15 @@ def classify_location_type(
         return "landmark"
     if _is_landmark_only(s):
         return "landmark"
-    if any(k in s for k in ("區", "路", "街", "大道", "巷", "弄", "號")):
+    if any(k in s for k in ("路", "街", "大道", "巷", "弄", "號")):
         return "address"
+    if "區" in s:
+        # 只講到區名（「板橋區」）才算門牌，接著問路名。
+        # 區名後面還接著其他名稱（「板橋區大遠百」）時判不出型態，
+        # 交給地址 API 自己判是地標還是門牌；不然組地址時只會留下區名，
+        # 後面的地點名稱就不見了（2026-11-18 實測）。
+        after_district = re.sub(r"[，,。．.！!？?、]", "", s.rsplit("區", 1)[1])
+        return None if after_district else "address"
     return None
 
 
@@ -1370,6 +1377,8 @@ def _is_landmark_only(addr: str) -> bool:
             "派出所", "分局", "警局", "學校", "車站", "捷運",
             "公園", "市場", "廟", "宮", "大樓", "大廈", "社區", "里辦",
             "機關", "公司", "醫院", "診所",
+            # 2026-11-18：百貨商場類（「板橋區大遠百」原本被判成門牌）
+            "百貨", "商場", "購物中心", "遠百", "SOGO", "三越",
         )
     ):
         return True
