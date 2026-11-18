@@ -1176,13 +1176,19 @@ def update_sub_category_from_answers(case: Any) -> None:
 # 規則（承辦 10/13 說明）。換垂片（火警流程）和擋 BERT 往反方向換（engine）共用這一個判斷。
 def tab_conflicts_with_fire_smoke(
     tab: Optional[str], sub_category: Optional[str], fire_or_smoke: Optional[str],
+    *, building: Optional[str] = None,
 ) -> bool:
-    """這張垂片（加上次案類）跟火煙狀況衝突嗎？只有火花、不確定都不算衝突。"""
+    """
+    這張垂片（加上次案類）跟火煙狀況衝突嗎？只有火花、不確定都不算衝突。
+    building 是已經知道的建築物類型或工廠類型：輕微火警要知道是哪種建築物才換到建築物火警，
+    換過去次案類才有值（使用者 11/18 決定；之前沒有這個條件，電線桿冒煙被判成查看案件時
+    換到建築物火警、次案類變空，一直重問「請問是哪一種建築物？」）。
+    """
     if tab == TAB_A and fire_or_smoke == FIRE_SMOKE_NONE:
         return True   # 建築物火警卻無火無煙 → 該是輕微火警
     if (tab == TAB_C and sub_category in MINOR_ALARM_OR_CHECK
-            and fire_or_smoke in FIRE_SMOKE_FIRE_OR_SMOKE_VISIBLE):
-        return True   # 警報器作響、查看案件卻看得到火或煙 → 該是建築物火警
+            and fire_or_smoke in FIRE_SMOKE_FIRE_OR_SMOKE_VISIBLE and building):
+        return True   # 警報器作響、查看案件卻看得到火或煙，又知道是哪種建築物 → 該是建築物火警
     return False
 
 

@@ -277,7 +277,8 @@ class HuoJingGenericHandler(SubCategoryHandler):
         """
         每題問之前呼叫：
         - 建築物火警，無火無煙 → 換到輕微火警（次案類清空，由輕微火警第一題問）
-        - 輕微火警的警報器作響、查看案件，看得到火或煙 → 換到建築物火警（次案類＝建築物類型）
+        - 輕微火警的警報器作響、查看案件，看得到火或煙，而且已經知道是哪種建築物
+          → 換到建築物火警（次案類＝建築物類型或工廠類型）
         換了垂片就從新垂片第一題重新走，答過的題目會自動跳過、不重問。
         """
         from sop_119_engine import SubCategorySwitched
@@ -287,6 +288,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
             update_sub_category_from_answers(case)
             if not tab_conflicts_with_fire_smoke(
                 case.fire_tab, case.sub_category, case.fire_or_smoke,
+                building=case.building_type or case.factory_type,
             ):
                 return  # 不用換，繼續問下一題
             old_sub = case.sub_category
