@@ -16,7 +16,7 @@ FIRE_BERT_CONF_THRESHOLD = 0.5
 
 # 案類分析：一句話直接分到 A / B1 / B2 / C 垂片（取代舊 Q1/Q2 兩段分流）
 INCIDENT_STAGE = "火警-案類分析"
-INCIDENT_Q = "請問發生什麼事？是什麼東西在燒？"
+INCIDENT_Q = "請問是什麼東西在燒呢？"
 INCIDENT_REASK_Q = "不好意思，請您再說一次是什麼在燒？"
 # 問兩次仍分不出是哪種火災、先當成輕微火警處理時，寫進 ImportantTag 的說明文字。
 # 取代舊流程的「Q2 兩輪仍無法判斷」（意思相同，舊名稱裡的 Q2 已不存在）。
