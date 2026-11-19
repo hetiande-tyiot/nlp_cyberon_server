@@ -33,7 +33,7 @@ from fire_tab_map_119 import (
     tab_conflicts_with_fire_smoke,
     update_sub_category_from_answers,
 )
-from important_tags_119 import merge_important_tags
+from important_tags_119 import important_case_level, merge_important_tags
 from .base import CLOSING_LINE, SubCategoryHandler
 
 if TYPE_CHECKING:
@@ -144,7 +144,7 @@ class HuoJingGenericHandler(SubCategoryHandler):
     def _flag_fire_issue(self, engine: "SopEngine119", tag: str) -> None:
         """記錄無法判斷／資訊缺失，繼續流程、不轉人工。"""
         with engine._case_lock:
-            engine.case.ImportantCase = 1
+            engine.case.ImportantCase = important_case_level(engine.case.ImportantTag, 1)
             engine.case.ImportantTag = merge_important_tags(
                 engine.case.ImportantTag, [tag],
             )

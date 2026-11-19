@@ -41,6 +41,7 @@ IMPORTANT_TAGS: Tuple[str, ...] = (
     "非法拘禁",
     "救命",
     "強盜",
+    "OHCA",
     "地址搜尋失敗",
     "地址未確認",
     "Q1 兩輪仍無法判斷",
@@ -91,6 +92,10 @@ def _load_caller_keywords() -> Tuple[str, ...]:
 
 CALLER_KEYWORD_TAGS: Tuple[str, ...] = _load_caller_keywords()
 
+# 報案人講到這些詞就標上「OHCA」（使用者 11/17 決定，先放這兩個）
+OHCA_TAG = "OHCA"
+OHCA_KEYWORDS: Tuple[str, ...] = ("OHCA", "ohca")
+
 # 全部合法標籤：合併既有標籤時用這一份，報案人關鍵字才不會被濾掉
 ALL_TAGS: Tuple[str, ...] = IMPORTANT_TAGS + CALLER_KEYWORD_TAGS
 
@@ -140,7 +145,15 @@ def normalize_important_tags(
 
 def match_important_tags(text: str) -> List[str]:
     """以本輪報警人原話直接比對案情標籤與報案人關鍵字（系統狀態標籤不會從原話產生）。"""
-    return normalize_important_tags(text, CASE_CONTENT_TAGS + CALLER_KEYWORD_TAGS)
+    tags = normalize_important_tags(text, CASE_CONTENT_TAGS + CALLER_KEYWORD_TAGS)
+    if OHCA_TAG not in tags and any(word in text for word in OHCA_KEYWORDS):
+        tags.append(OHCA_TAG)
+    return tags
+
+
+def important_case_level(tags: Sequence[str], level: int) -> int:
+    """有 OHCA 標籤的案件，重要程度一律是 2（緊急處理），不會被後面的判斷降下來。"""
+    return 2 if OHCA_TAG in tags else level
 
 
 def merge_important_tags(current: Sequence[str], incoming: Any) -> List[str]:

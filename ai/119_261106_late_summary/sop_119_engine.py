@@ -60,7 +60,7 @@ from handlers import (
     parent_main_for_subcategory,
     sop_slots_for,
 )
-from important_tags_119 import match_important_tags, merge_important_tags
+from important_tags_119 import important_case_level, match_important_tags, merge_important_tags
 from llm_extractor_119 import LLMExtractor119, build_fallback_summary
 from fuzzy_match_log_119 import (
     KIND_DISTRICT,
@@ -1042,13 +1042,17 @@ class SopEngine119:
                     and isinstance(val, int)
                     and val in (0, 1, 2)
                 ):
-                    self.case.ImportantCase = val
+                    self.case.ImportantCase = important_case_level(self.case.ImportantTag, val)
                 continue
 
             if key == "ImportantTag":
                 self.case.ImportantTag = merge_important_tags(
                     self.case.ImportantTag,
                     val,
+                )
+                # 這一輪標上 OHCA 的話，重要程度跟著變成 2
+                self.case.ImportantCase = important_case_level(
+                    self.case.ImportantTag, self.case.ImportantCase,
                 )
                 continue
 
@@ -3562,7 +3566,7 @@ class SopEngine119:
                 "invalid", "error"
             }:
                 self.case.address_validation_status = "invalid"
-            self.case.ImportantCase = 1
+            self.case.ImportantCase = important_case_level(self.case.ImportantTag, 1)
             self.case.ImportantTag = merge_important_tags(
                 self.case.ImportantTag,
                 ["地址未確認"] if api_verified else ["地址搜尋失敗"],
@@ -4852,7 +4856,7 @@ class SopEngine119:
             self.case.address_suspect_error = True
             self.case.address_error_reason = reason
             self.case.address_validation_status = None
-            self.case.ImportantCase = 1
+            self.case.ImportantCase = important_case_level(self.case.ImportantTag, 1)
             self.case.ImportantTag = merge_important_tags(self.case.ImportantTag, ["地址未確認"])
         self._notify_case_update()
 
