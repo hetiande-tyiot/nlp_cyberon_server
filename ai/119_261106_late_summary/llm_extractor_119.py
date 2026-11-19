@@ -1553,7 +1553,7 @@ class LLMExtractor119:
             "intersection_road1": "string|null",
             "intersection_road2": "string|null",
             "highway_name":       "string|null",
-            "highway_direction":  "南向|北向|null",
+            "highway_direction":  "string|null",
             "highway_kilometer":  "string|null",
         }
         rescue_ext_schema = {
@@ -1691,8 +1691,10 @@ class LLMExtractor119:
             "不得將段、巷、弄的數字當門牌號。\n"
             "- intersection_road1/intersection_road2：分別抽取交叉路口的兩條路、街或巷；"
             "只有一條時 road2 必須為 null。\n"
-            "- highway_name：如「國道一號」「國道3號」；highway_direction 只可為南向或北向；"
-            "highway_kilometer 只填公里數，可含小數，不含『公里處』。\n"
+            "- highway_name、highway_direction 照報案人的說法填，不要改寫：路名如「國一」「中山高」「國道3號」「台64」；"
+            "方向如「南下」「北上」「南向」「往東」。"
+            "highway_kilometer 只填公里數，中文數字改成阿拉伯數字，可含小數，不含『公里』『K』，"
+            "如「33」「32.5」；講「33K+500」就填「33K+500」。\n"
             "- 回答只是補充「板橋區」「文化路」「北向32.5公里」時，即使無法單獨判定"
             " location_type，也要抽取能確定的元件。"
         )

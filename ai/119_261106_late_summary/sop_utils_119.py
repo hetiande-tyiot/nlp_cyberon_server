@@ -1276,9 +1276,11 @@ def build_highway_address(
     if not name or not direction or not kilometer:
         return None
     km = re.sub(r"\s*(?:公里處|公里|K|k)\s*$", "", str(kilometer)).strip()
-    # 不加空格，跟 addrCheck 回傳的寫法（「國道1北上35.209公里處」）一樣；
-    # 有空格的話，覆誦時每輪重組會被當成報案人改了地址
-    return f"{name}{direction}{km}公里處" if km else None
+    if not km:
+        return None
+    # 11/19：照報案人的說法組，結尾寫 K（「國一南下33K」）；「33K+500」本身有 K 就不再加。
+    # 不加空格，有空格的話，覆誦時每輪重組會被當成報案人改了地址
+    return f"{name}{direction}{km}" if re.search(r"[Kk]", km) else f"{name}{direction}{km}K"
 
 
 def is_bare_district_or_city(text: Optional[str]) -> bool:
@@ -1706,6 +1708,46 @@ HIGHWAY_ROUTE_RE = re.compile(
 )
 HIGHWAY_DIRECTION_RE = re.compile(r"南下|北上|南向|北向|往南|往北|向南|向北|東向|西向|向東|向西|往東|往西")
 HIGHWAY_KM_RE = re.compile(r"\d+(?:\.\d+)?\s*(?:公里|[Kk])")
+
+
+# 送 addrCheck 前要換的路名：11/19 實測 addrCheck 認不得這幾種說法。
+# 其他說法（國一、中山高、北二高、北宜高、五楊高架、台64……）addrCheck 自己認得，照原樣送；
+# 五楊高架、汐五高架不可換成國道1，addrCheck 是分開定位的。
+_HIGHWAY_NAME_FOR_ADDRCHECK = {
+    "雪山隧道": "國道5",
+    "雪隧": "國道5",
+    "八里新店線": "台64線",
+    "五股土城線": "台65線",
+}
+
+
+def highway_addrcheck_query(
+    name: Optional[str],
+    direction: Optional[str],
+    kilometer: Optional[str],
+) -> str:
+    """把報案人講的高速公路三項（路名、方向、公里數）組成送 addrCheck 查詢的字。
+    只拿來查，不存回欄位，欄位和地址都保留報案人的說法。
+    - 路名：雪隧、八里新店線、五股土城線換成 addrCheck 認得的寫法；
+      「台六十四線」這種的中文數字換成阿拉伯數字。
+    - 公里數：中文數字換成阿拉伯數字；「33K+500」「33K500」換成「33.5」（不換會被當成 33 公里）。
+    例：「國一」「南下」「三十三」→「國一南下33公里」。"""
+    name = name or ""
+    for spoken, standard in _HIGHWAY_NAME_FOR_ADDRCHECK.items():
+        if spoken in name:
+            name = standard
+            break
+    name = re.sub(
+        r"台([零〇一二兩三四五六七八九十]+)",
+        lambda m: "台" + chinese_numerals_to_digits(m.group(1)),
+        name,
+    )
+    km = chinese_numerals_to_digits((kilometer or "").replace("點", "."))
+    km = re.sub(r"\s*(?:公里處|公里|[Kk])\s*$", "", km.strip())
+    plus = re.fullmatch(r"(\d+)\s*[Kk]\s*\+?\s*(\d{1,3})", km)
+    if plus:
+        km = f"{plus.group(1)}.{plus.group(2).zfill(3)}".rstrip("0").rstrip(".")
+    return f"{name}{direction or ''}{km}公里"
 
 
 def highway_km_to_digits(text: Optional[str]) -> str:
